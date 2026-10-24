@@ -40,11 +40,11 @@ if(release&&root&&isSecureContext&&'serviceWorker' in navigator){
      registration=await navigator.serviceWorker.register(new URL('sw.js',root),{scope:root.pathname,updateViaCache:'none'});
      window.queenStreetPWA={registration,release,checkUpdates,get pending(){return !!registration.waiting||pendingReload;}};
      const watch=worker=>{if(!worker)return;text(hadController?'Checking for an update…':'Preparing offline play…');worker.addEventListener('statechange',()=>{
-       if(worker.state==='installed'){text(registration.waiting?'Update downloaded. It will apply when paused or at the end of the ride.':'Ready for offline play. Updates are checked automatically.');applyUpdate();}
+       if(worker.state==='installed'){text(registration.waiting?'Update downloaded. It will apply at the end of the ride.':'Ready for offline play. Updates are checked automatically.');applyUpdate();}
        if(worker.state==='redundant')text('Offline version retained. Updates will be checked again when online.');
      });};
      registration.addEventListener('updatefound',()=>watch(registration.installing));watch(registration.installing);
-     if(registration.waiting){text('Update downloaded. It will apply when paused or at the end of the ride.');applyUpdate();}
+     if(registration.waiting){text('Update downloaded. It will apply at the end of the ride.');applyUpdate();}
      else if(registration.active)text('Ready for offline play. Updates are checked automatically.');
      reportVersion();checkUpdates();
      setInterval(applyUpdate,1000);setInterval(checkUpdates,5*60*1000);

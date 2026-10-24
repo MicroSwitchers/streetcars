@@ -4,7 +4,7 @@ The default sensory view uses a single Go press. Go becomes bright green with a 
 
 Hold the Settings control continuously for **3 seconds** with touch, mouse, pen, Space or Enter. A filling bar and countdown show progress; releasing early, dragging away, losing focus or hiding the page cancels the hold. The menu pauses the ride and restores its prior pause state on close.
 
-The weather control cycles through slow cycling, Random, all eight fixed types and Off. Random follows a saved shuffled sequence with the same four-minute phases and gentle 90-second blends. Day/night works separately. Signal stopping defaults to off and remains optional; new installations default to Single press, while existing saved play-mode choices are respected. Validated preferences?including the ready cue, street names, mode, weather, sound, camera, stop options and night-light switch?persist in local storage across reloads and PWA updates.
+The weather control cycles through slow cycling, Random, all eight fixed types and Off. Random follows a saved shuffled sequence with the same four-minute phases and gentle 90-second blends. Day/night works separately. Signal stopping defaults to off and remains optional; new installations default to Single press, with older saved play modes reset to Single press once for this update; later explicit mode choices persist. Validated preferences?including the ready cue, street names, mode, weather, sound, camera, stop options and night-light switch?persist in local storage across reloads and PWA updates.
 
 Play online: **https://microswitchers.github.io/streetcars/**
 
@@ -86,7 +86,7 @@ the Blender source, preview, geometry budget and browser checks. The portable
 | One button (default) | A large green Go button | Drives to each stop, brakes, opens both door sets, and waits indefinitely. Go closes the doors and starts the next leg. Again begins a fresh ride after the last stop. |
 | Go + doors | Go plus door controls | Drives and brakes. Open and close the doors before departing. Choose one Open/Close toggle or separate Open and Close buttons. |
 | Full driving | Power/brake slider plus door controls | Signals apply a safety brake; doors cannot open while moving, and traction is blocked while doors are open. |
-| Just watch | Pause / Resume, plus optional sounds | Drives, opens the doors, spends 10 seconds at each stop, then continues. After the last stop it automatically repeats the ride under a soft camera dissolve. |
+| Full auto | Optional sounds; no Go or Pause control | Drives, opens the doors, spends 10 seconds at each stop, then continues. After the last stop it automatically repeats the ride under a soft camera dissolve. |
 
 Bell and horn buttons are optional in every mode and can be hidden separately. They are extra play actions, never required to continue a one-button ride. There are no departure timers in the two Go-controlled modes; Just watch alone continues automatically. Ride speed can be set to 12, 20 or 30 km/h for those modes.
 
@@ -100,7 +100,7 @@ Holding Settings for three seconds opens a modal supporter menu and pauses the r
 
 Use Space or Enter for Go when the street is focused, or activate a focused button using Space or Enter. Tab navigates controls. A held key cannot automatically depart the next stop. A switch that sends one of those keys or a click can use the same controls. Closing settings with Back to the streetcar returns focus to Go in assisted modes. Escape closes the menu and restores the prior pause state.
 
-B rings the bell, H sounds the horn, C changes camera, and P pauses. Full driving also accepts W / Up for power, S / Down for brake, Space for emergency brake, and D for doors. The slider supports pointer, touch and keyboard input. Phone layouts retain the large primary controls and keep the vehicle framed above them.
+B rings the bell, H sounds the horn, and C changes camera. Full driving also accepts W / Up for power, S / Down for brake, Space for emergency brake, and D for doors. The slider supports pointer, touch and keyboard input. Phone layouts retain the large primary controls and keep the vehicle framed above them.
 
 The player streetcar uses the right-hand track, with its doors and stop shelters on the curb side. The sidewalk camera watches from that same passenger side. Livery remains readable after correcting the vehicle handedness. The front door marker is mounted on the fixed body panel behind the door opening.
 
@@ -163,3 +163,5 @@ Check traffic direction, repeat arrivals, signal stops, door-side marker clearan
 The Blender car models can be checked with `node qa/check_graphics.mjs carAssets carAssetsPhone carAssetsNight offlineCarAssets`. The checks verify scale and roof clearance, linked wheel meshes, lower distance budgets, switching with hysteresis and only one active distance level, nighttime lens glow, mirror clearance, signal stops, rolling wheels and offline embedding.
 
 Check departure timing with `node qa/check_departure_bell.mjs` and the real recordings in Chrome with `node qa/check_graphics.mjs departureBell offlineDepartureBell`. Check delayed audio with `node qa/check_sounds.mjs` and `node qa/check_graphics.mjs audioActivation offlineAudioActivation`. The timing checks cover loads finishing after cancellation, expired button requests, pause/resume races, repeated stop updates and natural recording completion. Check the daylight/brake policy with `node qa/check_graphics.mjs daytimeBrakes daytimeBrakesPhone offlineDaytimeBrakes`; this includes a rendered-pixel check for actual red car-brake emission and tests normal stops, manual braking, coasting, night controls and the oncoming streetcar.
+
+Full auto has no Go, Pause or Resume control. It starts and repeats the ride automatically. The P shortcut is disabled. Full auto also keeps running behind Settings. Hidden tabs and graphics recovery may suspend rendering internally; returning to a running tab resumes automatically. Play-mode preferences from before `playModeVersion: 1` migrate to Single press once, preserving all other settings. Future explicit mode choices remain persistent.

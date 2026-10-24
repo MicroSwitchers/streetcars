@@ -35,6 +35,7 @@ export function installGraphicsRecovery(canvas){
    recovery.api.weather.rebuildEnvironments();recovery.api.updateSettings({});
    recovery.lost=false;window.queenStreetGraphicsLost=false;recovery.restores++;
    loading.hidden=true;reload.hidden=true;recovery.api.setPaused(true);
+   if(['watch','manual'].includes(recovery.api.settings.mode)&&!document.getElementById('settings-dialog')?.open){recovery.api.state.paused=false;recovery.api.updateHUD();}
   }catch{message.textContent='Please reload to continue with lighter graphics.';}
  },0));
  return recovery;
