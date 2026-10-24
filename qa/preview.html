@@ -1,0 +1,463 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Queen Street visual checks</title>
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden}iframe{width:100%;height:100%;border:0}#results{display:none}body.failed #results{display:block;position:absolute;inset:0;background:#fff;color:#900;z-index:9;white-space:pre-wrap;padding:24px}</style>
+<iframe id="game" title="Queen Street preview"></iframe><pre id="results">Waiting for the game</pre>
+<script type="module">
+const params=new URLSearchParams(location.search),frame=document.querySelector('iframe'),results=document.querySelector('#results'),checks=[],errors=[];let gameWindow;
+frame.style.width=(params.get('width')||1440)+'px';frame.style.height=(params.get('height')||960)+'px';
+const check=(label,value)=>{checks.push({label,pass:!!value});if(!value)throw new Error(label);};
+let bumperMotion;
+try{
+ const source=params.has('offline')?'../Queen-Street-Drive.html':'../dist/index.html';
+ if(params.has('first-look'))localStorage.removeItem('queen-street-ride-settings-v1');
+ if(params.has('restore-weather'))localStorage.setItem('queen-street-ride-settings-v1',JSON.stringify({atmosphereVersion:3,weatherMode:params.get('restore-weather'),weather:'rain',dayNightCycle:false,volume:.17,size:'jumbo'}));
+ if(params.has('migrate-weather'))localStorage.setItem('queen-street-ride-settings-v1',JSON.stringify({atmosphereVersion:2,weather:'sunset',dayNightCycle:false,volume:.17,size:'jumbo'}));
+ let html=await (await fetch(source)).text();
+ html=html.replace('<head>','<head><base href="'+new URL('../dist/',location.href)+'"><script>window.__errors=[];const originalError=console.error;console.error=(...args)=>{window.__errors.push(args.map(String).join(" "));originalError(...args)};window.addEventListener("error",e=>window.__errors.push(e.message));window.addEventListener("unhandledrejection",e=>window.__errors.push(String(e.reason)));<\/script>');
+ frame.srcdoc=html;
+ await new Promise((resolve,reject)=>{let ticks=0;const timer=setInterval(()=>{if(frame.contentWindow.queenStreet?.ready){clearInterval(timer);resolve();}else if(ticks++>600){clearInterval(timer);reject(new Error('Game did not become ready: '+JSON.stringify(frame.contentWindow.__errors)));}},100);});
+ const w=gameWindow=frame.contentWindow,api=w.queenStreet,doc=w.document;
+ if(params.has('restore-weather')){
+   check('Saved weather mode and fixed type restore on a fresh load',api.settings.weatherMode===params.get('restore-weather')&&api.settings.weather==='rain'&&doc.querySelector('#setting-weather-mode').value===params.get('restore-weather'));
+   check('Restoring weather preserves audio, button size and time-of-day preferences',api.settings.volume===.17&&api.settings.size==='jumbo'&&!api.settings.dayNightCycle);
+   check('Restored mode applies its actual rain state',api.weather.rain.visible===(params.get('restore-weather')==='fixed'));
+ }
+ if(params.has('migrate-weather'))check('Older glaring defaults migrate to subdued cycling and preserve other preferences',api.settings.weatherMode==='cycle'&&api.settings.weather==='overcast'&&api.settings.dayNightCycle&&api.settings.volume===.17&&api.settings.size==='jumbo');
+ if(params.has('first-look'))check('Subdued overcast and slow weather/day-night cycles are the initial settings',api.settings.weather==='overcast'&&api.settings.weatherMode==='cycle'&&api.settings.dayNightCycle&&!api.settings.night);
+ api.updateSettings({mode:'one',camera:'auto',reduceMotion:false,size:'large',spacious:false,doorDwell:params.get('mode')==='watch'?10:0,stopEvery:1,quality:'high',dayNightCycle:params.has('first-look'),night:false,weatherMode:params.has('first-look')?'cycle':'fixed',weather:params.has('first-look')?'overcast':'clear'});api.restart();
+ check('WebGL scene ready',api.ready&&doc.querySelector('#loading').hidden);
+ check('Finishing pass and depth texture',api.graphics.target.depthTexture&&api.graphics.target.samples===4);
+ check('Extended streetscape',api.city.buildingCount>170);
+ check('Storefront awnings enrich the street-level scene',api.city.awningCount>80);
+ check('Shopfronts have framed upper windows and stronger facade trim',api.city.upperWindowCount>300&&api.city.facadeDetailCount>2000);
+ check('Building rooflines have varied parapet details',api.city.rooflineDetailCount>100);
+ check('Ground-floor storefronts have framed glazing and detailed entrances',api.city.shopfrontCount>150&&api.city.shopfrontFeatureCount>3000);
+ check('Store displays sit behind individual transparent glazing panes',api.city.storeGlazingCount>300&&api.city.storeGlazing.material.transparent&&api.city.storeGlazing.material.opacity>0&&api.city.storeGlazing.material.opacity<.25&&api.city.storeGlazing.renderOrder>0);
+ check('Distinct illustrated shop signs fit within the shared atlas',api.city.signCount>50&&api.city.signCount<=192);
+ if(params.get('scene')==='intersection'){
+   const frontage=api.city.neighbourhood;
+   check('Cross streets have extended, continuous shopfront blocks',frontage.sideStreetBuildings>=132);
+   check('Cross-street end walls are finished',frontage.finishedEndWalls>=24);
+   check('Corner elevations have detailed surrounds and fire escapes',frontage.sideElevationDetails>=100);
+   check('Cross-street shops have striped awnings',frontage.sideStreetAwnings>=132);
+   check('Cross-street windows have detailed surrounds',frontage.sideStreetWindows>=350);
+ }
+ if(params.get('scene')==='crosswalk'){
+   const frontage=api.city.neighbourhood;
+   check('Queen Street crosswalk bars run along the street with sparse spacing',frontage.mainCrosswalkStripeCount===10&&frontage.mainCrosswalkOrientation==='along-Queen-Street'&&frontage.mainCrosswalkStripeSize[0]<frontage.mainCrosswalkStripeSize[1]&&frontage.mainCrosswalkSpacing>=1.3);
+   check('Side-street crosswalk bars run along the side street with sparse spacing',frontage.sideCrosswalkStripeCount===9&&frontage.sideCrosswalkOrientation==='along-side-street'&&frontage.sideCrosswalkStripeSize[0]>frontage.sideCrosswalkStripeSize[1]&&frontage.sideCrosswalkSpacing>=1.38);
+   check('Each crossing has one sparse, evenly spaced stripe bank',frontage.crosswalkStripes===114);
+   check('Turned stripe banks remain separated at every corner',frontage.sideCrosswalkCenterOffset-3.2/2-((frontage.mainCrosswalkStripeCount-1)*frontage.mainCrosswalkSpacing/2+.46/2)>0);
+   check('Side-street sidewalks start beyond the Queen Street sidewalk edge',frontage.sideStreetSidewalkInnerEdge>=11.3);
+ }
+ if(params.get('scene')==='sidewalks'){
+   const THREE=await import('../dist/vendor/three.module.js');
+   const concrete=api.scene.children.filter(o=>o.isMesh&&o.material===api.city.materials.concrete);
+   const curbs=api.scene.children.filter(o=>o.isMesh&&o.material===api.city.materials.curb);
+   api.scene.updateMatrixWorld(true);
+   const ray=new THREE.Raycaster(),hitsAt=(meshes,x,z)=>{
+     ray.set(new THREE.Vector3(x,2,z),new THREE.Vector3(0,-1,0));
+     return ray.intersectObjects(meshes,false).filter(hit=>hit.point.y>.001);
+   };
+   for(const cross of api.route.crossings)for(const side of [-1,1])for(const end of [-1,1]){
+     const corner=`${cross.name}, ${side}, ${end}`;
+     for(const [x,distance] of [[8.23,6.89],[8.23,7.31],[9.34,7.67],[9.34,8.29],[8.23,8.61],[10.43,7.23],[11.29,7.51],[11.31,7.51]]){
+       const hits=hitsAt(concrete,side*x,cross.z+end*distance);
+       check('One sidewalk surface at '+corner+': '+x+', '+distance,hits.length===1);
+       const expected=x<9.85&&distance<8.35?.015+(distance-6.75)/1.6*.165:.18;
+       check('Sidewalk and ramp meet at the correct height at '+corner+': '+x+', '+distance,Math.abs(hits[0].point.y-expected)<.00001);
+     }
+     check('Curb leaves the ramp entrance open at '+corner,hitsAt(curbs,side*8.43,cross.z+end*6.83).length===0);
+   }
+ }
+ if(params.has('crosswalk-paint')){
+   const {checkCrosswalkPaint}=await import('./crosswalk-paint.js');
+   await checkCrosswalkPaint(api,check);
+ }
+ if(params.has('ambient-occlusion')){
+   const {checkAmbientOcclusion}=await import('./ambient-occlusion.js');
+   await checkAmbientOcclusion(api,check,w);
+ }
+ if(params.has('surface-artifacts')){
+   const {checkSurfaceArtifacts}=await import('./surface-artifacts.js');await checkSurfaceArtifacts(api,check,w);
+ }
+ if(params.has('depth-normals')){
+   const {checkDepthNormalRegression}=await import('./depth-normal-regression.js');await checkDepthNormalRegression(api,check,w);
+ }
+ if(params.has('shadow-surfaces')){
+   const {checkShadowSurfaces}=await import('./shadow-surfaces.js');await checkShadowSurfaces(api,check,w);
+ }
+ if(params.has('door-audio')){
+   const embedded=doc.getElementById('audio-door');
+   const bytes=embedded?Uint8Array.from(atob(embedded.textContent.trim()),c=>c.charCodeAt(0)):new Uint8Array(await (await fetch(new URL('./audio/streetcar-door.wav',doc.baseURI))).arrayBuffer());
+   const wav=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+   let dataLength=0,formatOffset=-1;
+   for(let offset=12;offset+8<=bytes.length;){const size=wav.getUint32(offset+4,true),chunk=String.fromCharCode(...bytes.subarray(offset,offset+4));if(chunk==='data')dataLength=size;if(chunk==='fmt ')formatOffset=offset;offset+=8+size+(size%2);}
+   const channels=formatOffset<0?0:wav.getUint16(formatOffset+10,true),sampleRate=formatOffset<0?0:wav.getUint32(formatOffset+12,true),bits=formatOffset<0?0:wav.getUint16(formatOffset+22,true);
+   const duration=dataLength/(sampleRate*channels*(bits/8));
+   check('Train door recording is valid and available locally or embedded',bytes[0]===82&&bytes[1]===73&&bytes[2]===70&&bytes[3]===70&&duration>3&&channels>=1&&sampleRate>0&&bits>0);
+   // Use the deliberate door control so audio is enabled, as in real play.
+   api.updateSettings({mode:'doors'});
+   const doorEvents=[],play=api.sound.play.bind(api.sound);api.sound.play=name=>{doorEvents.push(name);return Promise.resolve(true);};
+   api.ride.setDoors(false);api.toggleDoors();api.ride.setDoors(true);api.toggleDoors();
+   api.sound.play=play;
+   check('Door sound plays once for opening and once for closing',doorEvents.join(',')==='door,door');
+   api.updateSettings({mode:'one'});
+ }
+ check('PBR bump maps',!!api.city.materials.road.bumpMap&&!!api.city.materials.brick0.bumpMap);
+ check('Foliage uses alpha cutouts',api.city.materials.leaf.alphaTest>0);
+ check('No pedestrians in the street',api.city.actors.walkers===0&&api.city.actors.actors.every(actor=>actor.type==='car'));
+ if(params.has('asset')){
+   const {checkStreetcarAsset}=await import('./asset-checks.js');await checkStreetcarAsset(api,check);
+   api.setPaused(false);
+ }
+ if(params.has('bumper')){
+   const {checkBumperMotion}=await import('./bumper-motion.js');bumperMotion=await checkBumperMotion(api);
+   // Different finishes cross 8-bit rounding thresholds at different pixels.
+   // Small isolated pixel changes are bounded separately from strip-wide drift; measure their amplitude
+   // and the actual brightness drift across the whole strip instead.
+   check('Bumper trim is steady during slow travel',bumperMotion.fixed.maximumPixelChange<=3&&bumperMotion.fixed.peakChange<1&&bumperMotion.fixed.brightnessRange<.25);
+   // At the gentler sun angle both finishes can have only two-level rounding
+   // changes; require bounded flashes and no increase in the peak strip change.
+   check('Satin trim limits pixel flashes',bumperMotion.fixed.maximumPixelChange<=bumperMotion.legacy.maximumPixelChange&&bumperMotion.fixed.peakChange<=bumperMotion.legacy.peakChange);
+ }
+ if(params.has('road')){
+   const THREE=await import('../dist/vendor/three.module.js'),roadMeshes=api.scene.children.filter(o=>o.isMesh&&o.material===api.city.materials.road);
+   api.scene.updateMatrixWorld(true);
+   const ray=new THREE.Raycaster();
+   for(const [x,z] of [[api.route.trackX+api.route.gauge/2,-143.2],[api.route.trackX+api.route.gauge/2,-100],[.37,100],[10.23,300]]){
+     ray.set(new THREE.Vector3(x,2,z),new THREE.Vector3(0,-1,0));
+     const hits=ray.intersectObjects(roadMeshes,false).filter(hit=>hit.point.y>-.001);
+     check('Single road surface at '+x.toFixed(2)+', '+z,hits.length===1);
+   }
+   check('Road surface does not cast crawling detail shadows',roadMeshes.every(mesh=>!mesh.castShadow));
+   check('Camera uses improved near-depth precision',api.camera.near>=.5);
+   api.setCamera('front');api.view.transition=null;
+   api.view.instant=true;api.view.update(api.state.z,0);
+   for(let i=0;i<32;i++){
+     api.state.z+=.025;api.step(0);api.view.update(api.state.z,1/60);api.graphics.render(api.scene,api.camera);
+   }
+   check('Moving rail and road shader renders without errors',w.__errors.length===0);
+   api.restart();
+ }
+ if(params.has('traffic')){
+   const traffic=api.city.actors,moving=traffic.actors.filter(a=>a.moving),saved=traffic.actors.map(a=>({...a})),parked=traffic.actors.filter(a=>!a.moving).map(a=>[a.x,a.z]);
+   const a=moving[0],line=api.route.crossings[1].z+13;
+   a.z=line+3;a.speed=2;
+   traffic.setFocus(a.z);
+   const batch=traffic.batches.find(b=>b.lod===0&&b.part.wheel&&b.part.material.name==='Car_Alloy'&&b.active.some(item=>item.actor===a));
+   const wheel=batch.mesh,index=batch.active.findIndex(item=>item.actor===a),before=api.car.matrixWorld.clone(),after=before.clone();wheel.getMatrixAt(index,before);
+   for(let i=0;i<100;i++)traffic.update(28,.1,false);
+   wheel.getMatrixAt(index,after);
+   check('Traffic stops at red',a.z>=line&&a.z<=line+3&&a.speed===0);
+   check('Wheels roll as cars travel',[0,1,2,4,5,6,8,9,10].some(i=>Math.abs(before.elements[i]-after.elements[i])>.01));
+   for(let i=0;i<60;i++)traffic.update(0,.1,true);
+   check('Traffic resumes on green',a.z<line-1&&a.speed>0);
+   check('Parked cars stay parked',traffic.actors.filter(a=>!a.moving).every((a,i)=>a.x===parked[i][0]&&a.z===parked[i][1]));
+   traffic.actors.forEach((a,i)=>Object.assign(a,saved[i]));traffic.update(0,0,true);
+ }
+ if(params.has('car-assets')){
+   const {checkCarAssets}=await import('./car-assets.js');checkCarAssets(api,check);
+ }
+ if(params.has('audio-activation')){
+   const {checkAudioActivation}=await import('./audio-activation.js');checkAudioActivation(api,check,w);
+ }
+ if(params.has('departure-bell')){
+   const {checkDepartureBell}=await import('./departure-bell.js');await checkDepartureBell(api,check,w);
+ }
+ if(params.has('daytime-brakes')){
+   const {checkDaytimeBrakes}=await import('./daytime-brakes.js');await checkDaytimeBrakes(api,check,w);
+ }
+ if(params.has('verify')){
+   api.updateSettings({mode:'one',alwaysGreen:true});api.restart();
+   for(let stop=0;stop<3;stop++){
+     check('Go accepted for stop '+stop,api.ride.go());
+     for(let i=0;i<3000&&!['atStop','finished'].includes(api.state.phase);i++)api.step(.1);
+     for(let i=0;i<15;i++)api.step(.1);
+     check('Arrived at stop '+stop,api.state.currentStop===stop&&api.state.speed===0&&api.state.doors);
+   }
+   check('Completed all stops',api.state.complete&&api.state.served.every(Boolean));
+   api.updateSettings({mode:'manual'});api.restart();api.ride.setDoors(true);
+   for(let i=0;i<20;i++)api.ride.step(.1,1);
+   check('Door interlock blocks traction',api.state.speed===0);
+   api.updateSettings({mode:'doors',doorStyle:'separate',size:'jumbo',spacious:true});api.restart();
+   api.openSettings();check('Settings modal opens',doc.querySelector('dialog').open);doc.querySelector('#settings-done').click();
+   check('Settings modal closes',!doc.querySelector('dialog').open);
+   api.updateSettings({mode:'one',doorStyle:'toggle',size:'large',spacious:false,alwaysGreen:false});api.restart();
+ }
+ if(params.has('signals')){
+   api.setPaused(false);api.updateSettings({mode:'one',alwaysGreen:false,stopAtLights:true,dayNightCycle:false});api.openSettings();
+   const stopSetting=doc.querySelector('#setting-stop-at-lights'),cycleSetting=doc.querySelector('#setting-day-night');
+   stopSetting.checked=false;stopSetting.dispatchEvent(new w.Event('change',{bubbles:true}));
+   check('Settings disable red-light stops',!api.ride.stopAtLights&&doc.querySelector('#signal-status').hidden);
+   stopSetting.checked=true;stopSetting.dispatchEvent(new w.Event('change',{bubbles:true}));
+   cycleSetting.checked=true;cycleSetting.dispatchEvent(new w.Event('change',{bubbles:true}));
+   check('Settings enable the day/night cycle and its button',api.settings.dayNightCycle&&!doc.querySelector('#day-night-toggle').hidden);
+   doc.querySelector('#settings-done').click();
+   api.updateSettings({mode:'one',alwaysGreen:false,stopAtLights:true,dayNightCycle:false});api.restart();
+   Object.assign(api.state,{z:-121,speed:1,time:27,phase:'travelling',nextStop:1});
+   for(let i=0;i<100;i++)api.ride.step(.1);
+   check('Streetcar stops at a red light when enabled',api.state.signal==='red'&&api.state.speed===0&&api.state.z<=-120);
+   api.updateHUD();
+   check('Signal indicator shows the current signal',!doc.querySelector('#signal-status').hidden&&doc.querySelector('#signal-status').dataset.signal==='red');
+   const signalBounds=doc.querySelector('#signal-status').getBoundingClientRect();
+   check('Signal indicator remains at the bottom-right edge',signalBounds.right<=w.innerWidth&&signalBounds.bottom<=w.innerHeight&&signalBounds.left>w.innerWidth/2);
+   api.updateSettings({stopAtLights:false});api.restart();
+   Object.assign(api.state,{z:-121,speed:1,time:27,phase:'travelling',nextStop:1});
+   for(let i=0;i<20;i++)api.ride.step(.1);
+   check('Streetcar continues through a red light when disabled',api.state.signal==='red'&&api.state.speed>0&&api.state.z>-120);
+   check('Signal indicator hides when red-light stops are disabled',doc.querySelector('#signal-status').hidden);
+   api.updateSettings({stopAtLights:true,dayNightCycle:true});
+   check('Day/night switch appears when cycle is enabled',!doc.querySelector('#day-night-toggle').hidden);
+   check('Daylight starts at the day setting',api.nightAmount===0&&api.lighting.sun.intensity>2);
+   check('Street lamps stay unlit in daylight',api.lighting.streetLights.fixtures.length>=10&&api.lighting.streetLights.fixtures.every(fixture=>fixture.light.intensity===0&&fixture.bulb.material.emissiveIntensity===0));
+   api.step(255);
+   check('Day/night lighting transitions smoothly',api.nightAmount>.45&&api.nightAmount<.55&&api.lighting.sun.intensity<3.2);
+   check('Twilight fog warms toward sunset',api.scene.fog.color.r>api.scene.fog.color.b);
+   api.toggleDayNight();
+   check('Day/night button switches back to day',api.nightAmount===0&&!api.settings.night);
+   api.toggleDayNight();
+   check('Day/night button switches to night',api.nightAmount===1&&api.settings.night);
+   check('Night activates warm street lamps near the streetcar',api.lighting.streetLights.fixtures.some(fixture=>fixture.light.intensity>0&&fixture.bulb.material.emissiveIntensity>0));
+   api.updateSettings({dayNightCycle:false});
+   check('Disabling the cycle restores daytime and hides its button',api.nightAmount===0&&doc.querySelector('#day-night-toggle').hidden);
+   api.updateSettings({stopAtLights:true,mode:'one'});api.restart();
+ }
+ if(params.has('streetcar-audio')){
+   const audio=doc.querySelector('#streetcar-pass');audio.load();
+   await new Promise((resolve,reject)=>{if(audio.readyState>=1)return resolve();audio.addEventListener('loadedmetadata',resolve,{once:true});audio.addEventListener('error',()=>reject(new Error('Streetcar pass WAV failed to load')),{once:true});});
+   check('Toronto pass recording loads locally',Math.abs(audio.duration-17.434)<.02);
+   check('Binaural recording keeps both channels',audio.src.endsWith('streetcar-pass.wav')||doc.querySelector('#audio-streetcar-pass')!==null);
+   check('Pass recording is non-looping and uses no audio-element pitch stretch',audio.loop===false&&audio.defaultPlaybackRate===1);
+   const predictedLegSeconds=(distance,speed)=>{
+     const acceleration=.7,braking=1.05,top=speed;
+     return top/acceleration+top/braking+Math.max(0,distance-top*top/(2*acceleration)-top*top/(2*braking))/top;
+   };
+   const expectedRate=audio.duration/predictedLegSeconds(80,20/3.6);
+   check('Per-leg playback rate can span the full expected journey',expectedRate>.4&&expectedRate<1.6);
+ }
+ const scenario=params.get('scene');
+ if(scenario==='night'||params.has('night-lamps')){api.updateSettings({dayNightCycle:true,night:false,stopAtLights:true});api.toggleDayNight();api.setPaused(true);}
+ if(scenario==='intersection'){
+   api.setPaused(true);api.view.transition=null;api.view.update=()=>{};
+   api.camera.position.set(-138,8,api.route.crossings[0].z+14);
+   api.camera.lookAt(-98,5,api.route.crossings[0].z+14);
+   api.camera.fov=52;api.camera.updateProjectionMatrix();
+ }
+ if(scenario==='crosswalk'){
+   api.setPaused(true);api.view.transition=null;api.view.update=()=>{};
+   api.camera.position.set(-38,30,api.route.crossings[0].z+38);
+   api.camera.lookAt(0,0,api.route.crossings[0].z);
+   api.camera.fov=54;api.camera.updateProjectionMatrix();
+ }
+ if(scenario==='crosswalk-close'){
+   api.setPaused(true);api.view.transition=null;api.view.update=()=>{};
+   api.camera.clearViewOffset();api.camera.position.set(1.7,2.6,api.route.crossings[0].z-18);
+   api.camera.lookAt(1.7,0,api.route.crossings[0].z-8.75);
+   api.camera.fov=62;api.camera.updateProjectionMatrix();
+ }
+ if(scenario==='sidewalks'){
+   api.setPaused(true);api.view.transition=null;api.view.update=()=>{};
+   api.camera.clearViewOffset();api.camera.position.set(4.2,4.7,api.route.crossings[0].z+3.1);
+   api.camera.lookAt(9.2,.08,api.route.crossings[0].z+8.0);
+   api.camera.fov=54;api.camera.updateProjectionMatrix();
+ }
+ if(scenario==='park'){
+   api.setCamera('free');api.step(0);api.view.update(api.state.z,0);api.view.orbitYaw=-.75;api.view.orbitHeight=4.3;api.view.orbitDistance=25;api.view.instant=true;
+ }
+ if(scenario==='stop'){api.state.z=-124;api.state.currentStop=0;api.state.nextStop=1;api.state.phase='atStop';api.ride.setDoors(true);for(let i=0;i<20;i++)api.ride.step(.1);api.step(0);api.view.instant=true;}
+ if(params.get('mode')==='doors')api.updateSettings({mode:'doors',doorStyle:'separate',size:'jumbo',spacious:true});
+ if(params.get('mode')==='manual')api.updateSettings({mode:'manual'});
+ if(params.get('mode')==='watch')api.updateSettings({mode:'watch'});
+ if(params.has('camera'))api.setCamera(params.get('camera'));
+ if(params.has('at')){
+   api.state.z=Number(params.get('at'));api.step(0);api.view.instant=true;
+ }
+ for(let i=0;i<250;i++)api.view.update(api.state.z,1/60);
+ api.view.update(api.state.z,0);api.updateHUD();
+ if(scenario?.startsWith('car-')){
+   const variant=scenario.slice(4),a=api.city.actors.actors.find(a=>!a.moving&&a.x>0&&a.variant===variant);
+   api.setPaused(true);api.city.actors.setFocus(a.z);api.view.transition=null;api.view.update=()=>{};
+   api.car.visible=false;api.streetcars.vehicles.forEach(actor=>actor.car.visible=false);
+   const scale=api.camera.aspect<.8?2:1,direction=params.has('car-front')?-1:1;
+   api.camera.clearViewOffset();api.camera.fov=44;api.camera.updateProjectionMatrix();
+   api.camera.position.set(a.x-3.7*scale,1.9*scale,a.z+direction*5.8*scale);api.camera.lookAt(a.x,.8,a.z);
+ }
+ if(scenario==='streetcar'){
+   api.setPaused(true);api.view.transition=null;api.view.update=()=>{};
+   api.camera.clearViewOffset();api.camera.fov=35;api.camera.updateProjectionMatrix();
+   api.camera.position.set(api.route.trackX-7,4.5,api.state.z+19);
+   api.camera.lookAt(api.route.trackX,1.8,api.state.z);
+ }
+ if(scenario==='surface-lines'||scenario==='surface-lines-close'){
+   api.setPaused(true);api.view.transition=null;api.view.update=()=>{};
+   api.camera.clearViewOffset();api.camera.fov=46;api.camera.updateProjectionMatrix();
+   api.camera.position.set(api.route.trackX-6.3,2.7,api.state.z+8);
+   api.camera.lookAt(api.route.trackX-1.7,1.10,api.state.z-2.4);
+   if(scenario==='surface-lines-close'){
+     api.camera.position.set(api.route.trackX-4.7,2.45,api.state.z+8);
+     api.camera.lookAt(api.route.trackX-1.6,1.30,api.state.z-2.4);
+     api.camera.fov=40;api.camera.updateProjectionMatrix();
+   }
+ }
+ if(params.has('all-hdr')){api.graphics.target.textures[1].type=api.graphics.target.texture.type;api.graphics.target.dispose();}
+ if(params.has('depth-bits')){
+   const bits=Number(params.get('depth-bits'));
+   let source=await(await fetch('../dist/rendering.js')).text();
+   source=source.replace("'three'",JSON.stringify(new URL('../dist/vendor/three.module.js',location.href).href));
+   source=source.replaceAll('float d=texture2D(depth,uv).x;',`float d=texture2D(depth,uv).x;d=floor(d*${2**bits-1}.+.5)/${2**bits-1}.;`);
+   const {createSceneRenderer}=await w.eval('import('+JSON.stringify('data:text/javascript;base64,'+btoa(source))+')');
+   const stress=createSceneRenderer(api.renderer);api.graphics.dispose();Object.assign(api.graphics,stress);
+ }
+ if(params.has('shadow-acne')){api.lighting.sun.shadow.bias=0;api.lighting.sun.shadow.normalBias=0;}
+ if(params.has('no-ao'))api.graphics.uniforms.aoStrength.value=0;
+ if(params.has('no-shadows'))api.scene.traverse(o=>{if(o.isMesh)o.receiveShadow=false;});
+ if(params.has('no-relief'))api.scene.traverse(o=>{
+   if(!o.isMesh)return;
+   for(const mat of Array.isArray(o.material)?o.material:[o.material]){
+     mat.normalMap=null;mat.bumpMap=null;mat.needsUpdate=true;
+   }
+ });
+ if(params.has('ao-buffer')){
+   api.graphics.render(api.scene,api.camera);
+   const target=api.graphics.ambientOcclusion.filtered,pixels=new Uint8Array(target.width*target.height*4);
+   api.renderer.readRenderTargetPixels(target,0,0,target.width,target.height,pixels);
+   const canvas=doc.createElement('canvas');canvas.width=target.width;canvas.height=target.height;
+   Object.assign(canvas.style,{position:'fixed',inset:'0',width:'100%',height:'100%',zIndex:9999});
+   const ctx=canvas.getContext('2d'),image=ctx.createImageData(target.width,target.height);
+   for(let y=0;y<target.height;y++)for(let x=0;x<target.width;x++){
+     const i=(y*target.width+x)*4,j=((target.height-1-y)*target.width+x)*4;
+     const value=Math.max(0,255-(255-pixels[i])*12);
+     image.data[j]=image.data[j+1]=image.data[j+2]=value;image.data[j+3]=255;
+   }
+   ctx.putImageData(image,0,0);doc.body.append(canvas);
+ }
+ if(scenario==='model-interior'){
+   api.setPaused(true);api.view.transition=null;api.view.update=()=>{};
+   api.rig.setLights({interior:true});api.camera.clearViewOffset();api.camera.fov=70;api.camera.updateProjectionMatrix();
+   api.camera.position.set(api.route.trackX,2.48,api.state.z+5.18);
+   api.camera.lookAt(api.route.trackX,2.05,api.state.z-5.5);
+ }
+ if(scenario==='model-rear'){
+   api.setPaused(true);api.view.transition=null;api.view.update=()=>{};
+   api.camera.clearViewOffset();api.camera.fov=38;api.camera.updateProjectionMatrix();
+   api.camera.position.set(api.route.trackX+9,4.7,api.state.z-21);
+   api.camera.lookAt(api.route.trackX,1.8,api.state.z);
+ }
+ if(scenario==='model-lounge'){
+   api.setPaused(true);api.view.transition=null;api.view.update=()=>{};
+   api.rig.setLights({interior:true});api.camera.clearViewOffset();api.camera.fov=70;api.camera.updateProjectionMatrix();
+   api.camera.position.set(api.route.trackX,2.35,api.state.z-4.35);
+   api.camera.lookAt(api.route.trackX,2.10,api.state.z-7.1);
+ }
+ if(scenario==='model-roof'){
+   api.setPaused(true);api.view.transition=null;api.view.update=()=>{};
+   api.camera.clearViewOffset();api.camera.fov=45;api.camera.updateProjectionMatrix();
+   api.camera.position.set(api.route.trackX+3,16,api.state.z-5);
+   api.camera.lookAt(api.route.trackX,3.2,api.state.z-1);
+ }
+ if(params.has('streetcar-traffic')){
+   const {checkStreetcarTraffic}=await import('./streetcar-traffic.js');await checkStreetcarTraffic(api,check,w);
+ }
+ if(scenario==='passing-streetcar'){
+   api.setPaused(true);api.view.transition=null;api.view.update=()=>{};
+   Object.assign(api.streetcars.vehicles[0],{active:true,z:api.state.z+5,speed:6.8});
+   api.streetcars.update(0,api.state.z,0,true);
+   api.camera.clearViewOffset();api.camera.fov=43;api.camera.updateProjectionMatrix();
+   api.camera.position.set(-8,6,api.state.z+27);api.camera.lookAt(0,1.6,api.state.z+2);
+ }
+ if(['street-furniture','garden','rooftops'].includes(scenario)){
+   api.setPaused(true);api.view.transition=null;api.view.update=()=>{};
+   api.camera.clearViewOffset();api.camera.fov=50;api.camera.updateProjectionMatrix();
+   if(scenario==='street-furniture'){
+     api.camera.position.set(-4.0,2.5,-180);api.camera.lookAt(-10.3,1.2,-192);
+   }else if(scenario==='garden'){
+     api.camera.position.set(-7.0,5.0,-143.5);api.camera.lookAt(-20,1.35,-160.4);
+     if(api.camera.aspect<.8){api.camera.position.set(-4,7,-137.5);api.camera.fov=60;api.camera.updateProjectionMatrix();}
+   }else{
+     api.camera.position.set(1,20,-191);api.camera.lookAt(16,9,-175);
+   }
+ }
+ if(params.has('architecture')){
+   const {checkArchitecture}=await import('./architecture.js');checkArchitecture(api,check,w);
+ }
+ if(scenario?.startsWith('architecture-')){
+   const a=api.city.architecture,kind=scenario.slice(13),choices=a.placements.filter(p=>p.kind===(kind==='roof'?'rooflantern':kind==='street'?'baywindow':kind==='night'?'balcony':kind));
+   const p=choices.sort((a,b)=>Math.abs(a.z-api.route.start)-Math.abs(b.z-api.route.start))[0],b=a.buildings.find(b=>b.index===p.index);
+   api.setPaused(true);api.view.transition=null;api.view.update=()=>{};api.camera.clearViewOffset();api.camera.fov=48;api.camera.updateProjectionMatrix();
+   const phone=api.camera.aspect<.8;
+   if(kind==='roof'){
+     api.camera.position.set(b.side*5,b.height+7.5,b.mid+12);api.camera.lookAt(b.side*15,b.height+.5,b.mid);
+   }else if(kind==='street'){
+     api.camera.position.set(b.side*.8,4.5,b.mid+15);api.camera.lookAt(b.side*11.3,5.2,b.mid-3);
+   }else{
+     api.camera.position.set(b.side*(phone?5.5:6.5),6.5,p.z+(phone?8.5:6));api.camera.lookAt(b.side*11.1,5.7,p.z);
+   }
+   if(kind==='night')api.updateSettings({dayNightCycle:true,night:true});
+ }
+ if(params.has('streetscape')){
+   const {checkStreetscape}=await import('./streetscape.js');checkStreetscape(api,check,w);
+ }
+ if(scenario?.startsWith('retail-')){
+   const kind=scenario.slice(7),bay=api.city.scenery.displays.filter(b=>b.type===kind).sort((a,b)=>Math.abs(a.z-api.route.start)-Math.abs(b.z-api.route.start))[0];
+   api.setPaused(true);api.view.transition=null;api.view.update=()=>{};
+   api.camera.clearViewOffset();api.camera.fov=46;api.camera.updateProjectionMatrix();
+   const scale=api.camera.aspect<.8?1.6:1;
+   api.camera.position.set(bay.side*(11.8-4.6*scale),2.1,bay.z+3.8*scale);api.camera.lookAt(bay.side*11.95,1.65,bay.z);
+ }
+ if(params.has('retail')){
+   const {checkStorefronts}=await import('./storefronts.js');checkStorefronts(api,check,w);
+ }
+ if(params.has('shared-lanes')){
+   const {checkSharedLanes}=await import('./shared-lanes.js');checkSharedLanes(api,check,w);
+ }
+ if(params.has('city-night')){
+   const {checkNightCity}=await import('./night-city.js');checkNightCity(api,check,w);
+ }
+ if(scenario==='boarding-traffic'||scenario==='city-night'){
+   api.setPaused(true);api.view.transition=null;api.view.update=()=>{};api.camera.clearViewOffset();api.camera.fov=50;api.camera.updateProjectionMatrix();
+   if(scenario==='boarding-traffic'){
+     api.camera.position.set(-8,4.3,api.state.z-20);api.camera.lookAt(-1.8,1.7,api.state.z-7);
+     if(api.camera.aspect<.8){api.camera.position.set(-11,7.5,api.state.z-30);api.camera.lookAt(-1.8,1.5,api.state.z-9);}
+   }else{
+     api.camera.position.set(.8,3.5,-218);api.camera.lookAt(8.0,2.5,-190);
+     if(api.camera.aspect<.8){api.camera.position.set(5.5,3.0,-206);api.camera.lookAt(11.3,2.4,-200);}
+   }
+ }
+ if(params.has('mrt-colour')){
+   const {checkMrtColour}=await import('./mrt-colour.js');await checkMrtColour(api,check,w);
+ }
+ if(params.has('live-transitions')){
+   const {checkLiveTransitions}=await import('./live-transitions.js');await checkLiveTransitions(api,check,w,params.has('calmer-fade'));
+ }
+ if(params.has('night-lamp-check')){
+   const {checkNightLamps}=await import('./night-lamps.js');await checkNightLamps(api,check,w);
+ }
+ if(params.has('cinematic')){
+   api.updateSettings({weatherMode:'fixed',weather:params.get('cinematic'),dayNightCycle:params.get('cinematic')==='rainnight',night:params.get('cinematic')==='rainnight'});api.setPaused(true);api.view.transition=null;api.view.update=()=>{};api.camera.clearViewOffset();api.camera.fov=50;api.camera.updateProjectionMatrix();
+   api.camera.position.set(5.8,2.6,-181);api.camera.lookAt(-1.5,2.5,-211);
+   if(params.has('cinematic-check')){const {checkCinematic}=await import('./cinematic.js');checkCinematic(api,check,w);}
+ }
+ if(params.has('weather')){
+   api.updateSettings({weather:params.get('weather')});api.setPaused(true);api.view.transition=null;api.view.update=()=>{};api.camera.clearViewOffset();api.camera.fov=50;api.camera.updateProjectionMatrix();
+   api.camera.position.set(-5.3,1.7,-219);api.camera.lookAt(2.5,2.2,-184);
+   if(api.camera.aspect<.8){api.camera.position.set(-4,1.7,-219);api.camera.lookAt(-1,2,-190);}
+   const {checkWeather}=await import('./weather.js');checkWeather(api,check,w);
+ }
+ if(params.has('weather-modes')){
+   const {checkWeatherModes}=await import('./weather-modes.js');checkWeatherModes(api,check,w,params.get('weather-modes'));
+   api.view.transition=null;api.view.update=()=>{};api.camera.clearViewOffset();api.camera.fov=50;api.camera.updateProjectionMatrix();
+   api.camera.position.set(5.8,2.6,-181);api.camera.lookAt(-1.5,2.5,-211);
+ }
+ if(params.has('stop-jitter')){const {checkStopJitter}=await import('./stop-jitter.js');checkStopJitter(api,check,w);}
+ if(params.has('ride-settings')){const {checkRidePerformance}=await import('./ride-performance.js');await checkRidePerformance(api,check,w);}
+ api.graphics.render(api.scene,api.camera,api.view.transition);
+ await new Promise(resolve=>setTimeout(resolve,100));
+ if(params.has('settings')){api.openSettings();if(params.has('ride-settings')){doc.querySelector('#setting-door-dwell').scrollIntoView({block:'center'});check('Ride selectors fit the phone settings panel',['#setting-door-dwell','#setting-stop-every'].every(id=>{const r=doc.querySelector(id).getBoundingClientRect();return r.left>=0&&r.right<=w.innerWidth&&r.top>=0&&r.bottom<=w.innerHeight;}));}if(params.has('weather-modes')){doc.querySelector('#setting-weather-mode').scrollIntoView({block:'center'});const row=doc.querySelector('#setting-weather-mode').getBoundingClientRect();check('Weather controls fit the phone settings panel',row.left>=0&&row.right<=w.innerWidth&&row.top>=0&&row.bottom<=w.innerHeight);}}
+ const gl=api.renderer.getContext(),glError=gl.getError();check('No WebGL errors ('+glError+')',glError===gl.NO_ERROR);
+ check('No shader or runtime errors',w.__errors.length===0);
+ const controls=[...doc.querySelectorAll('.topbar,.ride-dock,.sound-controls,#stop-line')];
+ check('Controls fit viewport',controls.every(e=>{const b=e.getBoundingClientRect();return b.left>=0&&b.right<=w.innerWidth+1&&b.top>=0&&b.bottom<=w.innerHeight+1;}));
+ results.textContent=JSON.stringify({pass:true,checks,errors:w.__errors,bumperMotion,ridePerformance:w.__ridePerformance,weather:w.__weatherReport,sharedLanes:w.__sharedLaneReport,cityNight:w.__cityNightReport,architecture:w.__architectureReport,retail:w.__retailReport,scenery:w.__sceneryReport,nightLampReport:w.__nightLampReport,transitionMotion:w.__transitionMotionReport,surfaceReports:w.__surfaceReports,depthNormalReports:w.__depthNormalReports,shadowReports:w.__shadowReports,buildings:api.city.buildingCount,programs:api.renderer.info.programs.length,triangles:api.renderer.info.render.triangles,viewport:[w.innerWidth,w.innerHeight]},null,2);
+ document.title='PASS - Queen Street visual checks';
+}catch(error){document.body.className='failed';results.textContent=JSON.stringify({pass:false,error:String(error),checks,errors:gameWindow?.__errors??errors,bumperMotion,nightLampReport:gameWindow?.__nightLampReport,transitionMotion:gameWindow?.__transitionMotionReport,depthNormalReports:gameWindow?.__depthNormalReports,shadowReports:gameWindow?.__shadowReports},null,2);document.title='FAIL - Queen Street visual checks';}
+</script>

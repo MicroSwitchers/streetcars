@@ -1,0 +1,18 @@
+{
+  "id": "./",
+  "name": "Queen Street Streetcar",
+  "short_name": "Queen Street",
+  "description": "A gentle streetcar ride through a quiet Toronto neighbourhood.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#20323a",
+  "theme_color": "#20323a",
+  "lang": "en-CA",
+  "icons": [
+    {"src":"icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
+    {"src":"icons/maskable-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
+  ]
+}

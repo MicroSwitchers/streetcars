@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.openai/
+.*-temp/
+pwa/
+Queen-Street-Drive.html
+Queen-Street-PWA.zip
+qa/*
+!qa/*.mjs
+!qa/*.js
+!qa/*.html
+asset-source/*
+!asset-source/audio/
+!asset-source/README.md

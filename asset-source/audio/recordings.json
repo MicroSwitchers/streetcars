@@ -1,0 +1,26 @@
+{
+  "bell": {
+    "source": "479980__craigsmith__r04-39-trolley-bell.wav",
+    "sourceSha256": "63dc2e2bceec60227407539fe4fb4546339cd2ad8ed4d188ffa7a5df10af5a65",
+    "sha256": "bd70939192d5ec711b81dd5fc5b43f5508cd51d67895fb4a1c543987cd3a66cd",
+    "credit": "R04-39-Trolley Bell.wav by craigsmith -- https://freesound.org/s/479980/ -- License: Creative Commons 0",
+    "leadingSilenceRemovedSeconds": 0.12889583333333332,
+    "durationSeconds": 6.217208333333334,
+    "sampleRate": 48000,
+    "channels": 1,
+    "bits": 16,
+    "bytes": 596896
+  },
+  "horn": {
+    "source": "131930__mcpable__industrial-air-horn.wav",
+    "sourceSha256": "af685675100693666b8e55c45111d6a69dd3f81b692dcf6e54eb055b3db8a899",
+    "sha256": "15aa155b3421af2139986544c525a8d0028328190edb68ff6163a23efb9f26c6",
+    "credit": "Industrial Air Horn by mcpable -- https://freesound.org/s/131930/ -- License: Creative Commons 0",
+    "leadingSilenceRemovedSeconds": 0.34496598639455783,
+    "durationSeconds": 2.2264625850340134,
+    "sampleRate": 44100,
+    "channels": 2,
+    "bits": 16,
+    "bytes": 392792
+  }
+}

@@ -1,0 +1,33 @@
+export async function checkRidePerformance(api,check,w){
+ const doc=w.document,rig=api.rig;
+ api.updateSettings({mode:'one',doorDwell:5,stopEvery:2,quality:'high',volume:0,weatherMode:'fixed',weather:'overcast',dayNightCycle:false});api.setPaused(true);
+ check('New ride and graphics selectors match saved values',doc.querySelector('#setting-door-dwell').value==='5'&&doc.querySelector('#setting-stop-every').value==='2'&&doc.querySelector('#setting-quality').value==='high');
+ Object.assign(api.state,{z:api.route.stops[0].z,speed:0,currentStop:0,nextStop:2,phase:'atStop',doors:false,dwell:0});rig.setDoor('both',0,true);api.ride.setDoors(true);api.setPaused(false);
+ for(let i=0;i<10;i++)api.step(.1);
+ check('Go and door closing wait for the selected minimum',!api.ride.go()&&!api.ride.setDoors(false)&&api.state.doors);
+ for(let i=0;i<65;i++)api.step(.1);api.updateHUD();
+ check('Doors finish their hold without departing in One button mode',api.ride.dwellReady&&api.state.phase==='atStop'&&api.state.speed===0&&api.state.doors);
+ check('Go departs for the next scheduled stop',api.ride.go()&&api.state.nextStop===2);
+ for(let i=0;i<20;i++)api.step(.1);api.setPaused(true);api.updateHUD();
+ check('Every two stops targets Spadina after Bathurst',doc.querySelector('#stop-name').textContent==='Spadina Avenue');
+ const snapshot=api.captureSession(),z=api.state.z;api.restart();
+ check('Safe-update snapshot restores position, doors and pause state',api.restoreSession(snapshot)&&api.state.z===z&&api.state.paused&&api.state.nextStop===2);
+ api.updateSettings({quality:'low'});api.graphics.render(api.scene,api.camera);
+ check('Low quality removes MSAA and reduces effect sample budgets',api.graphics.target.samples===0&&api.graphics.uniforms.volumeSteps.value===12&&api.graphics.uniforms.reflectionSteps.value===8&&api.lighting.sun.shadow.mapSize.x===1024);
+ check('Low quality bounds the render resolution',api.renderer.getPixelRatio()<=1&&api.graphics.target.width*api.graphics.target.height<=551600);
+ api.updateSettings({quality:'balanced'});api.graphics.render(api.scene,api.camera);
+ check('Balanced quality applies without reloading',api.graphics.target.samples===0&&api.graphics.uniforms.volumeSteps.value===20&&api.lighting.sun.shadow.mapSize.x===1024);
+ api.updateSettings({quality:'high'});api.graphics.render(api.scene,api.camera);
+ check('High quality restores finer shadows and samples',api.graphics.target.samples===4&&api.graphics.uniforms.volumeSteps.value===32&&api.lighting.sun.shadow.mapSize.x===2048);
+ const THREE=await w.eval('import("three")'),frustum=new THREE.Frustum(),matrix=new THREE.Matrix4();api.camera.updateMatrixWorld();matrix.multiplyMatrices(api.camera.projectionMatrix,api.camera.matrixWorldInverse);frustum.setFromProjectionMatrix(matrix);
+ let total=0,submitted=0,meshes=0;
+ api.scene.traverseVisible(o=>{if(!o.isMesh)return;meshes++;const triangles=(o.geometry.index?.count??o.geometry.attributes.position.count)/3*(o.isInstancedMesh?o.count:1);total+=triangles;if(!o.frustumCulled||frustum.intersectsObject(o))submitted+=triangles;});
+ check('Scenery culling excludes substantial out-of-view geometry',meshes>200&&submitted<total*.8);
+ api.view.transition=null;await new Promise(r=>setTimeout(r,250));const frames=api.graphics.stats.frames;await new Promise(r=>setTimeout(r,250));
+ check('A stationary paused view reuses its rendered frame',api.graphics.stats.frames===frames);
+ api.updateSettings({quality:'auto'});
+ check('Auto respects the device starting budget',api.performance.mode==='auto'&&api.performance.level===(w.matchMedia('(pointer: coarse)').matches?'balanced':w.navigator.deviceMemory<=2?'low':w.navigator.deviceMemory<=4?'balanced':'high'));
+ const saved=JSON.parse(w.localStorage.getItem('queen-street-ride-settings-v1'));
+ check('Dwell, stop interval and graphics preference persist',saved.doorDwell===5&&saved.stopEvery===2&&saved.quality==='auto');
+ w.__ridePerformance={meshes,triangles:total,visibleTriangles:submitted,culledPercent:100*(1-submitted/total),pixelRatio:api.renderer.getPixelRatio(),profile:api.performance.level};
+}

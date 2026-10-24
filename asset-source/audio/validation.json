@@ -1,0 +1,95 @@
+{
+  "release": "987a3c9d81a64602",
+  "departureTiming": {
+    "pass": true,
+    "fullTrips": 9,
+    "modes": [
+      "one",
+      "doors",
+      "manual",
+      "watch"
+    ],
+    "frameRates": [
+      20,
+      60,
+      144
+    ],
+    "covers": [
+      "initial departure",
+      "station departure",
+      "signal departure",
+      "traffic departure",
+      "manual stop/start",
+      "door interlocks",
+      "pause/resume",
+      "restore",
+      "restart"
+    ]
+  },
+  "audioTiming": {
+    "pass": true,
+    "checks": 17
+  },
+  "stopMotion": {
+    "pass": true,
+    "arrivals": 135
+  },
+  "rideSettings": {
+    "pass": true,
+    "trips": 48,
+    "timedHolds": 108
+  },
+  "chrome": {
+    "departureBell": {
+      "report": "qa/renders-1792871853068/departureBell.json",
+      "checks": 38,
+      "pass": true
+    },
+    "offlineDepartureBell": {
+      "report": "qa/renders-1792871853068/offlineDepartureBell.json",
+      "checks": 38,
+      "pass": true
+    },
+    "audioActivation": {
+      "report": "qa/renders-1792871853068/audioActivation.json",
+      "checks": 20,
+      "pass": true
+    },
+    "offlineAudioActivation": {
+      "report": "qa/renders-1792871853068/offlineAudioActivation.json",
+      "checks": 20,
+      "pass": true
+    },
+    "doorAudio": {
+      "report": "qa/renders-1792871965243/doorAudio.json",
+      "checks": 17,
+      "pass": true
+    },
+    "offlineDoorAudio": {
+      "report": "qa/renders-1792871965243/offlineDoorAudio.json",
+      "checks": 17,
+      "pass": true
+    },
+    "streetcarAudio": {
+      "report": "qa/renders-1792871965243/streetcarAudio.json",
+      "checks": 19,
+      "pass": true
+    },
+    "offlineStreetcarAudio": {
+      "report": "qa/renders-1792871965243/offlineStreetcarAudio.json",
+      "checks": 19,
+      "pass": true
+    }
+  },
+  "pwa": {
+    "pass": true,
+    "checks": 17,
+    "report": "qa/pwa-1792871802562/report.json",
+    "cachedAssets": 46
+  },
+  "assets": {
+    "originalsUnmodified": true,
+    "portableAndPwaMatchPreparedPcm": true,
+    "attributionsPackaged": true
+  }
+}
