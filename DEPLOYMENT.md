@@ -106,3 +106,11 @@ moving rides are not reloaded, and checks snapshot restoration and cache cleanup
 Implementation references: [MDN installation requirements](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable),
 [service worker lifecycle](https://web.dev/articles/service-worker-lifecycle),
 and [WebKit Home Screen web apps](https://webkit.org/blog/16993/news-from-wwdc25-web-technology-coming-this-fall-in-safari-26-beta/#every-site-can-be-a-web-app-on-ios-and-ipados).
+
+## GitHub Pages deployment
+
+The public game is at https://microswitchers.github.io/streetcars/ and the repository is https://github.com/MicroSwitchers/streetcars.
+
+The `.github/workflows/pages.yml` workflow checks ride/audio behavior, builds the PWA and publishes it on every push to `main`. Runtime source and prepared game assets are tracked; generated builds, QA screenshots and native Blender backups are excluded from Git history. The build uses the committed PCM recordings, so original WAV masters are not required on the CI server.
+
+Run `node qa/check_live.mjs` on Windows with Chrome installed to verify the public game becomes playable, finishes its offline cache and reloads with the network disabled. Local verification passed for release `a56a2e86639066b5`, including 46 cached assets, working sound credits and no runtime exceptions.
