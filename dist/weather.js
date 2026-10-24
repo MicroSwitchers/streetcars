@@ -96,7 +96,7 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
  const probeMaterial=skyMaterial.clone(),probe=new THREE.Mesh(sky.geometry,probeMaterial);probeScene.add(probe);
  const nightEnvironment={value:scene.environment},environmentBlend={value:0},nextEnvironment={value:scene.environment},nextNightEnvironment={value:scene.environment},profileBlend={value:0};
  const environmentMaterials=new Set();scene.traverse(o=>{if(o.isMesh)for(const m of Array.isArray(o.material)?o.material:[o.material])if(m.isMeshStandardMaterial&&!m.envMap)environmentMaterials.add(m);});
- for(const material of environmentMaterials){const compile=material.onBeforeCompile,key=material.customProgramCacheKey();
+ for(const material of graphics.compatibility?[]:environmentMaterials){const compile=material.onBeforeCompile,key=material.customProgramCacheKey();
    material.onBeforeCompile=function(shader,renderer){compile.call(this,shader,renderer);Object.assign(shader.uniforms,{weatherNightEnvironment:nightEnvironment,weatherEnvironmentBlend:environmentBlend,weatherNextEnvironment:nextEnvironment,weatherNextNightEnvironment:nextNightEnvironment,weatherProfileBlend:profileBlend});
      shader.fragmentShader='uniform sampler2D weatherNightEnvironment;uniform sampler2D weatherNextEnvironment;uniform sampler2D weatherNextNightEnvironment;uniform float weatherEnvironmentBlend;uniform float weatherProfileBlend;\n'+shader.fragmentShader;
      const chunk=THREE.ShaderChunk.envmap_physical_pars_fragment.replace(/vec4 envMapColor = textureCubeUV\( envMap, (.*?) \);/g,`vec4 envMapColor = mix(textureCubeUV(envMap, $1),textureCubeUV(weatherNightEnvironment, $1),weatherEnvironmentBlend);
@@ -111,7 +111,7 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
      for(const n of [0,1]){
        for(const [name,value] of Object.entries({cloudCover:p.cloud,night:n,golden:p.gold,storm:p.storm,weatherTime:0}))probeMaterial.uniforms[name].value=value;
        probeMaterial.uniforms.sunDirection.value.set(...p.sun).normalize();
-       const cube=new THREE.WebGLCubeRenderTarget(128,{type:THREE.HalfFloatType});new THREE.CubeCamera(.5,1000,cube).update(renderer,probeScene);
+       const cube=new THREE.WebGLCubeRenderTarget(graphics.compatibility?64:128,{type:THREE.HalfFloatType});new THREE.CubeCamera(.5,1000,cube).update(renderer,probeScene);
        pair.push(pmrem.fromCubemap(cube.texture));cube.dispose();
      }environments.set(key,pair);
    }
@@ -121,8 +121,9 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
    const from=mode==='off'?'off':mode==='cycle'?phase.from:preset;
    const to=mode==='cycle'?phase.to:from,blend=mode==='cycle'?phase.blend:0;
    const pair=probePair(from),next=blend>0?probePair(to):pair;
-   scene.environment=pair[0].texture;nightEnvironment.value=pair[1].texture;environmentBlend.value=night;
+   scene.environment=pair[graphics.compatibility&&night>=.5?1:0].texture;nightEnvironment.value=pair[1].texture;environmentBlend.value=night;
    nextEnvironment.value=next[0].texture;nextNightEnvironment.value=next[1].texture;profileBlend.value=blend;
+   if(graphics.compatibility)for(const [key,unused] of environments)if(key!==from&&key!==to){unused.forEach(target=>target.dispose());environments.delete(key);}
  }
  // One seeded particle batch. Drops fall only outdoors, above the vehicles.
  const count=4500,positions=new Float32Array(count*3),seeds=new Float32Array(count);
@@ -154,5 +155,6 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
    configure(nextMode,value){mode=WEATHER_MODES.includes(nextMode)?nextMode:'cycle';preset=Object.hasOwn(WEATHER,value)?value:'overcast';},
    setPreset(value){preset=Object.hasOwn(WEATHER,value)?value:'overcast';apply();},
    update(dt,z,nightAmount,ratio=1){const elapsed=Math.min(.1,Math.max(0,dt));if(mode!=='off')time+=elapsed;if(mode==='cycle')cycleTime+=elapsed;focus=z;night=nightAmount;rainMaterial.uniforms.focus.value=focus;rainMaterial.uniforms.pixelRatio.value=Math.min(2,ratio);apply();},
+   rebuildEnvironments(){for(const pair of environments.values())pair.forEach(p=>p.dispose());environments.clear();apply();},
    environments,dispose(){sky.removeFromParent();rain.removeFromParent();sky.geometry.dispose();skyMaterial.dispose();probeMaterial.dispose();pmrem.dispose();for(const pair of environments.values())pair.forEach(p=>p.dispose());geometry.dispose();rainMaterial.dispose();}};
 }

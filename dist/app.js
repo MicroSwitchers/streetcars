@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {loadStreetcar,yieldToBrowser} from './loading.js';
-import {AdaptiveQuality,QUALITY,initialQuality,renderRatio,QUALITY_MODES} from './performance.js';
+import {AdaptiveQuality,QUALITY,initialQuality,qualityProfile,renderRatio,QUALITY_MODES} from './performance.js';
 import {StreetcarController} from 'streetcar-controller';
 import {Ride} from './ride.js';
 import {StreetcarCamera,CAMERA_MODES,CAMERA_NAMES} from './cameras.js';
@@ -24,7 +24,8 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
  state.lights=true;rig.setLights({headlights:true,tail:true,markers:true,interior:true});ride.cruise=settings.cruise/3.6;ride.setDwellSeconds(settings.doorDwell);ride.setStopEvery(settings.stopEvery);ride.setAlwaysGreen(settings.alwaysGreen);ride.setStopAtLights(settings.stopAtLights);city.updateSignals(state.time,settings.alwaysGreen);lighting?.addStreetcar(car,rig);
  const streetcars=createStreetcarTraffic(scene,trafficTemplate,route,lighting,city.actors);
  const weather=createWeather(scene,city.materials,lighting,graphics,renderer);
- const performanceBudget=new AdaptiveQuality(initialQuality({coarse:matchMedia('(pointer: coarse)').matches,memory:navigator.deviceMemory}));
+ const compatibility=!!graphics.compatibility;
+ const performanceBudget=new AdaptiveQuality(initialQuality(renderer.userData?.device??{coarse:matchMedia('(pointer: coarse)').matches,memory:navigator.deviceMemory}),compatibility?'low':'high');
  performanceBudget.select(settings.quality);let needsRender=true,lastCityNight=-1;
  const roadStreetcars=[{id:'player',type:'streetcar',direction:1,length:15.6,active:true},{id:'oncoming',type:'streetcar',direction:-1,length:15.6}];
  city.actors.setStreetcars(()=>{
@@ -59,6 +60,7 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
    for(const [id,value] of [['setting-green',settings.alwaysGreen],['setting-stop-at-lights',settings.stopAtLights],['setting-day-night',settings.dayNightCycle],['setting-spacious',settings.spacious],['setting-swipe',settings.swipe],['setting-motion',settings.reduceMotion],['setting-contrast',settings.contrast],['setting-bell',settings.bell],['setting-horn',settings.horn]])$(id).checked=value;
    $('free-camera-help').hidden=settings.camera!=='free';
    $('volume-value').textContent=settings.volume===0?'Off':Math.round(settings.volume*100)+'%';$('camera-name').textContent=CAMERA_NAMES[settings.camera];$('camera').setAttribute('aria-label','Change camera. Current view: '+CAMERA_NAMES[settings.camera]);
+   $('setting-quality').disabled=compatibility;$('setting-quality').title=compatibility?'Lighter graphics are active to keep this device stable.':'';if(compatibility)$('setting-quality').previousElementSibling.querySelector('small').textContent='Lighter graphics are active to keep this device stable.';
    $('setting-weather').value=settings.weather;$('setting-weather-mode').value=settings.weatherMode;
    $('weather-profile-setting').hidden=settings.weatherMode!=='fixed';$('setting-weather').disabled=settings.weatherMode!=='fixed';
    $('weather-mode-help').textContent=settings.weatherMode==='off'?'Static, soft lighting without rain, haze, rays or wet-road effects. Day/night still works.':settings.weatherMode==='fixed'?'Choose one weather type below. The day/night cycle works separately.':'Weather changes gently over several minutes, through day and night.';
@@ -164,23 +166,23 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
    $('speed').textContent=Math.round(state.speed*3.6);$('power-label').textContent=state.doors?'Doors open':state.assist?'Signal hold':state.command>0?'Power':state.command<0?'Brake':'Coast';
    marker.visible=manual&&!!next;marker.position.set(route.trackX,.055,next?.z??0);
  }
- function applyQuality(){const profile=QUALITY[performanceBudget.level];graphics.setQuality(profile);lighting?.setQuality(profile);resize();}
- function resize(){needsRender=true;const profile=QUALITY[performanceBudget.level];renderer.setPixelRatio(renderRatio(profile,innerWidth,innerHeight,devicePixelRatio));renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();view.instant=true;}
+ function applyQuality(){const profile=qualityProfile(performanceBudget.level,compatibility);graphics.setQuality(profile);lighting?.setQuality(profile);resize();}
+ function resize(){needsRender=true;const profile=qualityProfile(performanceBudget.level,compatibility);renderer.setPixelRatio(renderRatio(profile,innerWidth,innerHeight,devicePixelRatio));renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();view.instant=true;}
  function captureSession(){return {version:1,ride:ride.snapshot(),cycleTime,weather:weather.snapshotClock()};}
  function restoreSession(snapshot){if(snapshot?.version!==1||!ride.restore(snapshot.ride))return false;if(typeof snapshot.ride.state.lights==='boolean'){state.lights=snapshot.ride.state.lights;rig.setLights({headlights:state.lights,tail:state.lights,markers:state.lights,interior:state.lights});$('lights').textContent=state.lights?'Night lights on':'Night lights off';$('lights').setAttribute('aria-pressed',state.lights);}if(Number.isFinite(snapshot.cycleTime))cycleTime=((snapshot.cycleTime%DAY_NIGHT.duration)+DAY_NIGHT.duration)%DAY_NIGHT.duration;weather.restoreClock(snapshot.weather);updateDayNight();city.actors.reset();streetcars.reset(state.z);updateWorld(0);view.reset();needsRender=true;return true;}
  const manifest=document.querySelector('link[rel="manifest"]'),release=document.querySelector('meta[name="queen-street-release"]')?.content;
  const sessionKey=release&&manifest?'queen-street-update-session:'+new URL('./',manifest.href).href:null;
  if(sessionKey)try{const saved=sessionStorage.getItem(sessionKey);sessionStorage.removeItem(sessionKey);if(saved)restoreSession(JSON.parse(saved));}catch{}
  window.addEventListener('resize',resize);window.visualViewport?.addEventListener('resize',resize);applyQuality();applyUI();updateWorld(0);view.update(state.z,0);
- graphics.prepare(scene);await yieldToBrowser();
+ if(renderer.userData?.recovery?.lost)return null;
+ graphics.prepare(scene,camera);await yieldToBrowser();
  if(renderer.compileAsync){renderer.setRenderTarget(graphics.target);try{await renderer.compileAsync(scene,camera);}finally{renderer.setRenderTarget(null);}}
+ if(renderer.userData?.recovery?.lost)return null;
  graphics.render(scene,camera,view.transition);$('loading').hidden=true;
- canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();setPaused(true);if(sessionKey)try{sessionStorage.setItem(sessionKey,JSON.stringify(captureSession()));}catch{}$('loading').hidden=false;$('load-message').textContent='Graphics were interrupted. Reload to continue.';$('reload-game').hidden=false;});
- $('reload-game').onclick=()=>location.reload();
  const api={scene,car,rig,streetcars,renderer,graphics,camera,lighting,state,route,city,weather,ride,settings,sound,view,performance:performanceBudget,captureSession,restoreSession,step,setCamera,primary,toggleDoors:()=>doors(),toggleDayNight, get nightAmount(){return nightAmount;},restart,updateHUD,updateSettings,setPaused,openSettings,ready:true};window.queenStreet=api;window.dispatchEvent(new Event('queen-street-ready'));
  if(settings.mode!=='manual')$('go').focus({preventScroll:true});
  const clock=new THREE.Clock(),lastPosition=new THREE.Vector3(),lastRotation=new THREE.Quaternion();let frameCount=0,lastFov=0,pendingFrame=0;
- function frame(){requestAnimationFrame(frame);pendingFrame+=clock.getDelta();if(document.hidden){pendingFrame=0;return;}if(pendingFrame<1/60-.001&&!needsRender)return;
+ function frame(){requestAnimationFrame(frame);pendingFrame+=clock.getDelta();if(document.hidden||renderer.userData?.recovery?.lost){pendingFrame=0;return;}if(pendingFrame<(compatibility?1/30:1/60)-.001&&!needsRender)return;
    const elapsed=pendingFrame,dt=Math.min(elapsed,.06);pendingFrame=0;
    step(dt);view.stopped=['atStop','finished'].includes(state.phase);view.update(state.z,dt,state.paused);
    if(performanceBudget.sample(elapsed,!state.paused&&!view.transition)){applyQuality();}

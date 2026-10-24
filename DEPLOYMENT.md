@@ -114,3 +114,11 @@ The public game is at https://microswitchers.github.io/streetcars/ and the repos
 The `.github/workflows/pages.yml` workflow checks ride/audio behavior, builds the PWA and publishes it on every push to `main`. Runtime source and prepared game assets are tracked; generated builds, QA screenshots and native Blender backups are excluded from Git history. The build uses the committed PCM recordings, so original WAV masters are not required on the CI server.
 
 Run `node qa/check_live.mjs` on Windows with Chrome installed to verify the public game becomes playable, finishes its offline cache and reloads with the network disabled. Local verification passed for release `a56a2e86639066b5`, including 46 cached assets, working sound credits and no runtime exceptions.
+
+## iPad graphics and context recovery
+
+Apple mobile devices (including iPad Safari desktop mode) start on a separate forward renderer with a 400,000-pixel drawing budget, 512-pixel sun shadow map and a 30 fps cap. It keeps the game models, PBR materials, weather sky/rain and night lights, while omitting the desktop MRT/AO, volumetric and screen-space reflection passes. At most four local spot lights and two cabin point lights shade the scene. Large livery and sign textures are reduced to at most 2048 pixels per side before GPU upload. Automatic quality cannot promote these devices back to the heavy renderer.
+
+Context-loss listeners install before renderer creation. A failure pauses rendering, preserves the ride when available and persists the safe renderer for subsequent loads. Context restoration rebuilds reflection probes and leaves the player paused at the same position. A GPU startup failure can still trigger PWA update checking. Normal desktop rendering remains available on devices without a recorded GPU failure.
+
+Checks: `node qa/check_graphics_budget.mjs`; `node qa/check_live.mjs <PWA URL> --ipad --loss`; `node qa/check_live.mjs <PWA URL> --startup-loss`; and `node qa/check_live.mjs <PWA URL> --loss`. These simulate device detection and actual WebGL context loss/restoration in Chrome; they do not substitute for a physical iPad test.

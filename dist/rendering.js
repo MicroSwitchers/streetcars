@@ -61,7 +61,8 @@ function prepareBackgroundNormals(){
 
 // Half-resolution ambient occlusion with depth-aware filtering, followed by
 // edge antialiasing and a gentle vignette. Sampling stays fixed as time passes.
-export function createSceneRenderer(renderer){
+export function createSceneRenderer(renderer,{compatibility=false}={}){
+ if(compatibility)return createCompatibilityRenderer(renderer);
  prepareBackgroundNormals();
  let quality=QUALITY.high,qualityDirty=true;
  const stats={frames:0,drawCalls:0,triangles:0,quality:'high'};
@@ -349,5 +350,41 @@ export function createSceneRenderer(renderer){
      stats.frames++;stats.drawCalls=renderer.info.render.calls;stats.triangles=renderer.info.render.triangles;
    },
    dispose(){target.dispose();outgoing.dispose();aoRaw.dispose();aoFiltered.dispose();glowA.dispose();glowB.dispose();volumeTarget.dispose();volumeMaterial.dispose();volumeScreen.children[0].geometry.dispose();blackGlow.dispose();glowMaterial.dispose();aoMaterial.dispose();filterMaterial.dispose();material.dispose();outgoingMaterial.dispose();quad.geometry.dispose();}
+ };
+}
+
+// One forward pass on constrained Apple GPUs: no MRT, float framebuffer,
+// screen-space ray marching, multisampling or double-rendered camera fades.
+// PBR materials, sun shadows, rain, emissive windows and real lamps remain.
+function createCompatibilityRenderer(renderer){
+ const stats={frames:0,drawCalls:0,triangles:0,quality:'compatibility',texturePixelsSaved:0},position=new THREE.Vector3(),textures=new WeakSet();
+ const lamps=Array.from({length:3},()=>new THREE.Vector4()),directions=lamps.map(()=>new THREE.Vector4()),colors=lamps.map(()=>new THREE.Color());
+ let preparedScene=null,spots=[],points=[];
+ function prepare(scene,view){
+  if(preparedScene!==scene){preparedScene=scene;spots=[];points=[];scene.traverse(o=>{
+   if(o.isSpotLight)spots.push(o);else if(o.isPointLight)points.push(o);
+   for(const material of o.material?(Array.isArray(o.material)?o.material:[o.material]):[])for(const texture of Object.values(material)){
+    if(!texture?.isTexture||textures.has(texture))continue;textures.add(texture);
+    const image=texture.image,width=image?.width,height=image?.height;
+    if(!width||!height||Math.max(width,height)<=2048)continue;
+    const scale=2048/Math.max(width,height),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(width*scale));canvas.height=Math.max(1,Math.round(height*scale));
+    canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);texture.image=canvas;texture.needsUpdate=true;
+    stats.texturePixelsSaved+=width*height-canvas.width*canvas.height;
+   }
+  });}
+  for(const [lights,limit] of [[spots,4],[points,2]]){
+   lights.sort((a,b)=>a.getWorldPosition(position).distanceToSquared(view?.position??scene.position)-b.getWorldPosition(position).distanceToSquared(view?.position??scene.position));
+   lights.forEach((light,i)=>light.visible=i<limit);
+  }
+ }
+ return {compatibility:true,target:null,stats,prepare,invalidate(){preparedScene=null;},setQuality(){},bindAtmosphere(){},setNight(){},setWeather(){},
+  atmosphere:{uniforms:{lamps:{value:lamps},lampDirections:{value:directions},lampColors:{value:colors}}},
+  render(scene,view,transition){
+   prepare(scene,view);renderer.info.reset();renderer.setRenderTarget(null);
+   const progress=transition?.progress??1;
+   renderer.domElement.style.opacity=transition?String(Math.abs(progress*2-1)):'';
+   renderer.render(scene,transition&&progress<.5?transition.from:view);
+   stats.frames++;stats.drawCalls=renderer.info.render.calls;stats.triangles=renderer.info.render.triangles;
+  },dispose(){renderer.domElement.style.opacity='';}
  };
 }

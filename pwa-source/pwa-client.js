@@ -2,7 +2,7 @@ const release=document.querySelector('meta[name="queen-street-release"]')?.conte
 const manifest=document.querySelector('link[rel="manifest"]');
 const root=manifest&&new URL('./',manifest.href),status=document.getElementById('app-status'),section=document.getElementById('install-section'),button=document.getElementById('install-app');
 const sessionKey=root&&'queen-street-update-session:'+root.href;
-let registration,promptEvent,reloading=false,pendingReload=false,activationSent=false,hadController=!!navigator.serviceWorker?.controller;
+let registration,promptEvent,reloading=false,pendingReload=false,activationSent=false,starting=false,hadController=!!navigator.serviceWorker?.controller;
 const text=value=>{if(status)status.textContent=value;};
 
 if(release&&root&&isSecureContext&&'serviceWorker' in navigator){
@@ -18,8 +18,8 @@ if(release&&root&&isSecureContext&&'serviceWorker' in navigator){
    if(event.data?.type==='OFFLINE_READY'&&event.data.release===release)text('Ready for offline play. Updates are checked automatically.');
  });
  function reportVersion(){navigator.serviceWorker.controller?.postMessage({type:'CLIENT_VERSION',release});}
- function safeToUpdate(){const api=window.queenStreet;return api?.ready&&!document.hidden&&!document.getElementById('settings-dialog')?.open&&(api.state.paused||!api.view.transition&&(api.state.phase==='ready'||api.state.phase==='finished'&&api.state.dwell>=1));}
- function preserveRide(){try{const snapshot=window.queenStreet.captureSession();sessionStorage.setItem(sessionKey,JSON.stringify(snapshot));return true;}catch{return false;}}
+ function safeToUpdate(){const api=window.queenStreet;return !document.hidden&&(window.queenStreetGraphicsLost||api?.ready&&!document.getElementById('settings-dialog')?.open&&(api.state.paused||!api.view.transition&&(api.state.phase==='ready'||api.state.phase==='finished'&&api.state.dwell>=1)));}
+ function preserveRide(){if(!window.queenStreet?.ready)return !!window.queenStreetGraphicsLost;try{const snapshot=window.queenStreet.captureSession();sessionStorage.setItem(sessionKey,JSON.stringify(snapshot));return true;}catch{return false;}}
  function applyUpdate(){
    if(reloading||!safeToUpdate())return;
    if(pendingReload){if(!preserveRide())return;reloading=true;location.reload();return;}
@@ -35,6 +35,7 @@ if(release&&root&&isSecureContext&&'serviceWorker' in navigator){
    reportVersion();try{await registration.update();}catch{/* Keep the verified offline version when the network is unavailable. */}
  }
  async function start(){
+   if(starting)return;starting=true;
    try{
      registration=await navigator.serviceWorker.register(new URL('sw.js',root),{scope:root.pathname,updateViaCache:'none'});
      window.queenStreetPWA={registration,release,checkUpdates,get pending(){return !!registration.waiting||pendingReload;}};
@@ -55,4 +56,6 @@ if(release&&root&&isSecureContext&&'serviceWorker' in navigator){
  // Register after the first playable frame so background caching does not
  // compete with initial model loading and shader compilation.
  if(window.queenStreet?.ready)setTimeout(start,1000);else window.addEventListener('queen-street-ready',()=>setTimeout(start,1000),{once:true});
+ // A failed GPU startup must still be able to receive the release that fixes it.
+ window.addEventListener('queen-street-graphics-lost',start);
 }
