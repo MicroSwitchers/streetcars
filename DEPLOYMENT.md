@@ -122,3 +122,7 @@ Apple mobile devices (including iPad Safari desktop mode) start on a separate fo
 Context-loss listeners install before renderer creation. A failure pauses rendering, preserves the ride when available and persists the safe renderer for subsequent loads. Context restoration rebuilds reflection probes and leaves the player paused at the same position. A GPU startup failure can still trigger PWA update checking. Normal desktop rendering remains available on devices without a recorded GPU failure.
 
 Checks: `node qa/check_graphics_budget.mjs`; `node qa/check_live.mjs <PWA URL> --ipad --loss`; `node qa/check_live.mjs <PWA URL> --startup-loss`; and `node qa/check_live.mjs <PWA URL> --loss`. These simulate device detection and actual WebGL context loss/restoration in Chrome; they do not substitute for a physical iPad test.
+
+## Sensory controls validation
+
+`node qa/check_sensory_logic.mjs` checks the complete weather-button loop, stable shuffled weather and smooth boundaries. `node qa/check_live.mjs <PWA URL> --sensory --phone` and `--sensory --ipad` check defaults, bright/dim readiness, the compact route, early hold cancellation, full touch and keyboard holds, Random progression and all preferences after a complete offline reload. The iPad case also retains its bounded graphics profile.

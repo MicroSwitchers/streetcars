@@ -211,3 +211,36 @@ select{background:#182a30;color:#f9efda;border-color:#a9bdb52e}
  .signal-status svg{width:16px;height:28px}
 }
 @media(max-height:540px){.signal-status{bottom:111px}}
+
+/* Quiet sensory view: action is communicated by the control itself. */
+#ride-message{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;padding:0;margin:-1px;border:0;background:none}
+.ready-cues .go-button.is-ready,.ready-cues .door-button.is-ready{background:linear-gradient(145deg,#baff83,#56ed80);color:#102d1c;border:3px solid #d5ffb3;box-shadow:inset 0 1px 0 #ffffff99,0 5px 0 #28754b,0 0 18px 4px #97ff8c70}
+.ready-cues .go-button[aria-disabled=true],.ready-cues .door-button[aria-disabled=true]{background:#53635f;color:#c4ceca;border-color:#7a8c83;box-shadow:0 4px 0 #35483e}
+.ready-cues .go-button[aria-disabled=true] svg{opacity:.65}
+#stop-line{left:max(14px,env(safe-area-inset-left));top:32%;transform:none;width:100px;padding:0;background:none;border:0;border-radius:0;box-shadow:none;backdrop-filter:none;display:block;pointer-events:none}
+#stop-prefix,#stop-name,#distance{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);padding:0;border:0;margin:-1px}
+#stop-line .route-strip{display:flex;flex-direction:column;justify-content:space-between;height:170px;padding:0;margin:0}
+#stop-line .route-track{top:7px;bottom:7px;left:5px;right:auto;width:2px;height:auto;background:#ffffff40}
+#route-fill{width:100%;height:0;max-height:100%}
+#stop-line .route-stop{flex-direction:row;align-items:center;justify-content:flex-start;gap:9px;min-height:14px;min-width:0}
+#stop-line .route-stop i{width:12px;height:12px;flex-shrink:0;box-shadow:0 0 0 3px #20303680}
+#stop-line .route-stop b{font-size:11px;font-weight:550;color:#fff5df;text-shadow:0 1px 4px #10252f,0 1px 8px #10252f;background:#1d2b3170;padding:2px 4px;border-radius:4px}
+#stop-line .route-stop.is-next b{color:#ffe1a8}
+.settings-hold{position:relative;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;overflow:hidden}
+.settings-hold.is-holding{background:#e9b96b22;box-shadow:inset 0 0 0 2px #ffdc8a}
+.quiet-button .hold-meter{display:block;position:absolute;left:6px;right:6px;bottom:3px;height:5px;background:#ffffff30;border-radius:4px;overflow:hidden}
+.quiet-button .hold-meter>span{display:block;width:100%;height:100%;background:#ffdc8a;transform-origin:left;transform:scaleX(var(--hold-progress,0))}
+.quiet-button .hold-count{display:grid;place-items:center;position:absolute;right:2px;top:1px;width:16px;height:16px;border-radius:50%;background:#ffdc8a;color:#203238;font-size:10px;font-weight:800}
+@media(max-width:850px){
+ .topbar{left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));gap:8px}
+ .topbar .identity{padding:4px;background:none;border:0;box-shadow:none;backdrop-filter:none}
+ .identity>div{display:none}
+ .topbar nav{gap:1px;padding:3px}
+ .topbar .quiet-button{min-width:42px;min-height:44px;padding:10px}
+ .topbar .quiet-button>span:not(.hold-count):not(.hold-meter){display:none}
+ #stop-line{width:90px;top:32%;left:max(12px,env(safe-area-inset-left))}
+ #stop-line .route-strip{height:145px}
+ #stop-line .route-stop{gap:5px}
+ #stop-line .route-stop b{font-size:10px}
+}
+@media(max-height:500px){#stop-line{top:27%}#stop-line .route-strip{height:110px}}

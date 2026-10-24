@@ -9,11 +9,12 @@ import {prepareRoadsideAsset} from './streetcar-asset.js';
 import {createStreetcarTraffic} from './streetcar-traffic.js';
 import {StreetcarSounds} from './sounds.js?timing-v11';
 import {createWeather,WEATHER} from './weather.js';
+import {installSettingsHold,nextWeatherChoice} from './sensory-controls.js';
 
 const $=id=>document.getElementById(id),storageKey='queen-street-ride-settings-v1';
-const defaults={mode:'one',doorStyle:'toggle',doorDwell:10,stopEvery:1,quality:'auto',cruise:20,alwaysGreen:false,stopAtLights:true,dayNightCycle:true,night:false,weather:'overcast',weatherMode:'cycle',atmosphereVersion:3,size:'large',spacious:false,camera:'auto',swipe:true,reduceMotion:matchMedia('(prefers-reduced-motion: reduce)').matches,contrast:false,volume:.35,bell:true,horn:true};
+const defaults={mode:'one',doorStyle:'toggle',doorDwell:10,stopEvery:1,quality:'auto',cruise:20,alwaysGreen:false,stopAtLights:false,readyGlow:true,streetNames:true,lights:true,weatherSeed:Math.floor(Math.random()*4294967296),dayNightCycle:true,night:false,weather:'overcast',weatherMode:'cycle',atmosphereVersion:3,size:'large',spacious:false,camera:'auto',swipe:true,reduceMotion:matchMedia('(prefers-reduced-motion: reduce)').matches,contrast:false,volume:.35,bell:true,horn:true};
 function readSettings(){try{const saved=JSON.parse(localStorage.getItem(storageKey)||'{}');if((saved.atmosphereVersion??0)<3)Object.assign(saved,{weather:'overcast',weatherMode:'cycle',night:false,dayNightCycle:true});return sanitize({...defaults,...saved});}catch{return {...defaults};}}
-function sanitize(s){return {mode:['one','doors','manual','watch'].includes(s.mode)?s.mode:'one',doorStyle:s.doorStyle==='separate'?'separate':'toggle',doorDwell:[0,5,10,15,20,30].includes(+s.doorDwell)?+s.doorDwell:10,stopEvery:+s.stopEvery===2?2:1,quality:QUALITY_MODES.includes(s.quality)?s.quality:'auto',cruise:[12,20,30].includes(+s.cruise)?+s.cruise:20,alwaysGreen:!!s.alwaysGreen,stopAtLights:s.stopAtLights!==false,dayNightCycle:!!s.dayNightCycle,night:!!s.night,weather:Object.hasOwn(WEATHER,s.weather)?s.weather:'overcast',weatherMode:['cycle','fixed','off'].includes(s.weatherMode)?s.weatherMode:'cycle',atmosphereVersion:3,size:['large','extra','jumbo'].includes(s.size)?s.size:'large',spacious:!!s.spacious,camera:CAMERA_MODES.includes(s.camera)?s.camera:'auto',swipe:!!s.swipe,reduceMotion:!!s.reduceMotion,contrast:!!s.contrast,volume:Math.max(0,Math.min(1,Number.isFinite(+s.volume)?+s.volume:.35)),bell:!!s.bell,horn:!!s.horn};}
+function sanitize(s){return {mode:['one','doors','manual','watch'].includes(s.mode)?s.mode:'one',doorStyle:s.doorStyle==='separate'?'separate':'toggle',doorDwell:[0,5,10,15,20,30].includes(+s.doorDwell)?+s.doorDwell:10,stopEvery:+s.stopEvery===2?2:1,quality:QUALITY_MODES.includes(s.quality)?s.quality:'auto',cruise:[12,20,30].includes(+s.cruise)?+s.cruise:20,alwaysGreen:!!s.alwaysGreen,stopAtLights:!!s.stopAtLights,readyGlow:s.readyGlow!==false,streetNames:s.streetNames!==false,lights:s.lights!==false,weatherSeed:Number.isInteger(s.weatherSeed)?s.weatherSeed>>>0:defaults.weatherSeed,dayNightCycle:!!s.dayNightCycle,night:!!s.night,weather:Object.hasOwn(WEATHER,s.weather)?s.weather:'overcast',weatherMode:['cycle','random','fixed','off'].includes(s.weatherMode)?s.weatherMode:'cycle',atmosphereVersion:3,size:['large','extra','jumbo'].includes(s.size)?s.size:'large',spacious:!!s.spacious,camera:CAMERA_MODES.includes(s.camera)?s.camera:'auto',swipe:!!s.swipe,reduceMotion:!!s.reduceMotion,contrast:!!s.contrast,volume:Math.max(0,Math.min(1,Number.isFinite(+s.volume)?+s.volume:.35)),bell:!!s.bell,horn:!!s.horn};}
 
 export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting,city,route,canvas,gltf}){
  const settings=readSettings(),sound=new StreetcarSounds(settings);
@@ -21,7 +22,7 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
  const car=prepareRoadsideAsset(gltf.scene),trafficTemplate=car.clone(true);scene.add(car);const rig=new StreetcarController(car),ride=new Ride(route,rig,settings.mode),state=ride.state,view=new StreetcarCamera(camera,canvas,settings,{state,route,rig});
  ride.onDoors=()=>{if(audioUnlocked&&!state.paused)sound.play('door');};
  ride.onDepart=()=>{if(audioUnlocked&&!state.paused)sound.play('bell');};
- state.lights=true;rig.setLights({headlights:true,tail:true,markers:true,interior:true});ride.cruise=settings.cruise/3.6;ride.setDwellSeconds(settings.doorDwell);ride.setStopEvery(settings.stopEvery);ride.setAlwaysGreen(settings.alwaysGreen);ride.setStopAtLights(settings.stopAtLights);city.updateSignals(state.time,settings.alwaysGreen);lighting?.addStreetcar(car,rig);
+ state.lights=settings.lights;rig.setLights({headlights:state.lights,tail:state.lights,markers:state.lights,interior:state.lights});ride.cruise=settings.cruise/3.6;ride.setDwellSeconds(settings.doorDwell);ride.setStopEvery(settings.stopEvery);ride.setAlwaysGreen(settings.alwaysGreen);ride.setStopAtLights(settings.stopAtLights);city.updateSignals(state.time,settings.alwaysGreen);lighting?.addStreetcar(car,rig);
  const streetcars=createStreetcarTraffic(scene,trafficTemplate,route,lighting,city.actors);
  const weather=createWeather(scene,city.materials,lighting,graphics,renderer);
  const compatibility=!!graphics.compatibility;
@@ -47,23 +48,26 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
    if(!settings.dayNightCycle){cycleTime=0;settings.night=false;nightAmount=0;}
    else{cycleTime=(cycleTime+dt)%DAY_NIGHT.duration;nightAmount=nightLevel(cycleTime);settings.night=nightAmount>=.5;}
    if(nightAmount!==lastCityNight){city.setNight(nightAmount);lastCityNight=nightAmount;}
-   weather.configure(settings.weatherMode,settings.weather);weather.update(dt,state.z,nightAmount,renderer.getPixelRatio());
+   weather.configure(settings.weatherMode,settings.weather,settings.weatherSeed);weather.update(dt,state.z,nightAmount,renderer.getPixelRatio());
  }
  updateDayNight();
  function applyUI(){
-   document.body.dataset.mode=settings.mode;document.body.dataset.doorStyle=settings.doorStyle;document.body.classList.toggle('extra-buttons',settings.size==='extra');document.body.classList.toggle('high-contrast',settings.contrast);document.body.classList.toggle('jumbo-buttons',settings.size==='jumbo');document.body.classList.toggle('spacious-buttons',settings.spacious);
+   document.body.classList.toggle('ready-cues',settings.readyGlow);$('stop-line').hidden=!settings.streetNames;document.body.dataset.mode=settings.mode;document.body.dataset.doorStyle=settings.doorStyle;document.body.classList.toggle('extra-buttons',settings.size==='extra');document.body.classList.toggle('high-contrast',settings.contrast);document.body.classList.toggle('jumbo-buttons',settings.size==='jumbo');document.body.classList.toggle('spacious-buttons',settings.spacious);
    $('assisted-controls').hidden=settings.mode==='manual';$('manual-controls').hidden=settings.mode!=='manual';$('doors').hidden=['one','watch'].includes(settings.mode)||settings.doorStyle!=='toggle';$('separate-doors').hidden=['one','watch'].includes(settings.mode)||settings.doorStyle!=='separate';
    if(['doors','manual'].includes(settings.mode))$(settings.mode==='manual'?'manual-door-slot':'assisted-controls').append(settings.doorStyle==='toggle'?$('doors'):$('separate-doors'));
    $('bell').hidden=!settings.bell;$('horn').hidden=!settings.horn;$('door-style-setting').hidden=['one','watch'].includes(settings.mode);$('day-night-toggle').hidden=!settings.dayNightCycle;$('signal-status').hidden=!settings.stopAtLights;
    document.querySelectorAll('[name=control-mode]').forEach(input=>input.checked=input.value===settings.mode);
    for(const [id,value] of [['setting-doors',settings.doorStyle],['setting-door-dwell',settings.doorDwell],['setting-stop-every',settings.stopEvery],['setting-quality',settings.quality],['setting-speed',settings.cruise],['setting-size',settings.size],['setting-camera',settings.camera],['setting-volume',Math.round(settings.volume*100)]])$(id).value=value;
-   for(const [id,value] of [['setting-green',settings.alwaysGreen],['setting-stop-at-lights',settings.stopAtLights],['setting-day-night',settings.dayNightCycle],['setting-spacious',settings.spacious],['setting-swipe',settings.swipe],['setting-motion',settings.reduceMotion],['setting-contrast',settings.contrast],['setting-bell',settings.bell],['setting-horn',settings.horn]])$(id).checked=value;
+   for(const [id,value] of [['setting-ready-glow',settings.readyGlow],['setting-street-names',settings.streetNames],['setting-green',settings.alwaysGreen],['setting-stop-at-lights',settings.stopAtLights],['setting-day-night',settings.dayNightCycle],['setting-spacious',settings.spacious],['setting-swipe',settings.swipe],['setting-motion',settings.reduceMotion],['setting-contrast',settings.contrast],['setting-bell',settings.bell],['setting-horn',settings.horn]])$(id).checked=value;
    $('free-camera-help').hidden=settings.camera!=='free';
+   $('lights').textContent=state.lights?'Night lights on':'Night lights off';$('lights').setAttribute('aria-pressed',state.lights);
    $('volume-value').textContent=settings.volume===0?'Off':Math.round(settings.volume*100)+'%';$('camera-name').textContent=CAMERA_NAMES[settings.camera];$('camera').setAttribute('aria-label','Change camera. Current view: '+CAMERA_NAMES[settings.camera]);
    $('setting-quality').disabled=compatibility;$('setting-quality').title=compatibility?'Lighter graphics are active to keep this device stable.':'';if(compatibility)$('setting-quality').previousElementSibling.querySelector('small').textContent='Lighter graphics are active to keep this device stable.';
    $('setting-weather').value=settings.weather;$('setting-weather-mode').value=settings.weatherMode;
    $('weather-profile-setting').hidden=settings.weatherMode!=='fixed';$('setting-weather').disabled=settings.weatherMode!=='fixed';
-   $('weather-mode-help').textContent=settings.weatherMode==='off'?'Static, soft lighting without rain, haze, rays or wet-road effects. Day/night still works.':settings.weatherMode==='fixed'?'Choose one weather type below. The day/night cycle works separately.':'Weather changes gently over several minutes, through day and night.';
+   const weatherLabel=settings.weatherMode==='random'?'Random':settings.weatherMode==='cycle'?'Changing skies':settings.weatherMode==='off'?'Weather off':WEATHER[settings.weather].label;
+   $('weather-label').textContent=weatherLabel;$('weather-cycle').setAttribute('aria-label','Weather: '+weatherLabel+'. Change weather');$('weather-cycle').title='Weather: '+weatherLabel;
+   $('weather-mode-help').textContent=settings.weatherMode==='off'?'Static, soft lighting without rain, haze, rays or wet-road effects. Day/night still works.':settings.weatherMode==='random'?'Weather changes gently in a shuffled order, through day and night.':settings.weatherMode==='fixed'?'Choose one weather type below. The day/night cycle works separately.':'Weather changes gently over several minutes, through day and night.';
    $('day-night-label').textContent=settings.night?'Day':'Night';$('day-night-toggle').setAttribute('aria-label','Switch to '+(settings.night?'day':'night'));$('day-night-toggle').title='Switch to '+(settings.night?'day':'night');
    updateHUD();
  }
@@ -113,19 +117,20 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
  function closeSettings(play=false){dialog.close(play===true?'play':'');state.paused=wasPaused;keys.clear();updateHUD();$(play===true&&settings.mode!=='manual'?'go':'settings-open').focus();}
  dialog.addEventListener('cancel',event=>{event.preventDefault();closeSettings();});
  dialog.addEventListener('close',()=>{state.paused=wasPaused;keys.clear();updateHUD();$(dialog.returnValue==='play'&&settings.mode!=='manual'?'go':'settings-open').focus();});
- $('settings-open').onclick=openSettings;$('settings-close').onclick=()=>closeSettings();$('settings-done').onclick=()=>closeSettings(true);
+ installSettingsHold($('settings-open'),openSettings);$('settings-close').onclick=()=>closeSettings();$('settings-done').onclick=()=>closeSettings(true);
  $('go').onclick=primary;$('doors').onclick=()=>doors();$('door-open').onclick=()=>doors(true);$('door-close').onclick=()=>doors(false);
  for(const id of ['go','doors','door-open','door-close','bell','horn']){const button=$(id);button.addEventListener('keydown',e=>{if(['Space','Enter'].includes(e.code)){e.preventDefault();e.stopPropagation();if(!e.repeat)button.click();}});button.addEventListener('keyup',e=>{if(['Space','Enter'].includes(e.code))e.preventDefault();});}
  $('bell').onclick=()=>play('bell');$('horn').onclick=()=>play('horn');$('test-bell').onclick=()=>play('bell');$('test-horn').onclick=()=>play('horn');
  $('pause').onclick=()=>setPaused(!state.paused);$('camera').onclick=cycleCamera;$('reset-view').onclick=()=>{view.reset();speak('Camera re-centred.');};
  $('day-night-toggle').onclick=toggleDayNight;
+ $('weather-cycle').onclick=()=>updateSettings(nextWeatherChoice(settings.weatherMode,settings.weather));
  $('setting-weather').onchange=e=>updateSettings({weather:e.target.value});
  $('setting-weather-mode').onchange=e=>updateSettings({weatherMode:e.target.value});
  $('restart').onclick=()=>{restart();wasPaused=false;closeSettings();};
- $('lights').onclick=()=>{needsRender=true;state.lights=!state.lights;rig.setLights({headlights:state.lights,tail:state.lights,markers:state.lights,interior:state.lights});$('lights').textContent=state.lights?'Night lights on':'Night lights off';$('lights').setAttribute('aria-pressed',state.lights);};
+ $('lights').onclick=()=>{needsRender=true;state.lights=!state.lights;settings.lights=state.lights;save();rig.setLights({headlights:state.lights,tail:state.lights,markers:state.lights,interior:state.lights});$('lights').textContent=state.lights?'Night lights on':'Night lights off';$('lights').setAttribute('aria-pressed',state.lights);};
  $('power').oninput=e=>{state.power=Number(e.target.value);if(state.power>0)unlockAudio();};
  document.querySelectorAll('[name=control-mode]').forEach(input=>input.onchange=()=>{if(input.checked)updateSettings({mode:input.value});});
- for(const [id,key,kind] of [['setting-doors','doorStyle'],['setting-door-dwell','doorDwell','number'],['setting-stop-every','stopEvery','number'],['setting-quality','quality'],['setting-speed','cruise','number'],['setting-size','size'],['setting-camera','camera'],['setting-green','alwaysGreen','check'],['setting-stop-at-lights','stopAtLights','check'],['setting-day-night','dayNightCycle','check'],['setting-spacious','spacious','check'],['setting-swipe','swipe','check'],['setting-motion','reduceMotion','check'],['setting-contrast','contrast','check'],['setting-bell','bell','check'],['setting-horn','horn','check']])$(id).onchange=e=>updateSettings({[key]:kind==='check'?e.target.checked:kind==='number'?+e.target.value:e.target.value});
+ for(const [id,key,kind] of [['setting-doors','doorStyle'],['setting-door-dwell','doorDwell','number'],['setting-stop-every','stopEvery','number'],['setting-quality','quality'],['setting-speed','cruise','number'],['setting-size','size'],['setting-camera','camera'],['setting-ready-glow','readyGlow','check'],['setting-street-names','streetNames','check'],['setting-green','alwaysGreen','check'],['setting-stop-at-lights','stopAtLights','check'],['setting-day-night','dayNightCycle','check'],['setting-spacious','spacious','check'],['setting-swipe','swipe','check'],['setting-motion','reduceMotion','check'],['setting-contrast','contrast','check'],['setting-bell','bell','check'],['setting-horn','horn','check']])$(id).onchange=e=>updateSettings({[key]:kind==='check'?e.target.checked:kind==='number'?+e.target.value:e.target.value});
  $('setting-volume').oninput=e=>updateSettings({volume:+e.target.value/100});
  window.addEventListener('keydown',e=>{
    if(dialog.open||(['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)&&e.target.id!=='power'))return;const k=e.code;
@@ -143,25 +148,18 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
    const manual=settings.mode==='manual',travelling=['closing','travelling'].includes(state.phase),at=state.currentStop>=0&&!travelling;
    const next=manual?route.stops.find(stop=>stop.z>=state.z-6):route.stops[state.nextStop],current=route.stops[state.currentStop],display=at?current:next;
    document.querySelectorAll('.route-stop').forEach((dot,i)=>{dot.classList.toggle('is-visited',i<=state.currentStop);dot.classList.toggle('is-next',display===route.stops[i]);});
-   const progress=THREE.MathUtils.clamp((state.z-route.stops[0].z)/(route.stops[2].z-route.stops[0].z),0,1);$('route-fill').style.width=(progress*100)+'%';
+   const progress=THREE.MathUtils.clamp((state.z-route.stops[0].z)/(route.stops[2].z-route.stops[0].z),0,1);$('route-fill').style.height=(progress*100)+'%';
    $('stop-prefix').textContent=at?'AT THE STOP':'NEXT STOP';$('stop-name').textContent=display?.name??'Queen Street';$('distance').textContent=display&&!at?Math.max(0,Math.round(display.z-state.z))+' m':'';
-   let message='Ready when you are.';
-   if(state.paused)message='Your ride is paused.';
-   else if(manual)message=state.assist?(state.trafficHeld?'Waiting for traffic.':'Waiting for the signal.'):state.doors?'Doors open. Close them before driving.':state.speed>.1?'Enjoy Queen Street.':'Power to go. Brake to stop.';
-   else if(state.phase==='closing')message='Closing the doors. Then we’re off.';
-   else if(state.phase==='travelling')message=state.assist&&state.speed<.1?(state.trafficHeld?'Waiting for traffic.':'Waiting for the signal.'):`On our way to ${next?.name??'the end of the street'}.`;
-   else if(state.phase==='finished')message=settings.mode==='doors'&&!state.openedHere?'Open the doors at our last stop.':'A lovely ride. Shall we go again?';
-   else if(state.phase==='atStop'){if(['one','watch'].includes(settings.mode))message=rig.doors.front<.98?'Opening the doors.':'Doors open. Go when you’re ready.';else message=!state.openedHere?'Open the doors to welcome everyone.':state.doors?'Close the doors when you’re ready.':rig.doors.front>.001?'The doors are closing.':'Ready for the next stop.';}
-   if(settings.mode==='watch'&&!state.paused){if(state.phase==='finished')message='A little pause. Then another ride.';else if(state.phase==='atStop')message='Doors open. We will set off again soon.';else if(state.phase==='ready')message='Settle in. Your ride starts on its own.';}
-   if(!state.paused&&state.doors&&ride.remainingDwell>0&&rig.doors.front>=.98){message='Doors open. '+Math.ceil(ride.remainingDwell)+' seconds remaining.';}
+   const message=state.paused?'Paused':state.speed>.1?'Moving':state.phase==='closing'?'Doors closing':state.doors?'Doors open':'Ready';
    if(message!==lastMessage){$('ride-message').textContent=message;lastMessage=message;}
    const watching=settings.mode==='watch',ready=watching||state.paused||ride.canGo;$('go').setAttribute('aria-disabled',!ready);
-   $('go-label').textContent=state.paused?'RESUME':watching?'PAUSE':state.phase==='finished'?'AGAIN':travelling?'RIDING':'GO';
+   $('go-label').textContent=state.paused?'RESUME':watching?'PAUSE':state.phase==='finished'?'AGAIN':'GO';
    const goAction=watching&&!state.paused?'pause':'go';if(goAction!==lastGoPicture){goPicture.innerHTML=goAction==='pause'?'<path fill="currentColor" d="M15 9h12v46H15zM37 9h12v46H37z"/>':goArrow;lastGoPicture=goAction;}
    $('go').setAttribute('aria-label',watching?(state.paused?'Resume watching streetcars':'Pause watching streetcars'):$('go-label').textContent);
    $('go').classList.toggle('long-label',$('go-label').textContent.length>5);
-   $('go-detail').textContent=state.paused?'Continue your ride':watching?'Just watch the streetcars':state.phase==='finished'?'Take another ride':state.phase==='closing'?'Doors are closing':state.phase==='travelling'?'Enjoy the view':next?'To '+next.name:'Ready when you are';
+
    const unavailable=state.speed>.12||state.phase==='closing',holding=state.doors&&!ride.dwellReady;$('doors').setAttribute('aria-disabled',unavailable||holding);$('door-open').setAttribute('aria-disabled',unavailable||state.doors);$('door-close').setAttribute('aria-disabled',unavailable||!state.doors||holding);$('doors').setAttribute('aria-pressed',state.doors);$('door-label').textContent=state.doors?'Close doors':'Open doors';$('doors').setAttribute('aria-label',state.doors?'Close doors':'Open doors');const picture=state.doors?'close':'open';if(picture!==lastDoorPicture){$('door-picture').innerHTML=doorPictures[picture];lastDoorPicture=picture;}
+   for(const id of ['go','doors','door-open','door-close'])$(id).classList.toggle('is-ready',$(id).getAttribute('aria-disabled')!=='true');
    $('pause-label').textContent=state.paused?'Resume':'Pause';$('pause').setAttribute('aria-label',state.paused?'Resume ride':'Pause ride');$('pause-icon').innerHTML=state.paused?'<path d="M8 5l11 7-11 7z"/>':'<path d="M8 5v14M16 5v14"/>';
    $('speed').textContent=Math.round(state.speed*3.6);$('power-label').textContent=state.doors?'Doors open':state.assist?'Signal hold':state.command>0?'Power':state.command<0?'Brake':'Coast';
    marker.visible=manual&&!!next;marker.position.set(route.trackX,.055,next?.z??0);
@@ -169,7 +167,7 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
  function applyQuality(){const profile=qualityProfile(performanceBudget.level,compatibility);graphics.setQuality(profile);lighting?.setQuality(profile);resize();}
  function resize(){needsRender=true;const profile=qualityProfile(performanceBudget.level,compatibility);renderer.setPixelRatio(renderRatio(profile,innerWidth,innerHeight,devicePixelRatio));renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();view.instant=true;}
  function captureSession(){return {version:1,ride:ride.snapshot(),cycleTime,weather:weather.snapshotClock()};}
- function restoreSession(snapshot){if(snapshot?.version!==1||!ride.restore(snapshot.ride))return false;if(typeof snapshot.ride.state.lights==='boolean'){state.lights=snapshot.ride.state.lights;rig.setLights({headlights:state.lights,tail:state.lights,markers:state.lights,interior:state.lights});$('lights').textContent=state.lights?'Night lights on':'Night lights off';$('lights').setAttribute('aria-pressed',state.lights);}if(Number.isFinite(snapshot.cycleTime))cycleTime=((snapshot.cycleTime%DAY_NIGHT.duration)+DAY_NIGHT.duration)%DAY_NIGHT.duration;weather.restoreClock(snapshot.weather);updateDayNight();city.actors.reset();streetcars.reset(state.z);updateWorld(0);view.reset();needsRender=true;return true;}
+ function restoreSession(snapshot){if(snapshot?.version!==1||!ride.restore(snapshot.ride))return false;if(typeof snapshot.ride.state.lights==='boolean'){state.lights=snapshot.ride.state.lights;settings.lights=state.lights;rig.setLights({headlights:state.lights,tail:state.lights,markers:state.lights,interior:state.lights});$('lights').textContent=state.lights?'Night lights on':'Night lights off';$('lights').setAttribute('aria-pressed',state.lights);}if(Number.isFinite(snapshot.cycleTime))cycleTime=((snapshot.cycleTime%DAY_NIGHT.duration)+DAY_NIGHT.duration)%DAY_NIGHT.duration;weather.restoreClock(snapshot.weather);updateDayNight();city.actors.reset();streetcars.reset(state.z);updateWorld(0);view.reset();needsRender=true;return true;}
  const manifest=document.querySelector('link[rel="manifest"]'),release=document.querySelector('meta[name="queen-street-release"]')?.content;
  const sessionKey=release&&manifest?'queen-street-update-session:'+new URL('./',manifest.href).href:null;
  if(sessionKey)try{const saved=sessionStorage.getItem(sessionKey);sessionStorage.removeItem(sessionKey);if(saved)restoreSession(JSON.parse(saved));}catch{}
@@ -178,7 +176,7 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
  graphics.prepare(scene,camera);await yieldToBrowser();
  if(renderer.compileAsync){renderer.setRenderTarget(graphics.target);try{await renderer.compileAsync(scene,camera);}finally{renderer.setRenderTarget(null);}}
  if(renderer.userData?.recovery?.lost)return null;
- graphics.render(scene,camera,view.transition);$('loading').hidden=true;
+ graphics.render(scene,camera,view.transition);$('loading').hidden=true;save();
  const api={scene,car,rig,streetcars,renderer,graphics,camera,lighting,state,route,city,weather,ride,settings,sound,view,performance:performanceBudget,captureSession,restoreSession,step,setCamera,primary,toggleDoors:()=>doors(),toggleDayNight, get nightAmount(){return nightAmount;},restart,updateHUD,updateSettings,setPaused,openSettings,ready:true};window.queenStreet=api;window.dispatchEvent(new Event('queen-street-ready'));
  if(settings.mode!=='manual')$('go').focus({preventScroll:true});
  const clock=new THREE.Clock(),lastPosition=new THREE.Vector3(),lastRotation=new THREE.Quaternion();let frameCount=0,lastFov=0,pendingFrame=0;

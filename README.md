@@ -1,5 +1,11 @@
 # Queen Street — A streetcar ride
 
+The default sensory view uses a single Go press. Go becomes bright green with a steady glow when available and dims while travelling or waiting; the glow can be turned off in Settings. The play view has no instruction bubble or destination subtitle. Optional street names sit on a narrow vertical route line at the left.
+
+Hold the Settings control continuously for **3 seconds** with touch, mouse, pen, Space or Enter. A filling bar and countdown show progress; releasing early, dragging away, losing focus or hiding the page cancels the hold. The menu pauses the ride and restores its prior pause state on close.
+
+The weather control cycles through slow cycling, Random, all eight fixed types and Off. Random follows a saved shuffled sequence with the same four-minute phases and gentle 90-second blends. Day/night works separately. Signal stopping defaults to off and remains optional; new installations default to Single press, while existing saved play-mode choices are respected. Validated preferences?including the ready cue, street names, mode, weather, sound, camera, stop options and night-light switch?persist in local storage across reloads and PWA updates.
+
 Play online: **https://microswitchers.github.io/streetcars/**
 
 GitHub repository: https://github.com/MicroSwitchers/streetcars
@@ -45,7 +51,7 @@ See [installation, automatic updates and deployment](DEPLOYMENT.md) and
 ## Weather and atmosphere
 
 The starting look is subdued overcast, with slow weather and day/night cycles.
-Settings > Weather offers **Slow cycle**, **One weather type**, and **Off**.
+Settings > Weather offers **Slow cycle**, **Random**, **One weather type**, and **Off**.
 The fixed type is saved separately, so switching modes retains your choice.
 Weather phases last four minutes, with a gradual 90-second blend. Daylight lasts
 four minutes, dusk and dawn each take 30 seconds, and full night lasts 12 seconds.
@@ -86,11 +92,11 @@ Bell and horn buttons are optional in every mode and can be hidden separately. T
 
 The optional **Always green traffic lights** setting keeps the displayed signals, streetcar driving logic and background traffic in agreement. It works in every driving mode and can be changed while paused. Turning it off restores the timed green/amber/red cycle. **Stop at red lights** can be switched off separately; when enabled, a bottom-right indicator shows the current signal. Scheduled stops and door controls still work normally. Both choices are remembered in this browser.
 
-Enable **Day/night cycle** in settings for 100 seconds of daylight, a six-second dusk, 12 seconds of full night, and a six-second dawn. The short night adds warm shop-window glow and cooler outdoor lighting. The Day/Night button then appears in the top bar and switches directly between the two parts of the cycle. Turning the cycle off restores daylight.
+Enable **Day/night cycle** in settings for 240 seconds of daylight, a 30-second dusk, 12 seconds of full night, and a 30-second dawn. The short night adds warm shop-window glow and cooler outdoor lighting. The Day/Night button then appears in the top bar and switches directly between the two parts of the cycle. Turning the cycle off restores daylight.
 
 ## Settings and input
 
-Settings opens a modal supporter menu and pauses the ride. Preferences are stored in the current browser, with a fallback if local storage is unavailable. Choose large, extra-large or jumbo picture buttons, wider button spacing, high contrast controls, camera behaviour, small swipe adjustments, a calmer camera option, sound volume and sound-button visibility. The operating system's reduced-motion preference supplies the initial calmer-camera setting.
+Holding Settings for three seconds opens a modal supporter menu and pauses the ride. Preferences are stored in the current browser, with a fallback if local storage is unavailable. Choose large, extra-large or jumbo picture buttons, wider button spacing, high contrast controls, camera behaviour, small swipe adjustments, a calmer camera option, sound volume and sound-button visibility. The operating system's reduced-motion preference supplies the initial calmer-camera setting.
 
 Use Space or Enter for Go when the street is focused, or activate a focused button using Space or Enter. Tab navigates controls. A held key cannot automatically depart the next stop. A switch that sends one of those keys or a click can use the same controls. Closing settings with Back to the streetcar returns focus to Go in assisted modes. Escape closes the menu and restores the prior pause state.
 

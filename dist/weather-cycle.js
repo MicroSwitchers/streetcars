@@ -4,7 +4,13 @@ export const WEATHER_PHASE_SECONDS=240;
 export const WEATHER_TRANSITION_SECONDS=90;
 export const WEATHER_SEQUENCE=['overcast','mist','clear','sunset','sunbreak','rain','storm'];
 export const WEATHER_CYCLE_SECONDS=WEATHER_PHASE_SECONDS*WEATHER_SEQUENCE.length;
-export const WEATHER_MODES=['cycle','fixed','off'];
+export const WEATHER_MODES=['cycle','random','fixed','off'];
+// Seeded shuffle keeps random weather stable across reloads and update restores.
+export function randomWeatherSequence(seed){
+ const sequence=Object.keys(WEATHER);let state=seed>>>0;
+ for(let i=sequence.length-1;i>0;i--){state=(Math.imul(state,1664525)+1013904223)>>>0;const j=state%(i+1);[sequence[i],sequence[j]]=[sequence[j],sequence[i]];}
+ return sequence;
+}
 
 export const WEATHER={
  sunset:{label:'Clouded golden hour',cloud:.82,rain:0,wet:.26,haze:.08,gold:.7,storm:0,volume:.006,sun:[.015,.15,-.989]},
@@ -20,11 +26,11 @@ export const WEATHER={
 // cycle and all normal vehicle, building and street lighting still work.
 export const WEATHER_OFF={label:'Off',cloud:.9,rain:0,wet:0,haze:0,gold:0,storm:0,volume:0,sun:[34,48,38],enabled:false};
 
-export function weatherPhase(time){
- const t=((time%WEATHER_CYCLE_SECONDS)+WEATHER_CYCLE_SECONDS)%WEATHER_CYCLE_SECONDS;
+export function weatherPhase(time,sequence=WEATHER_SEQUENCE){
+ const duration=WEATHER_PHASE_SECONDS*sequence.length,t=((time%duration)+duration)%duration;
  const index=Math.floor(t/WEATHER_PHASE_SECONDS),local=t-index*WEATHER_PHASE_SECONDS;
  const progress=Math.max(0,(local-(WEATHER_PHASE_SECONDS-WEATHER_TRANSITION_SECONDS))/WEATHER_TRANSITION_SECONDS);
- return {from:WEATHER_SEQUENCE[index],to:WEATHER_SEQUENCE[(index+1)%WEATHER_SEQUENCE.length],blend:progress*progress*(3-2*progress)};
+ return {from:sequence[index],to:sequence[(index+1)%sequence.length],blend:progress*progress*(3-2*progress)};
 }
 
 export function mixWeather(from,to,blend,result={sun:[0,0,0]}){

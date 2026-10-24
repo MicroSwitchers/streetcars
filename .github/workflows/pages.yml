@@ -27,6 +27,8 @@ jobs:
       - name: Check departure and audio timing
         run: |
           node qa/check_graphics_budget.mjs
+          node qa/check_sensory_logic.mjs
+          node qa/check_weather_cycle.mjs
           node qa/check_departure_bell.mjs
           node qa/check_sounds.mjs
           node qa/check_stop_motion.mjs

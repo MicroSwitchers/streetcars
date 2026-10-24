@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {WEATHER,WEATHER_OFF,WEATHER_MODES,weatherPhase,mixWeather} from './weather-cycle.js';
+import {WEATHER,WEATHER_OFF,WEATHER_MODES,WEATHER_SEQUENCE,randomWeatherSequence,weatherPhase,mixWeather} from './weather-cycle.js';
 export {WEATHER} from './weather-cycle.js';
 export const WET_PATCH_GLSL=`
  float weatherHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
@@ -16,6 +16,7 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
  const uniforms={weatherTime:{value:0},cloudCover:{value:.18},rainAmount:{value:0},wetness:{value:0},night:{value:0},golden:{value:0},storm:{value:0}};
  let preset='overcast',mode='fixed',time=0,cycleTime=0,night=0,focus=0;
  let phase=weatherPhase(0);
+ let randomSeed=0,randomSequence=randomWeatherSequence(0);
  const blended={sun:[0,0,0]};
  // Compose with road markings, world UVs, window spill and stable shadow hooks.
  for(const name of ['road','trackbed','patch','concrete','curb','stone']){
@@ -118,8 +119,8 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
    return environments.get(key);
  }
  function environment(){
-   const from=mode==='off'?'off':mode==='cycle'?phase.from:preset;
-   const to=mode==='cycle'?phase.to:from,blend=mode==='cycle'?phase.blend:0;
+   const cycling=mode==='cycle'||mode==='random',from=mode==='off'?'off':cycling?phase.from:preset;
+   const to=cycling?phase.to:from,blend=cycling?phase.blend:0;
    const pair=probePair(from),next=blend>0?probePair(to):pair;
    scene.environment=pair[graphics.compatibility&&night>=.5?1:0].texture;nightEnvironment.value=pair[1].texture;environmentBlend.value=night;
    nextEnvironment.value=next[0].texture;nextNightEnvironment.value=next[1].texture;profileBlend.value=blend;
@@ -146,15 +147,15 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
      gl_FragColor=vec4(dropColor,a);}`});
  const rain=new THREE.Points(geometry,rainMaterial);rain.name='Windblown_Rain';rain.frustumCulled=false;rain.renderOrder=3;scene.add(rain);
  graphics.bindAtmosphere(lighting);
- function apply(){phase=weatherPhase(cycleTime);const p=mode==='off'?WEATHER_OFF:mode==='cycle'?mixWeather(WEATHER[phase.from],WEATHER[phase.to],phase.blend,blended):WEATHER[preset];
+ function apply(){phase=weatherPhase(cycleTime,mode==='random'?randomSequence:WEATHER_SEQUENCE);const p=mode==='off'?WEATHER_OFF:mode==='cycle'||mode==='random'?mixWeather(WEATHER[phase.from],WEATHER[phase.to],phase.blend,blended):WEATHER[preset];
    uniforms.cloudCover.value=p.cloud;uniforms.rainAmount.value=p.rain;uniforms.wetness.value=p.wet;uniforms.night.value=night;uniforms.golden.value=p.gold;uniforms.storm.value=p.storm;rain.visible=p.rain>.001;
    uniforms.weatherTime.value=mode==='off'?0:time;
    sunDirection.set(...p.sun).normalize();environment();lighting.setWeather(p,night);graphics.setWeather(p.wet,p.rain,uniforms.weatherTime.value,night,p);}
  return {uniforms,sky,rain,geometry,presets:WEATHER,get preset(){return preset;},get time(){return time;},get mode(){return mode;},get cycleTime(){return cycleTime;},get phase(){return {...phase};},environmentBlend,profileBlend,
    snapshotClock(){return {time,cycleTime};},restoreClock(saved){if(saved&&Number.isFinite(saved.time)&&saved.time>=0&&Number.isFinite(saved.cycleTime)&&saved.cycleTime>=0){time=saved.time;cycleTime=saved.cycleTime;}},
-   configure(nextMode,value){mode=WEATHER_MODES.includes(nextMode)?nextMode:'cycle';preset=Object.hasOwn(WEATHER,value)?value:'overcast';},
+   configure(nextMode,value,seed=0){mode=WEATHER_MODES.includes(nextMode)?nextMode:'cycle';preset=Object.hasOwn(WEATHER,value)?value:'overcast';if(randomSeed!==(seed>>>0)){randomSeed=seed>>>0;randomSequence=randomWeatherSequence(randomSeed);}},
    setPreset(value){preset=Object.hasOwn(WEATHER,value)?value:'overcast';apply();},
-   update(dt,z,nightAmount,ratio=1){const elapsed=Math.min(.1,Math.max(0,dt));if(mode!=='off')time+=elapsed;if(mode==='cycle')cycleTime+=elapsed;focus=z;night=nightAmount;rainMaterial.uniforms.focus.value=focus;rainMaterial.uniforms.pixelRatio.value=Math.min(2,ratio);apply();},
+   update(dt,z,nightAmount,ratio=1){const elapsed=Math.min(.1,Math.max(0,dt));if(mode!=='off')time+=elapsed;if(mode==='cycle'||mode==='random')cycleTime+=elapsed;focus=z;night=nightAmount;rainMaterial.uniforms.focus.value=focus;rainMaterial.uniforms.pixelRatio.value=Math.min(2,ratio);apply();},
    rebuildEnvironments(){for(const pair of environments.values())pair.forEach(p=>p.dispose());environments.clear();apply();},
    environments,dispose(){sky.removeFromParent();rain.removeFromParent();sky.geometry.dispose();skyMaterial.dispose();probeMaterial.dispose();pmrem.dispose();for(const pair of environments.values())pair.forEach(p=>p.dispose());geometry.dispose();rainMaterial.dispose();}};
 }
