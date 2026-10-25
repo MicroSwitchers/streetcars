@@ -33,6 +33,7 @@ jobs:
           node qa/check_sounds.mjs
           node qa/check_stop_motion.mjs
           node qa/check_ride_settings.mjs
+          node qa/check_routes.mjs
       - name: Build the versioned PWA
         run: python build_web.py
       - uses: actions/configure-pages@v5

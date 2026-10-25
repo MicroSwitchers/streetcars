@@ -39,3 +39,9 @@ Train door recording
 Train Door Opening by iamaviolin
 https://freesound.org/s/439499/
 License: Creative Commons 0 (CC0)
+
+TTC route names and ordered stops
+Contains information licensed under the Open Government Licence - Toronto.
+Source: https://open.toronto.ca/dataset/merged-gtfs-ttc-routes-and-schedules/
+Licence: https://open.toronto.ca/open-data-license/
+See ROUTES.md for snapshot dates, standard-route corrections and sources.

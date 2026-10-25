@@ -175,7 +175,7 @@ try{
      for(let i=0;i<15;i++)api.step(.1);
      check('Arrived at stop '+stop,api.state.currentStop===stop&&api.state.speed===0&&api.state.doors);
    }
-   check('Completed all stops',api.state.complete&&api.state.served.every(Boolean));
+    check('Completed this street section; full itinerary continues',api.state.phase==='finished'&&api.route.hasNext&&!api.state.complete&&api.state.served.every(Boolean));
    api.updateSettings({mode:'manual'});api.restart();api.ride.setDoors(true);
    for(let i=0;i<20;i++)api.ride.step(.1,1);
    check('Door interlock blocks traction',api.state.speed===0);

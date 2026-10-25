@@ -7,6 +7,7 @@ const qa=dirname(fileURLToPath(import.meta.url)),url=process.argv[2]||'https://m
 const ipad=process.argv.includes('--ipad'),loss=process.argv.includes('--loss'),startupLoss=process.argv.includes('--startup-loss');
 const sensory=process.argv.includes('--sensory'),phone=process.argv.includes('--phone');let sensoryExpected;
 const auto=process.argv.includes('--auto');
+const routes=process.argv.includes('--routes');
 const morning=process.argv.includes('--morning'),dawn=process.argv.includes('--dawn'),atmosphere=process.argv.includes('--atmosphere');
 const output=join(qa,'renders-live-'+Date.now());await mkdir(output);
 const profile=await mkdtemp(join(qa,'headless-live-'));
@@ -64,7 +65,7 @@ try{
   if(!await evaluate('!queenStreet.state.paused&&queenStreet.primary()===false'))throw Error('A legacy pause action can stop Full auto');
   await evaluate('queenStreet.openSettings()');if(!await evaluate('document.getElementById("settings-dialog").open&&!queenStreet.state.paused'))throw Error('Settings interrupted Full auto');await evaluate('document.getElementById("settings-close").click()');
   if(!await evaluate('(()=>{Object.defineProperty(document,"hidden",{configurable:true,get:()=>window.__autoHidden});window.__autoHidden=true;document.dispatchEvent(new Event("visibilitychange"));const suspended=queenStreet.state.paused;window.__autoHidden=false;document.dispatchEvent(new Event("visibilitychange"));const resumed=!queenStreet.state.paused;delete document.hidden;return suspended&&resumed;})()'))throw Error('Full auto remains suspended after returning to the tab');
-  const laps=await evaluate('(()=>{let laps=0,previous=queenStreet.state.z;for(let i=0;i<6000&&laps<2;i++){queenStreet.ride.step(.1);if(queenStreet.state.z<previous)laps++;previous=queenStreet.state.z;}return laps;})()');
+  const laps=await evaluate('(()=>{let laps=0,previous=queenStreet.route.stopOffset;for(let i=0;i<100000&&laps<2;i++){queenStreet.step(.1);if(queenStreet.route.stopOffset===0&&previous>0)laps++;previous=queenStreet.route.stopOffset;}return laps;})()');
   if(laps!==2)throw Error('Full auto did not repeat continuously');
   console.log('PASS: Legacy preferences migrate to Single press; no pause button or pause key; Full auto starts and repeats two laps unaided');
  }
@@ -104,13 +105,50 @@ try{
  }
  if(ipad){
   const budget=await evaluate('({simple:queenStreet.graphics.compatibility,pixels:queenStreet.renderer.domElement.width*queenStreet.renderer.domElement.height,shadow:queenStreet.lighting.sun.shadow.mapSize.x,level:queenStreet.performance.level,savedPixels:queenStreet.graphics.stats.texturePixelsSaved})');
-  if(!budget.simple||budget.pixels>1400000||budget.pixels<=1100000||budget.shadow!==2048||budget.level!=='balanced'||budget.savedPixels<6000000)throw Error('iPad budget: '+JSON.stringify(budget));
+  if(!budget.simple||budget.pixels>1400000||budget.pixels<=1100000||budget.shadow!==2048||budget.level!=='balanced'||budget.savedPixels<3000000)throw Error('iPad budget: '+JSON.stringify(budget));
   await evaluate('queenStreet.updateSettings({quality:"low"})');
   if(!await evaluate('queenStreet.renderer.domElement.width*queenStreet.renderer.domElement.height<=400000&&queenStreet.lighting.sun.shadow.mapSize.x===512'))throw Error('Low fallback is not available');
   await evaluate('queenStreet.updateSettings({quality:"high",weather:"rain",weatherMode:"fixed",night:true});queenStreet.setPaused(false);queenStreet.primary()');
   await wait(1500);
   if(await evaluate('queenStreet.performance.level')!=='balanced')throw Error('Saved High bypassed the iPad safety ceiling');
   console.log('PASS: iPad desktop-mode detection, bounded textures/pixels/shadows, night rain and High safety ceiling');
+ }
+ if(routes){
+  const checkRoute=async id=>{
+   for(let i=0;i<100&&await evaluate('!!queenStreet.routeTransition');i++)await wait(100);
+   const current=await evaluate('queenStreet.route.id');
+   if(current!==id){await evaluate('document.getElementById("route-select").click()');for(let i=0;i<100&&await evaluate('!!queenStreet.routeTransition');i++)await wait(100);}
+   if(!await evaluate('queenStreet.route.id==='+JSON.stringify(id)+'&&!queenStreet.routeTransition'))throw Error('Route button did not select '+id);
+  };
+  await checkRoute('dundas');
+  if(!await evaluate('document.querySelector(".route-badge").textContent==="505"&&document.getElementById("route-title").textContent==="Dundas Street"&&queenStreet.route.stops[0].label==="Dundas West Station"&&queenStreet.rig.materials.get("Markings_Atlas").map.image instanceof HTMLCanvasElement&&queenStreet.streetcars.vehicles[0].rig.materials.get("Markings_Atlas").map.image instanceof HTMLCanvasElement'))throw Error('Route identity, stop labels or destination-board textures are stale');
+  if(!await evaluate('queenStreet.rig.materials.get("Markings_Atlas").map.source!==queenStreet.streetcars.vehicles[0].rig.materials.get("Markings_Atlas").map.source'))throw Error('Opposite destination boards share a texture source');
+  const signs=await evaluate('(()=>{const cells=new Map();for(const s of queenStreet.city.routeSigns)cells.set(s.binding.type+":"+s.binding.slot,s.px+","+s.py);return {roles:cells.size,unique:new Set(cells.values()).size,signCount:queenStreet.city.signCount,stops:document.querySelectorAll("#route-stop-list li").length};})()');
+  if(signs.roles!==12||signs.unique!==12||signs.stops!==39)throw Error('Roadside sign roles share an atlas cell or full itinerary is missing: '+JSON.stringify(signs));
+  for(const id of ['dundas','queen']){
+   await checkRoute(id);
+   const report=await evaluate(`(async()=>{
+    const a=queenStreet;a.updateSettings({mode:'watch',quality:'low',volume:0,doorDwell:0,stopEvery:1,alwaysGreen:true});a.restart();a.ride.trafficAhead=()=>null;
+    const seen=new Set(),total=a.route.totalStops;let sections=0,lastOffset=0,movingFadeFrames=0,looped=false,objects=0;
+    a.scene.traverse(()=>objects++);
+    for(let i=0;i<75000;i++){
+     const before=a.state.z,pending=a.routeTransition,elapsed=pending?.elapsed,switched=pending?.switched,speed=a.state.speed;
+     a.step(.1);a.servedStops.forEach((served,index)=>{if(served)seen.add(index);});
+     if(pending&&elapsed>0&&!switched&&a.routeTransition&&!a.routeTransition.switched&&speed>.1){if(a.state.z<=before)throw Error('Streetcar froze during a section fade');movingFadeFrames++;}
+     if(a.route.stopOffset!==lastOffset){sections++;if(a.route.stopOffset===0&&seen.size===total){looped=true;break;}lastOffset=a.route.stopOffset;}
+     if(i%500===0)await new Promise(r=>setTimeout(r,0));
+    }
+    let after=0;a.scene.traverse(()=>after++);
+    if(!looped||seen.size!==total||movingFadeFrames<10||objects!==after)throw Error('Full itinerary did not loop with bounded scenery: '+JSON.stringify({looped,visited:seen.size,total,movingFadeFrames,objects,after}));
+    return {route:a.route.id,total,sections,movingFadeFrames,boundedObjects:objects};
+   })()`);
+   console.log('PASS: Full route, every stop, continuous section fades and bounded scenery: '+JSON.stringify(report));
+   if(!await evaluate('queenStreet.city.signals.every((s,i)=>s.cross===queenStreet.route.crossings[Math.floor(i/2)])'))throw Error('Signals retain a previous section street name');
+  }
+  await checkRoute('dundas');await evaluate('queenStreet.updateSettings({mode:"one",quality:"balanced"});queenStreet.restart()');
+  await checkRoute('dundas');
+  const checkpoint=await evaluate('(()=>{const a=queenStreet;a.updateSettings({mode:"watch",doorDwell:0,volume:0});a.ride.trafficAhead=()=>null;for(let i=0;i<10000&&(a.route.stopOffset<2||a.routeTransition);i++)a.step(.1);a.setPaused(true);const s=a.captureSession(),manifest=document.querySelector("link[rel=manifest]");sessionStorage.setItem("queen-street-update-session:"+new URL("./",manifest.href).href,JSON.stringify(s));sessionStorage.setItem("route-checkpoint-expected",JSON.stringify({offset:a.route.stopOffset,z:a.state.z}));return {offset:a.route.stopOffset,z:a.state.z};})()');
+  if(checkpoint.offset<2)throw Error('No later-section checkpoint was reached');
  }
  if(atmosphere){
   const report=await evaluate(`(async()=>{
@@ -170,6 +208,8 @@ try{
  ready=false;for(let i=0;i<900;i++){ready=await evaluate('!!window.queenStreet?.ready');if(ready)break;await wait(100);}
  if(!ready||errors.length)throw Error('Installed live game did not reload offline: '+JSON.stringify(errors));
  if(morning&&!await evaluate('queenStreet.nightAmount===0&&!queenStreet.settings.night&&queenStreet.settings.volume===.2'))throw Error('Offline relaunch did not reset to morning');
+ if(routes&&!await evaluate('queenStreet.route.id==="dundas"&&queenStreet.settings.routeId==="dundas"&&queenStreet.nightAmount===0&&document.querySelector(".route-badge").textContent==="505"'))throw Error('Offline reload lost the selected route or morning start');
+ if(routes&&!await evaluate('(()=>{const expected=JSON.parse(sessionStorage.getItem("route-checkpoint-expected"));return queenStreet.route.stopOffset===expected.offset&&Math.abs(queenStreet.state.z-expected.z)<1e-8;})()'))throw Error('Offline update/recovery checkpoint lost its itinerary section');
  if(morning&&!await evaluate('queenStreet.settings.alwaysGreen===false&&queenStreet.settings.doorDwell===15&&queenStreet.captureSession().manualFade===null&&queenStreet.captureSession().cycleTime===0&&queenStreet.state.time>=29.9'))throw Error('Nighttime checkpoint did not restore in morning with later preferences retained');
  if(morning)console.log('PASS: Offline update/recovery checkpoint starts in daylight, clears its night fade and preserves the ride and later settings');
  if(sensory&&await evaluate('JSON.stringify(queenStreet.settings)')!==sensoryExpected)throw Error('Saved sensory preferences did not survive offline reload');

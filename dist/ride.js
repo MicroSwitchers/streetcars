@@ -1,7 +1,7 @@
 // Engine-neutral ride logic. Just watch alone departs and repeats automatically.
 export class Ride {
  constructor(route,rig,mode='one'){this.route=route;this.rig=rig;this.state={};this.mode=mode;this.cruise=20/3.6;this.alwaysGreen=true;this.stopAtLights=false;this.dwellSeconds=5;this.stopEvery=1;this.restart();}
- scheduled(index){return index===this.route.stops.length-1||index%this.stopEvery===0;}
+ scheduled(index){const offset=this.route.stopOffset??0;return index+offset===(this.route.totalStops??this.route.stops.length)-1||(index+offset)%this.stopEvery===0;}
  nextScheduledStop(index){while(index<this.route.stops.length&&!this.scheduled(index))index++;return index;}
  setStopEvery(value){this.stopEvery=+value===2?2:1;const s=this.state;let index=this.route.stops.findIndex(stop=>stop.z>s.z+.02);if(index<0)index=this.route.stops.length;s.nextStop=this.nextScheduledStop(index);}
  setDwellSeconds(value){this.dwellSeconds=[0,5,10,15,20,30].includes(+value)?+value:5;}
@@ -10,11 +10,11 @@ export class Ride {
  setAlwaysGreen(value){this.alwaysGreen=!!value;this.syncSignal();}
  setStopAtLights(value){this.stopAtLights=!!value;if(!this.stopAtLights)this.state.assist=false;}
  syncSignal(){const s=this.state;s.signal=this.alwaysGreen||s.time%42<23?'green':s.time%42<27?'amber':'red';if(s.signal==='green')s.assist=false;}
- restart(){Object.assign(this.state,{z:this.route.start,speed:0,metres:0,power:0,time:0,paused:false,doors:false,served:this.route.stops.map(()=>false),dwell:0,nextStop:this.nextScheduledStop(0),currentStop:-1,phase:this.mode==='manual'?'manual':'ready',complete:false,signal:'green',assist:false,command:0,openedHere:false,braking:true});this.rig.setDoor('both',0,true);this.rig.setDistance(0);this.rig.setBrake?.(1);}
- setMode(mode){if(!['one','doors','manual','watch'].includes(mode))return;this.mode=mode;const s=this.state;s.power=0;if(mode==='manual'){s.phase='manual';return;}s.nextStop=this.route.stops.findIndex(stop=>stop.z>s.z+6);if(s.nextStop<0)s.nextStop=this.route.stops.length;s.nextStop=this.nextScheduledStop(s.nextStop);if(s.speed>.12){s.phase='travelling';this.setDoors(false);return;}const at=this.route.stops.findIndex(stop=>Math.abs(stop.z-s.z)<6);s.currentStop=at;s.phase=at===this.route.stops.length-1?'finished':at>=0?'atStop':'ready';s.complete=s.phase==='finished';if(['one','watch'].includes(mode)&&at>=0)this.setDoors(true);}
+ restart(){Object.assign(this.state,{z:this.route.start,speed:0,metres:0,power:0,time:0,paused:false,doors:false,served:this.route.stops.map(()=>false),dwell:0,nextStop:this.nextScheduledStop(this.route.firstStop??0),currentStop:-1,phase:this.mode==='manual'?'manual':'ready',complete:false,signal:'green',assist:false,command:0,openedHere:false,braking:true});this.rig.setDoor('both',0,true);this.rig.setDistance(0);this.rig.setBrake?.(1);}
+ setMode(mode){if(!['one','doors','manual','watch'].includes(mode))return;this.mode=mode;const s=this.state;s.power=0;if(mode==='manual'){s.phase='manual';return;}s.nextStop=this.route.stops.findIndex(stop=>stop.z>s.z+6);if(s.nextStop<0)s.nextStop=this.route.stops.length;s.nextStop=this.nextScheduledStop(s.nextStop);if(s.speed>.12){s.phase='travelling';this.setDoors(false);return;}const at=this.route.stops.findIndex(stop=>Math.abs(stop.z-s.z)<6);s.currentStop=at;s.phase=at===this.route.stops.length-1?'finished':at>=0?'atStop':'ready';s.complete=s.phase==='finished'&&!this.route.hasNext;if(['one','watch'].includes(mode)&&at>=0)this.setDoors(true);}
  setDoors(open){const s=this.state;if(s.speed>.12)return false;const opening=!!open;if(s.doors===opening)return true;if(!opening&&!this.dwellReady)return false;s.doors=opening;s.dwell=0;this.rig.setDoor('both',s.doors?1:0);this.onDoors?.(opening);if(s.doors){s.power=0;if(s.currentStop>=0){s.openedHere=true;s.served[s.currentStop]=true;}}return true;}
  toggleDoors(){return this.setDoors(!this.state.doors);}
- go(){const s=this.state;if(s.paused||!this.dwellReady||this.mode==='manual'||!['ready','atStop','finished'].includes(s.phase))return false;if(this.mode==='doors'&&(s.doors||this.rig.doors.front>.001||this.rig.doors.rear>.001))return false;if(this.mode==='doors'&&s.currentStop>=0&&!s.openedHere)return false;if(s.phase==='finished'){this.restart();return this.go();}this.setDoors(false);s.dwell=0;s.phase='closing';return true;}
+ go(){const s=this.state;if(s.paused||!this.dwellReady||this.mode==='manual'||!['ready','atStop','finished'].includes(s.phase))return false;if(this.mode==='doors'&&(s.doors||this.rig.doors.front>.001||this.rig.doors.rear>.001))return false;if(this.mode==='doors'&&s.currentStop>=0&&!s.openedHere)return false;if(s.phase==='finished'){if(this.onContinue?.())return true;this.restart();return this.go();}this.setDoors(false);s.dwell=0;s.phase='closing';return true;}
  get canGo(){const s=this.state;return !s.paused&&this.dwellReady&&['ready','atStop','finished'].includes(s.phase)&&(['one','watch'].includes(this.mode)||(!s.doors&&this.rig.doors.front<.001&&this.rig.doors.rear<.001&&(s.currentStop<0||s.openedHere)));}
  step(dt,manualCommand=0){
    if(this.state.paused)return;
@@ -55,7 +55,7 @@ export class Ride {
    if(arrived&&target===destination)this.arrive();
    s.command=s.assist?-1:s.speed<desired?1:0;
  }
- arrive(){const s=this.state;s.dwell=0;if(s.nextStop<this.route.stops.length){s.currentStop=s.nextStop;s.nextStop=this.nextScheduledStop(s.nextStop+1);s.openedHere=false;s.phase=s.nextStop===this.route.stops.length?'finished':'atStop';s.complete=s.phase==='finished';if(['one','watch'].includes(this.mode))this.setDoors(true);}else{s.phase='finished';s.complete=true;this.setDoors(['one','watch'].includes(this.mode));}}
+ arrive(){const s=this.state;s.dwell=0;if(s.nextStop<this.route.stops.length){s.currentStop=s.nextStop;s.nextStop=this.nextScheduledStop(s.nextStop+1);s.openedHere=false;s.phase=s.nextStop===this.route.stops.length?'finished':'atStop';s.complete=s.phase==='finished'&&!this.route.hasNext;if(['one','watch'].includes(this.mode))this.setDoors(true);}else{s.phase='finished';s.complete=true;this.setDoors(['one','watch'].includes(this.mode));}}
  snapshot(){return {version:1,mode:this.mode,state:{...this.state,served:[...this.state.served]}};}
  restore(snapshot){
    const s=snapshot?.state;if(snapshot?.version!==1||snapshot.mode!==this.mode||!s||!['ready','closing','travelling','atStop','finished','manual'].includes(s.phase))return false;

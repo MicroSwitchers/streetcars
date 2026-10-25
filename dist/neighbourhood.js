@@ -91,7 +91,7 @@ export function buildNeighbourhood(c){
          const names=['CORNER GROCER','WEST END STUDIO','NEIGHBOURHOOD CAFE'];
          box('dark',x,4.0,front-end*.23,width-.65,.80,.20);
          box('warmStone',x,4.0,front-end*.35,width-.82,.68,.07);
-         sign(names[(j+variation)%names.length],x,4.0,front-end*.40,width-1.05,.52,end===1?Math.PI:0,'#e2d8b8',['#33493d','#304452','#724439'][variation%3],'QUEEN STREET','shop');
+         sign(names[(j+variation)%names.length],x,4.0,front-end*.40,width-1.05,.52,end===1?Math.PI:0,'#e2d8b8',['#33493d','#304452','#724439'][variation%3],'SHOP LOCAL','shop');
          const awningColours=['awningRed','awningGreen','awningBlue','awningOchre'];
          for(let stripe=0;stripe<5;stripe++){
            const stripeX=x-width*.42+stripe*(width*.84/4);

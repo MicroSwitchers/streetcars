@@ -9,12 +9,14 @@ import {prepareRoadsideAsset} from './streetcar-asset.js';
 import {createStreetcarTraffic} from './streetcar-traffic.js';
 import {StreetcarSounds} from './sounds.js?timing-v11';
 import {createWeather,WEATHER} from './weather.js';
+import {ROUTES,createRouteSection,nextRouteSection} from './routes.js';
+import {createRouteSigns} from './route-signs.js';
 import {installSettingsHold,nextWeatherChoice} from './sensory-controls.js';
 
 const $=id=>document.getElementById(id),storageKey='queen-street-ride-settings-v1';
-const defaults={mode:'one',playModeVersion:1,startupDefaultsVersion:1,doorStyle:'toggle',doorDwell:5,stopEvery:1,quality:'auto',cruise:20,alwaysGreen:true,stopAtLights:false,readyGlow:true,streetNames:true,lights:true,weatherSeed:Math.floor(Math.random()*4294967296),dayNightCycle:true,night:false,weather:'overcast',weatherMode:'cycle',atmosphereVersion:3,size:'large',spacious:false,camera:'auto',swipe:true,reduceMotion:matchMedia('(prefers-reduced-motion: reduce)').matches,contrast:false,volume:.35,bell:true,horn:true};
+const defaults={routeId:'queen',mode:'one',playModeVersion:1,startupDefaultsVersion:1,doorStyle:'toggle',doorDwell:5,stopEvery:1,quality:'auto',cruise:20,alwaysGreen:true,stopAtLights:false,readyGlow:true,streetNames:true,lights:true,weatherSeed:Math.floor(Math.random()*4294967296),dayNightCycle:true,night:false,weather:'overcast',weatherMode:'cycle',atmosphereVersion:3,size:'large',spacious:false,camera:'auto',swipe:true,reduceMotion:matchMedia('(prefers-reduced-motion: reduce)').matches,contrast:false,volume:.35,bell:true,horn:true};
 function readSettings(){try{const saved=JSON.parse(localStorage.getItem(storageKey)||'{}');if(saved.startupDefaultsVersion!==1){saved.alwaysGreen=true;if(saved.doorDwell==null||+saved.doorDwell===10)saved.doorDwell=5;saved.startupDefaultsVersion=1;}if(saved.playModeVersion!==1)Object.assign(saved,{mode:'one',playModeVersion:1});if((saved.atmosphereVersion??0)<3)Object.assign(saved,{weather:'overcast',weatherMode:'cycle',night:false,dayNightCycle:true});return sanitize({...defaults,...saved,night:false});}catch{return {...defaults};}}
-function sanitize(s){return {playModeVersion:1,startupDefaultsVersion:1,mode:['one','doors','manual','watch'].includes(s.mode)?s.mode:'one',doorStyle:s.doorStyle==='separate'?'separate':'toggle',doorDwell:[0,5,10,15,20,30].includes(+s.doorDwell)?+s.doorDwell:5,stopEvery:+s.stopEvery===2?2:1,quality:QUALITY_MODES.includes(s.quality)?s.quality:'auto',cruise:[12,20,30].includes(+s.cruise)?+s.cruise:20,alwaysGreen:!!s.alwaysGreen,stopAtLights:!!s.stopAtLights,readyGlow:s.readyGlow!==false,streetNames:s.streetNames!==false,lights:s.lights!==false,weatherSeed:Number.isInteger(s.weatherSeed)?s.weatherSeed>>>0:defaults.weatherSeed,dayNightCycle:!!s.dayNightCycle,night:!!s.night,weather:Object.hasOwn(WEATHER,s.weather)?s.weather:'overcast',weatherMode:['cycle','random','fixed','off'].includes(s.weatherMode)?s.weatherMode:'cycle',atmosphereVersion:3,size:['large','extra','jumbo'].includes(s.size)?s.size:'large',spacious:!!s.spacious,camera:CAMERA_MODES.includes(s.camera)?s.camera:'auto',swipe:!!s.swipe,reduceMotion:!!s.reduceMotion,contrast:!!s.contrast,volume:Math.max(0,Math.min(1,Number.isFinite(+s.volume)?+s.volume:.35)),bell:!!s.bell,horn:!!s.horn};}
+function sanitize(s){return {routeId:s.routeId==='dundas'?'dundas':'queen',playModeVersion:1,startupDefaultsVersion:1,mode:['one','doors','manual','watch'].includes(s.mode)?s.mode:'one',doorStyle:s.doorStyle==='separate'?'separate':'toggle',doorDwell:[0,5,10,15,20,30].includes(+s.doorDwell)?+s.doorDwell:5,stopEvery:+s.stopEvery===2?2:1,quality:QUALITY_MODES.includes(s.quality)?s.quality:'auto',cruise:[12,20,30].includes(+s.cruise)?+s.cruise:20,alwaysGreen:!!s.alwaysGreen,stopAtLights:!!s.stopAtLights,readyGlow:s.readyGlow!==false,streetNames:s.streetNames!==false,lights:s.lights!==false,weatherSeed:Number.isInteger(s.weatherSeed)?s.weatherSeed>>>0:defaults.weatherSeed,dayNightCycle:!!s.dayNightCycle,night:!!s.night,weather:Object.hasOwn(WEATHER,s.weather)?s.weather:'overcast',weatherMode:['cycle','random','fixed','off'].includes(s.weatherMode)?s.weatherMode:'cycle',atmosphereVersion:3,size:['large','extra','jumbo'].includes(s.size)?s.size:'large',spacious:!!s.spacious,camera:CAMERA_MODES.includes(s.camera)?s.camera:'auto',swipe:!!s.swipe,reduceMotion:!!s.reduceMotion,contrast:!!s.contrast,volume:Math.max(0,Math.min(1,Number.isFinite(+s.volume)?+s.volume:.35)),bell:!!s.bell,horn:!!s.horn};}
 
 export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting,city,route,canvas,gltf}){
  const settings=readSettings(),sound=new StreetcarSounds(settings);
@@ -24,6 +26,7 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
  ride.onDepart=()=>{if(audioUnlocked&&!state.paused)sound.play('bell');};
  state.lights=settings.lights;rig.setLights({headlights:state.lights,tail:state.lights,markers:state.lights,interior:state.lights});ride.cruise=settings.cruise/3.6;ride.setDwellSeconds(settings.doorDwell);ride.setStopEvery(settings.stopEvery);ride.setAlwaysGreen(settings.alwaysGreen);ride.setStopAtLights(settings.stopAtLights);city.updateSignals(state.time,settings.alwaysGreen);lighting?.addStreetcar(car,rig);
  const streetcars=createStreetcarTraffic(scene,trafficTemplate,route,lighting,city.actors);
+ const playerRouteSigns=createRouteSigns(rig),opposingRouteSigns=createRouteSigns(streetcars.vehicles[0].rig,true);playerRouteSigns.setRoute(route);opposingRouteSigns.setRoute(route);
  const weather=createWeather(scene,city.materials,lighting,graphics,renderer);
  const compatibility=!!graphics.compatibility;
  const performanceBudget=new AdaptiveQuality(initialQuality(renderer.userData?.device??{coarse:matchMedia('(pointer: coarse)').matches,memory:navigator.deviceMemory}),compatibility?(renderer.userData?.device?.recovering?'low':'balanced'):'high',compatibility?30:60);
@@ -40,9 +43,58 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
  const marker=new THREE.Mesh(new THREE.TorusGeometry(1.45,.025,6,48),new THREE.MeshBasicMaterial({color:0xd0b474,transparent:true,opacity:.55}));marker.rotation.x=Math.PI/2;scene.add(marker);
  const keys=new Set(),dialog=$('settings-dialog');let wasPaused=false,lastMessage='',lastPrimary=-Infinity,cycleTime=0,nightAmount=0,manualFade=null,lastNightButton=null,passLegActive=false,passLegStartZ=0,passLegEndZ=route.end,audioUnlocked=false;
  const doorPictures={"open":"<svg class=\"aac-symbol\" data-symbol=\"open\" viewBox=\"0 0 64 64\" aria-hidden=\"true\"><path fill=\"currentColor\" d=\"M7 6h50v5H7zM9 14h15v30H9zM40 14h15v30H40z\"/><path fill=\"#fffdf3\" d=\"M13 19h7v13h-7zM44 19h7v13h-7z\"/><path fill=\"#157947\" d=\"m3 53 11-8v5h11v6H14v5zm58 0-11-8v5H39v6h11v5z\"/></svg>","close":"<svg class=\"aac-symbol\" data-symbol=\"close\" viewBox=\"0 0 64 64\" aria-hidden=\"true\"><path fill=\"currentColor\" d=\"M7 6h50v5H7zM15 14h16v30H15zM33 14h16v30H33z\"/><path fill=\"#fffdf3\" d=\"M19 19h8v13h-8zM37 19h8v13h-8z\"/><path fill=\"#ad3c2a\" d=\"M3 50h14v-5l11 8-11 8v-5H3zm58 0H47v-5l-11 8 11 8v-5h14z\"/></svg>"};let lastDoorPicture='';
+ let routeTransition=null,servedStops=Array(route.totalStops).fill(false);
+ const routeFade=document.createElement('div');routeFade.id='route-fade';routeFade.setAttribute('aria-hidden','true');document.body.append(routeFade);
  const announcements=document.createElement('span');announcements.className='sr-only';announcements.setAttribute('role','status');document.body.append(announcements);
  const speak=text=>{announcements.textContent=text;};
  function save(){try{localStorage.setItem(storageKey,JSON.stringify(settings));}catch{}}
+ function updateRouteUI(){
+   document.querySelectorAll('.route-badge').forEach(badge=>badge.textContent=route.number);$('route-title').textContent=route.title;
+   $('route-select').setAttribute('aria-label',route.number+' '+route.name+'. Switch to '+(route.id==='queen'?'505 Dundas':'501 Queen'));
+   $('route-select').title='Switch to '+(route.id==='queen'?'505 Dundas':'501 Queen');$('route-select').disabled=!!routeTransition;
+   canvas.setAttribute('aria-label','A Toronto streetcar on the '+route.number+' '+route.name+' route');document.title=route.title+' - A streetcar ride';
+   $('route-list-title').textContent=route.number+' '+route.name+' - '+route.totalStops+' stops';$('route-stop-list').replaceChildren(...route.allStops.map(stop=>{const li=document.createElement('li');li.textContent=stop.name;return li;}));
+   document.querySelectorAll('.route-stop b').forEach((label,i)=>{label.textContent=route.stops[i].label;label.title=route.stops[i].name;});
+ }
+ function applySection(section,continuing=false,moving=false){
+   const previous={z:state.z,speed:state.speed,time:state.time,metres:state.metres,paused:state.paused,power:state.power},changed=section.id!==route.id;
+   if(changed||!continuing)servedStops=Array(section.totalStops).fill(false);
+   Object.assign(route,section);settings.routeId=route.id;ride.restart();ride.setStopEvery(settings.stopEvery);
+   state.served=route.stops.map(stop=>!!servedStops[stop.index]);state.paused=previous.paused;
+   if(continuing){state.time=previous.time;state.metres=previous.metres;rig.setDistance(state.metres);}
+   if(moving){state.phase=settings.mode==='manual'?'manual':'travelling';state.speed=previous.speed;state.power=previous.power;}
+   if(passLegActive&&moving){passLegStartZ+=state.z-previous.z;passLegEndZ=route.stops[state.nextStop]?.z??route.end;}
+   else{sound.stopPass();passLegActive=false;}
+   if(changed){playerRouteSigns.setRoute(route);opposingRouteSigns.setRoute(route);}
+   city.setRoute();city.actors.reset();streetcars.reset(state.z);lastTrafficZ=state.z;
+   view.sidewalkStops=view.makeSidewalkStops();view.hasPose=false;view.transition=null;view.lastZ=null;view.sidewalkIndex=null;view.instant=true;
+   updateRouteUI();updateWorld(0);view.update(state.z,0);needsRender=true;save();
+ }
+ function selectRoute(id){
+   if(!Object.hasOwn(ROUTES,id)||routeTransition||id===route.id)return false;
+   routeTransition={kind:'select',id,offset:0,firstStop:0,elapsed:0,switched:false,restoreFocus:document.activeElement===$('route-select')};settings.routeId=id;save();updateRouteUI();return true;
+ }
+ ride.onContinue=()=>{
+   if(routeTransition)return true;
+   const next=nextRouteSection(route),section=next??createRouteSection(route.id);
+   routeTransition={kind:next?'continue':'loop',id:section.id,offset:section.stopOffset,firstStop:section.firstStop,elapsed:0,switched:false};
+   ride.setDoors(false);state.phase='closing';state.complete=false;updateRouteUI();return true;
+ };
+ function advanceRoute(dt){
+   if(!routeTransition)return;
+   const t=routeTransition;
+   if(t.kind!=='select'&&!t.switched&&(state.doors||rig.doors.front>.001||rig.doors.rear>.001))return;
+   t.elapsed=Math.min(2.8,t.elapsed+Math.min(.1,Math.max(0,dt)));
+   if(t.elapsed>=1.4&&!t.switched){
+     const moving=state.speed>.001||settings.mode==='watch',continuing=t.kind==='continue';
+     applySection(createRouteSection(t.id,t.offset,t.firstStop),continuing,moving);t.switched=true;
+     if(t.kind==='select'){manualFade=null;cycleTime=0;settings.night=false;updateDayNight();}
+   }
+   routeFade.style.opacity=String(Math.sin(Math.PI*t.elapsed/2.8));
+   if(t.elapsed>=2.8){routeTransition=null;routeFade.style.opacity='0';updateRouteUI();if(t.restoreFocus)$('route-select').focus({preventScroll:true});}
+   needsRender=true;
+ }
+ updateRouteUI();
  function updateDayNightButton(){
    if(lastNightButton===settings.night)return;lastNightButton=settings.night;
    $('day-night-label').textContent=settings.night?'Day':'Night';$('day-night-toggle').setAttribute('aria-label','Switch to '+(settings.night?'day':'night'));$('day-night-toggle').title='Switch to '+(settings.night?'day':'night');
@@ -112,11 +164,11 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
  function unlockAudio(){
    audioUnlocked=true;sound.unlockPass();
  }
- function primary(){if(settings.mode==='watch')return false;const now=performance.now();if(now-lastPrimary<400)return false;lastPrimary=now;unlockAudio();if(state.paused&&!dialog.open){state.paused=false;updateHUD();if(state.phase==='travelling')return true;}const accepted=ride.go();updateHUD();return accepted;}
+ function primary(){if(settings.mode==='watch'||routeTransition?.kind==='select')return false;const now=performance.now();if(now-lastPrimary<400)return false;lastPrimary=now;unlockAudio();if(state.paused&&!dialog.open){state.paused=false;updateHUD();if(state.phase==='travelling')return true;}const accepted=ride.go();updateHUD();return accepted;}
  function doors(open){if(['one','watch'].includes(settings.mode))return false;if(state.speed<=.12)unlockAudio();const ok=open===undefined?ride.toggleDoors():ride.setDoors(open);if(!ok)speak(ride.remainingDwell>0?'Keep the doors open for '+Math.ceil(ride.remainingDwell)+' more seconds.':'The streetcar needs to stop before the doors can open.');updateHUD();return ok;}
  async function play(name){unlockAudio();const ok=await sound.play(name);speak(ok?(name==='bell'?'Bell.':'Horn.'):settings.volume===0?'Sound is off.':'Sound is not available.');}
  function setPaused(value){needsRender=true;if(!value)unlockAudio();state.paused=!!value;keys.clear();state.power=0;$('power').value=0;if(state.paused)sound.stop();updateHUD();}
- function restart(){needsRender=true;sound.stop();sound.stopPass();passLegActive=false;manualFade=null;cycleTime=0;settings.night=false;updateDayNight();ride.restart();streetcars.reset(route.start);city.actors.reset();state.lights=state.lights??true;keys.clear();$('power').value=0;view.reset();updateWorld(0);updateHUD();}
+ function restart(){routeTransition=null;routeFade.style.opacity='0';applySection(createRouteSection(route.id));needsRender=true;sound.stop();sound.stopPass();passLegActive=false;manualFade=null;cycleTime=0;settings.night=false;updateDayNight();ride.restart();streetcars.reset(route.start);city.actors.reset();state.lights=state.lights??true;keys.clear();$('power').value=0;view.reset();updateWorld(0);updateHUD();}
  function setCamera(mode){const value=typeof mode==='number'?CAMERA_MODES[((mode%CAMERA_MODES.length)+CAMERA_MODES.length)%CAMERA_MODES.length]:mode;updateSettings({camera:value});}
  function cycleCamera(){setCamera(CAMERA_MODES[(CAMERA_MODES.indexOf(settings.camera)+1)%CAMERA_MODES.length]);}
  function openSettings(){if(dialog.open)return;wasPaused=state.paused;if(settings.mode!=='watch')setPaused(true);dialog.returnValue='';dialog.showModal();$('settings-close').focus();}
@@ -124,6 +176,7 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
  dialog.addEventListener('cancel',event=>{event.preventDefault();closeSettings();});
  dialog.addEventListener('close',()=>{state.paused=wasPaused;keys.clear();updateHUD();$(dialog.returnValue==='play'&&['one','doors'].includes(settings.mode)?'go':'settings-open').focus();});
  installSettingsHold($('settings-open'),openSettings);$('settings-close').onclick=()=>closeSettings();$('settings-done').onclick=()=>closeSettings(true);
+ $('route-select').onclick=()=>selectRoute(route.id==='queen'?'dundas':'queen');
  $('go').onclick=primary;$('doors').onclick=()=>doors();$('door-open').onclick=()=>doors(true);$('door-close').onclick=()=>doors(false);
  for(const id of ['go','doors','door-open','door-close','bell','horn']){const button=$(id);button.addEventListener('keydown',e=>{if(['Space','Enter'].includes(e.code)){e.preventDefault();e.stopPropagation();if(!e.repeat)button.click();}});button.addEventListener('keyup',e=>{if(['Space','Enter'].includes(e.code))e.preventDefault();});}
  $('bell').onclick=()=>play('bell');$('horn').onclick=()=>play('horn');$('test-bell').onclick=()=>play('bell');$('test-horn').onclick=()=>play('horn');
@@ -146,7 +199,7 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
    if(e.repeat)return;if(k==='KeyB'&&settings.bell)play('bell');if(k==='KeyH'&&settings.horn)play('horn');if(k==='KeyC')cycleCamera();if(k==='KeyD'&&settings.mode!=='one')doors();
  });
  window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener('blur',()=>{keys.clear();state.power=0;$('power').value=0;});let resumeOnVisible=false;document.addEventListener('visibilitychange',()=>{if(document.hidden){resumeOnVisible=!state.paused&&!dialog.open;if(resumeOnVisible)setPaused(true);}else{if(resumeOnVisible&&!dialog.open&&!renderer.userData?.recovery?.lost){state.paused=false;needsRender=true;updateHUD();}resumeOnVisible=false;}});
- function step(dt,commandOverride){if(state.paused)return;let command=commandOverride??state.power;if(keys.has('KeyW')||keys.has('ArrowUp'))command=1;if(keys.has('KeyS')||keys.has('ArrowDown'))command=-1;if(keys.has('Space'))command=-2;updateDayNight(dt);ride.step(dt,command);syncStreetcarSound();city.updateSignals(state.time,settings.alwaysGreen);city.update(state.time,dt,settings.alwaysGreen);updateWorld(dt);}
+ function step(dt,commandOverride){if(state.paused)return;let command=commandOverride??state.power;if(keys.has('KeyW')||keys.has('ArrowUp'))command=1;if(keys.has('KeyS')||keys.has('ArrowDown'))command=-1;if(keys.has('Space'))command=-2;updateDayNight(dt);ride.step(dt,command);for(let i=0;i<state.served.length;i++)if(state.served[i])servedStops[route.stops[i].index]=true;if(settings.mode==='manual'&&route.hasNext&&state.z>route.end-30&&!routeTransition)ride.onContinue();advanceRoute(dt);syncStreetcarSound();city.updateSignals(state.time,settings.alwaysGreen);city.update(state.time,dt,settings.alwaysGreen);updateWorld(dt);}
  function updateWorld(dt){car.position.set(route.trackX,.026,state.z);city.actors.setFocus(state.z);streetcars.update(dt,state.z,state.time,settings.alwaysGreen);if(Math.abs(state.z-lastTrafficZ)>20)city.actors.reset();lastTrafficZ=state.z;const hit=rig.followWireSegment(new THREE.Vector3(route.trackX,route.wireY,state.z-18),new THREE.Vector3(route.trackX,route.wireY,state.z+18));state.wire=hit.reachable;state.wireError=hit.errorMetres;if(lighting)lighting.update(state.z);else{sky.position.z=state.z;sun.position.set(35,65,state.z-25);sun.target.position.set(0,0,state.z+15);}}
  function updateHUD(){
    $('signal-status').dataset.signal=state.signal;$('signal-label').textContent='Signal · '+state.signal[0].toUpperCase()+state.signal.slice(1);$('signal-status').setAttribute('aria-label','Traffic signal ahead: '+state.signal+(settings.stopAtLights?'; the streetcar will '+(state.signal==='green'?'continue':'stop')+'.':'.'));
@@ -155,11 +208,11 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
    const next=manual?route.stops.find(stop=>stop.z>=state.z-6):route.stops[state.nextStop],current=route.stops[state.currentStop],display=at?current:next;
    document.querySelectorAll('.route-stop').forEach((dot,i)=>{dot.classList.toggle('is-visited',i<=state.currentStop);dot.classList.toggle('is-next',display===route.stops[i]);});
    const progress=THREE.MathUtils.clamp((state.z-route.stops[0].z)/(route.stops[2].z-route.stops[0].z),0,1);$('route-fill').style.height=(progress*100)+'%';
-   $('stop-prefix').textContent=at?'AT THE STOP':'NEXT STOP';$('stop-name').textContent=display?.name??'Queen Street';$('distance').textContent=display&&!at?Math.max(0,Math.round(display.z-state.z))+' m':'';
+   $('stop-prefix').textContent=at?'AT THE STOP':'NEXT STOP';$('stop-name').textContent=display?.name??route.title;$('distance').textContent=display&&!at?Math.max(0,Math.round(display.z-state.z))+' m':'';
    const message=state.paused?'Paused':state.speed>.1?'Moving':state.phase==='closing'?'Doors closing':state.doors?'Doors open':'Ready';
    if(message!==lastMessage){$('ride-message').textContent=message;lastMessage=message;}
-   const watching=settings.mode==='watch',ready=!watching&&(state.paused||ride.canGo);$('go').setAttribute('aria-disabled',!ready);
-   $('go-label').textContent=state.phase==='finished'?'AGAIN':'GO';
+   const watching=settings.mode==='watch',ready=!watching&&routeTransition?.kind!=='select'&&(state.paused||ride.canGo);$('go').setAttribute('aria-disabled',!ready);
+   $('go-label').textContent=state.phase==='finished'&&!route.hasNext?'AGAIN':'GO';
 
    $('go').setAttribute('aria-label',$('go-label').textContent);
    $('go').classList.toggle('long-label',$('go-label').textContent.length>5);
@@ -172,8 +225,8 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
  }
  function applyQuality(){const profile=qualityProfile(performanceBudget.level,compatibility);graphics.setQuality(profile);lighting?.setQuality(profile);resize();if(compatibility&&weather.environments.size)weather.rebuildEnvironments();}
  function resize(){needsRender=true;const profile=qualityProfile(performanceBudget.level,compatibility);renderer.setPixelRatio(renderRatio(profile,innerWidth,innerHeight,devicePixelRatio));renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();view.instant=true;}
- function captureSession(){return {version:1,ride:ride.snapshot(),cycleTime,dayNightDuration:DAY_NIGHT.duration,manualFade:manualFade?{...manualFade}:null,weather:weather.snapshotClock()};}
- function restoreSession(snapshot,{daylight=false}={}){if(snapshot?.version!==1||!ride.restore(snapshot.ride))return false;if(typeof snapshot.ride.state.lights==='boolean'){state.lights=snapshot.ride.state.lights;settings.lights=state.lights;rig.setLights({headlights:state.lights,tail:state.lights,markers:state.lights,interior:state.lights});$('lights').textContent=state.lights?'Night lights on':'Night lights off';$('lights').setAttribute('aria-pressed',state.lights);}if(Number.isFinite(snapshot.cycleTime))cycleTime=restoreDayNightTime(snapshot.cycleTime,snapshot.dayNightDuration??(Object.hasOwn(snapshot,'manualFade')?342:312));manualFade=snapshot.manualFade&&Number.isFinite(snapshot.manualFade.from)&&snapshot.manualFade.from>=0&&snapshot.manualFade.from<=1&&Number.isFinite(snapshot.manualFade.elapsed)&&snapshot.manualFade.elapsed>=0&&snapshot.manualFade.elapsed<8?{from:snapshot.manualFade.from,elapsed:snapshot.manualFade.elapsed,night:!!snapshot.manualFade.night}:null;if(daylight){cycleTime=0;manualFade=null;settings.night=false;}weather.restoreClock(snapshot.weather);updateDayNight();city.actors.reset();streetcars.reset(state.z);updateWorld(0);view.reset();needsRender=true;return true;}
+ function captureSession(){return {version:1,itinerary:{id:route.id,offset:route.stopOffset,firstStop:route.firstStop,served:[...servedStops],transition:routeTransition?{...routeTransition}:null},ride:ride.snapshot(),cycleTime,dayNightDuration:DAY_NIGHT.duration,manualFade:manualFade?{...manualFade}:null,weather:weather.snapshotClock()};}
+ function restoreSession(snapshot,{daylight=false}={}){if(snapshot?.version!==1||snapshot.itinerary?.id!==route.id||!Number.isInteger(snapshot.itinerary.offset)||snapshot.itinerary.offset<0||snapshot.itinerary.offset>route.totalStops-3)return false;const section=createRouteSection(route.id,snapshot.itinerary.offset,snapshot.itinerary.firstStop),validator=new Ride(section,{setDoor(){},setDistance(){},setBrake(){}},settings.mode);if(!validator.restore(snapshot.ride))return false;routeTransition=null;routeFade.style.opacity='0';applySection(section);ride.restore(snapshot.ride);servedStops=Array.isArray(snapshot.itinerary.served)&&snapshot.itinerary.served.length===route.totalStops?snapshot.itinerary.served.map(Boolean):servedStops;const transition=snapshot.itinerary.transition;if(transition&&['select','continue','loop'].includes(transition.kind)&&Object.hasOwn(ROUTES,transition.id)&&Number.isFinite(transition.elapsed)&&transition.elapsed>=0&&transition.elapsed<2.8)routeTransition={...transition};if(typeof snapshot.ride.state.lights==='boolean'){state.lights=snapshot.ride.state.lights;settings.lights=state.lights;rig.setLights({headlights:state.lights,tail:state.lights,markers:state.lights,interior:state.lights});$('lights').textContent=state.lights?'Night lights on':'Night lights off';$('lights').setAttribute('aria-pressed',state.lights);}if(Number.isFinite(snapshot.cycleTime))cycleTime=restoreDayNightTime(snapshot.cycleTime,snapshot.dayNightDuration??(Object.hasOwn(snapshot,'manualFade')?342:312));manualFade=snapshot.manualFade&&Number.isFinite(snapshot.manualFade.from)&&snapshot.manualFade.from>=0&&snapshot.manualFade.from<=1&&Number.isFinite(snapshot.manualFade.elapsed)&&snapshot.manualFade.elapsed>=0&&snapshot.manualFade.elapsed<8?{from:snapshot.manualFade.from,elapsed:snapshot.manualFade.elapsed,night:!!snapshot.manualFade.night}:null;if(daylight){cycleTime=0;manualFade=null;settings.night=false;}weather.restoreClock(snapshot.weather);updateDayNight();city.actors.reset();streetcars.reset(state.z);updateWorld(0);view.reset();updateRouteUI();needsRender=true;return true;}
  const manifest=document.querySelector('link[rel="manifest"]'),release=document.querySelector('meta[name="queen-street-release"]')?.content;
  const sessionKey=release&&manifest?'queen-street-update-session:'+new URL('./',manifest.href).href:null;
  if(sessionKey)try{const saved=sessionStorage.getItem(sessionKey);sessionStorage.removeItem(sessionKey);if(saved)restoreSession(JSON.parse(saved),{daylight:true});}catch{}
@@ -183,11 +236,12 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
  if(renderer.compileAsync){renderer.setRenderTarget(graphics.target);try{await renderer.compileAsync(scene,camera);}finally{renderer.setRenderTarget(null);}}
  if(renderer.userData?.recovery?.lost)return null;
  graphics.render(scene,camera,view.transition);$('loading').hidden=true;save();
- const api={scene,car,rig,streetcars,renderer,graphics,camera,lighting,state,route,city,weather,ride,settings,sound,view,performance:performanceBudget,captureSession,restoreSession,step,setCamera,primary,toggleDoors:()=>doors(),toggleDayNight, get nightAmount(){return nightAmount;},restart,updateHUD,updateSettings,setPaused,openSettings,ready:true};window.queenStreet=api;window.dispatchEvent(new Event('queen-street-ready'));
+ const api={scene,car,rig,streetcars,renderer,graphics,camera,lighting,state,route,city,weather,ride,settings,sound,view,performance:performanceBudget,captureSession,restoreSession,step,setCamera,primary,toggleDoors:()=>doors(),toggleDayNight, get nightAmount(){return nightAmount;},get servedStops(){return [...servedStops];},get routeTransition(){return routeTransition;},selectRoute,restart,updateHUD,updateSettings,setPaused,openSettings,ready:true};window.queenStreet=api;window.dispatchEvent(new Event('queen-street-ready'));
  if(['one','doors'].includes(settings.mode))$('go').focus({preventScroll:true});
  const clock=new THREE.Clock(),lastPosition=new THREE.Vector3(),lastRotation=new THREE.Quaternion();let frameCount=0,lastFov=0,pendingFrame=0;
  function frame(){requestAnimationFrame(frame);pendingFrame+=clock.getDelta();if(document.hidden||renderer.userData?.recovery?.lost){pendingFrame=0;return;}if(pendingFrame<(compatibility?1/30:1/60)-.001&&!needsRender)return;
    const elapsed=pendingFrame,dt=Math.min(elapsed,.06);pendingFrame=0;
+   if(state.paused&&routeTransition?.kind==='select')advanceRoute(dt);
    if(state.paused&&(manualFade||weather.transitioning)){updateDayNight(dt);needsRender=true;}step(dt);view.stopped=['atStop','finished'].includes(state.phase);view.update(state.z,dt,state.paused);
    if(performanceBudget.sample(elapsed,!state.paused&&!view.transition)){applyQuality();}
    if(frameCount++%6===0)updateHUD();

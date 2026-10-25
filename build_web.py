@@ -11,6 +11,7 @@ files={str(p.relative_to(SOURCE)).replace('\\','/'):p.read_bytes() for p in SOUR
 files['pwa-client.js']=(PWA/'pwa-client.js').read_bytes()
 shared={str(p.relative_to(PWA)).replace('\\','/'):p.read_bytes() for p in (PWA/'icons').glob('*') if p.is_file()}
 shared['manifest.webmanifest']=(PWA/'manifest.webmanifest').read_bytes()
+shared['ROUTES.md']=(ROOT/'ROUTES.md').read_bytes()
 shared['THIRD_PARTY_LICENSES.txt']=(ROOT/'THIRD_PARTY_LICENSES.txt').read_bytes()
 source_html=(SOURCE/'index.html').read_text(encoding='utf8')
 template=(PWA/'sw.template.js').read_text(encoding='utf8')

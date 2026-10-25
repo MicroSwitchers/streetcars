@@ -6,12 +6,10 @@ import {createFoliage} from './surfaces.js';
 import {createStreetscape} from './streetscape.js';
 import {createArchitecture} from './architecture.js';
 
-// Distances are deliberately compressed. All geometry is in metres; east is +Z.
- export const ROUTE={start:-205,end:360,trackX:-1.8,sidewalkX:-7.85,gauge:1.495,wireY:5.8,
-  crossings:[{z:-100,name:'BATHURST ST'},{z:100,name:'PORTLAND ST'},{z:300,name:'SPADINA AVE'}],
-  stops:[{z:-124,name:'Bathurst Street'},{z:76,name:'Portland Street'},{z:276,name:'Spadina Avenue'}]};
+import {createRouteSection} from './routes.js';
+export const ROUTE=createRouteSection();
 
-export function buildEnvironment(scene,trafficCars,streetProps,architecturalAssets){
+export function buildEnvironment(scene,trafficCars,streetProps,architecturalAssets,route=ROUTE){
  let seed=501;const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
  const mats={},batches=new Map(),dummy=new THREE.Object3D();
  const foliage=createFoliage();
@@ -52,12 +50,18 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
  for(const name of ['leaf','leaf2','leaf3']){const m=mats[name];m.map=foliage.map;m.alphaTest=.45;m.side=THREE.DoubleSide;m.vertexColors=true;m.roughness=.85;m.shadowSide=THREE.FrontSide;}
  const windowGlow=new THREE.Color(0xffc581);
  const plaster=['paintedGreen','paintedCream','paintedGrey'];
- const atlas=document.createElement('canvas');atlas.width=2048;atlas.height=3072;const ac=atlas.getContext('2d'),at=new THREE.CanvasTexture(atlas);at.colorSpace=THREE.SRGBColorSpace;at.anisotropy=4;
+ const atlas=document.createElement('canvas');atlas.width=2048;atlas.height=3072;const atlasContext=atlas.getContext('2d'),at=new THREE.CanvasTexture(atlas);at.colorSpace=THREE.SRGBColorSpace;at.anisotropy=4;
+ const routeSigns=[],routeSignGeos=[],routeAtlas=document.createElement('canvas');routeAtlas.width=1024;routeAtlas.height=512;
+ const routeContext=routeAtlas.getContext('2d'),routeTexture=new THREE.CanvasTexture(routeAtlas);routeTexture.colorSpace=THREE.SRGBColorSpace;routeTexture.anisotropy=4;
+ const routeSignMat=new THREE.MeshStandardMaterial({map:routeTexture,roughness:.67,metalness:.08,side:THREE.DoubleSide});
  const signMat=new THREE.MeshStandardMaterial({map:at,roughness:.67,metalness:.08,side:THREE.DoubleSide}),signGeos=[];let signIndex=0;const signCache=new Map();
- function sign(text,x,y,z,width,height,rotation,colour='#e7dbb9',bg='#2c4b41',sub='',style='street'){
+ function sign(text,x,y,z,width,height,rotation,colour='#e7dbb9',bg='#2c4b41',sub='',style='street',binding=null){
+   const ac=binding?routeContext:atlasContext,target=binding?routeAtlas:atlas;
    const aspect=style==='shop'?Math.round(width/height/3)*3:0;
-   const key=[text,colour,bg,sub,style,aspect].join('|');if(!signCache.has(key))signCache.set(key,signIndex++);const index=signCache.get(key),col=index%8,row=Math.floor(index/8);if(row>=atlas.height/128)return;
-   const px=col*256,py=row*128;
+   const key=[text,colour,bg,sub,style,aspect].join('|');
+   if(!binding&&!signCache.has(key))signCache.set(key,signIndex++);
+   const index=binding?{road:0,cross:3,pole:6,shelter:9}[binding.type]+binding.slot:signCache.get(key),columns=binding?4:8,col=index%columns,row=Math.floor(index/columns);if(row>=target.height/128)return;
+   const px=col*256,py=row*128;if(binding)routeSigns.push({binding,px,py});
    let cropTop=0,cropHeight=128;
    if(style==='shop'){
      cropHeight=Math.max(16,Math.min(48,256*height/width));cropTop=(128-cropHeight)/2;
@@ -69,7 +73,7 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
      ac.fillStyle=bg;ac.beginPath();ac.arc(px+center,py+center,radius*.78,0,Math.PI*2);ac.fill();
      ac.fillStyle=colour;ac.textAlign='center';ac.textBaseline='middle';ac.font=`bold ${Math.max(8,cropHeight*.38)}px Georgia,serif`;ac.fillText(text.trim()[0]||'Q',px+center,py+center);
      const textX=px+cropHeight*.88,textWidth=256-cropHeight*1.02;
-     ac.fillStyle='#d5bb7b';ac.textAlign='left';ac.textBaseline='middle';ac.font=`bold ${Math.max(5,cropHeight*.15)}px Arial,sans-serif`;ac.fillText('QUEEN STREET WEST',textX,py+cropTop+cropHeight*.22);
+     ac.fillStyle='#d5bb7b';ac.textAlign='left';ac.textBaseline='middle';ac.font=`bold ${Math.max(5,cropHeight*.15)}px Arial,sans-serif`;ac.fillText('TORONTO',textX,py+cropTop+cropHeight*.22);
      ac.strokeStyle='#d5bb7b99';ac.lineWidth=Math.max(.5,cropHeight*.012);ac.beginPath();ac.moveTo(textX,py+cropTop+cropHeight*.37);ac.lineTo(px+250,py+cropTop+cropHeight*.37);ac.stroke();
      let size=Math.max(7,cropHeight*.37);ac.font=`bold ${size}px Georgia,serif`;
      while(size>6&&ac.measureText(text).width>textWidth){size--;ac.font=`bold ${size}px Georgia,serif`;}
@@ -78,36 +82,36 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
    }else{
      ac.fillStyle=colour;ac.textAlign='center';ac.textBaseline='middle';ac.font='bold '+Math.min(32,360/text.length)+'px Arial';ac.fillText(text,px+128,py+(sub?50:64),238);if(sub){ac.font='12px Arial';ac.fillText(sub,px+128,py+86,236);}
    }
-   const geo=new THREE.PlaneGeometry(width,height),uv=geo.attributes.uv;for(let i=0;i<uv.count;i++)uv.setXY(i,(px+uv.getX(i)*256)/atlas.width,1-(py+cropTop+(1-uv.getY(i))*cropHeight)/atlas.height);geo.rotateY(rotation);geo.translate(x,y,z);signGeos.push(geo);
+   const geo=new THREE.PlaneGeometry(width,height),uv=geo.attributes.uv;for(let i=0;i<uv.count;i++)uv.setXY(i,(px+uv.getX(i)*256)/target.width,1-(py+cropTop+(1-uv.getY(i))*cropHeight)/target.height);geo.rotateY(rotation);geo.translate(x,y,z);(binding?routeSignGeos:signGeos).push(geo);
  }
  // One depth surface carries the road, embedded rails and painted markings.
  // Their world-space material details remain continuous through intersections.
  box('concrete',0,-.25,75,280,.3,1500);box('road',0,-.08,75,15,.16,1200);
  // Cross streets, walk markings and overhead street signs.
  const signals=[];
- for(const cross of ROUTE.crossings){
+ for(const [slot,cross] of route.crossings.entries()){
    // Side-street arms meet the main road at its edges; no coplanar overlap.
    for(const side of [-1,1])box('road',side*73.75,-.08,cross.z,132,.16,13.5);
    for(const side of [-1,1]){
-     const z=cross.z+side*12.5;cylinder('pole',side*8,3.8,z,.085,7.6);rod('pole',[side*8,7.2,z],[side*Math.abs(ROUTE.trackX),7.2,z],.065);
-     box('signalCase',side*Math.abs(ROUTE.trackX),6.65,z,.36,.95,.27);const group=new THREE.Group();group.position.set(side*Math.abs(ROUTE.trackX),6.65,z);if(side===-1)group.rotation.y=Math.PI;
+     const z=cross.z+side*12.5;cylinder('pole',side*8,3.8,z,.085,7.6);rod('pole',[side*8,7.2,z],[side*Math.abs(route.trackX),7.2,z],.065);
+     box('signalCase',side*Math.abs(route.trackX),6.65,z,.36,.95,.27);const group=new THREE.Group();group.position.set(side*Math.abs(route.trackX),6.65,z);if(side===-1)group.rotation.y=Math.PI;
      for(let i=0;i<3;i++){const m=new THREE.MeshBasicMaterial({color:0x242f27});const lamp=new THREE.Mesh(new THREE.CircleGeometry(.115,12),m);lamp.position.set(0,.28-i*.28,.144);group.add(lamp);}scene.add(group);signals.push({group,z:cross.z-12,cross});
-     sign('QUEEN ST W',side*8,4.0,cross.z+side*12.5,2.0,.38,0,'#f0ead8','#244c3c');
-     sign(cross.name,side*8,4.45,cross.z+side*12.5,2.0,.38,Math.PI/2,'#f0ead8','#244c3c');
+     sign(cross.road.toUpperCase(),side*8,4.0,cross.z+side*12.5,2.0,.38,0,'#f0ead8','#244c3c','','street',{type:'road',slot});
+     sign(cross.name,side*8,4.45,cross.z+side*12.5,2.0,.38,Math.PI/2,'#f0ead8','#244c3c','','street',{type:'cross',slot});
 
    }
  }
- const neighbourhood=buildNeighbourhood({scene,route:ROUTE,mats,mat,box,cylinder,rod,add,sign,rnd,leafGeo,canvasMap});
- const streetscape=createStreetscape({scene,route:ROUTE,mats,mat,box,cylinder,rod,add,sign,leafGeo},streetProps);
- const architecture=createArchitecture({scene,route:ROUTE,mats},architecturalAssets);
+ const neighbourhood=buildNeighbourhood({scene,route,mats,mat,box,cylinder,rod,add,sign,rnd,leafGeo,canvasMap});
+ const streetscape=createStreetscape({scene,route,mats,mat,box,cylinder,rod,add,sign,leafGeo},streetProps);
+ const architecture=createArchitecture({scene,route,mats},architecturalAssets);
  const shopNames=['PAPER & INK','QUEEN RECORDS','THE CORNER CAFE','WEST END BOOKS','BELLWOODS CYCLE','STUDIO 501','GOLDEN PHO','THREAD & NEEDLE','CITY FLOWERS','NIGHT OWL','VINYL EXCHANGE','QUEEN HARDWARE','PARKDALE MARKET','SILVER SCREEN','GOOD NEIGHBOUR','THE LITTLE BAKERY'];
  const signColours=['#283e37','#883e31','#303f52','#d1bc83','#344548','#6c513d'];
  let shop=0,awningCount=0,upperWindowCount=0,facadeDetailCount=0,rooflineDetailCount=0,shopfrontCount=0,shopfrontFeatureCount=0;
  for(const side of [-1,1]){
-   for(let z=-518;z<675;){const width=7.5+rnd()*4.4,mid=z+width/2;z+=width+.12;if(ROUTE.crossings.some(c=>Math.abs(mid-c.z)<width/2+11)||(side===-1&&mid+width/2>-179&&mid-width/2<-142))continue;
+   for(let z=-518;z<675;){const width=7.5+rnd()*4.4,mid=z+width/2;z+=width+.12;if(route.crossings.some(c=>Math.abs(mid-c.z)<width/2+11)||(side===-1&&mid+width/2>-179&&mid-width/2<-142))continue;
      const height=7.0+rnd()*7.0,material=shop%7===0?plaster[shop%3]:'brick'+Math.floor(rnd()*5),depth=8+rnd()*3;
      const entry=mid+(width-.9)/3,paneWidth=(width-.9)/3-.13;
-     const detailed=mid>ROUTE.start-45&&mid<ROUTE.end+60;
+     const detailed=mid>route.start-45&&mid<route.end+60;
      const building={side,mid,width,height,depth,index:shop,detailed},architecturePlan=architecture.plan(building);
      if(detailed){
        // A real 2.2 m display recess replaces the solid ground-floor facade.
@@ -239,7 +243,7 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
  }
  // Street furniture, catenary supports and planted pockets along both sidewalks.
  for(let z=-510;z<=665;z+=34){
-   if(ROUTE.crossings.some(c=>Math.abs(z-c.z)<14))continue;
+   if(route.crossings.some(c=>Math.abs(z-c.z)<14))continue;
    for(const side of [-1,1]){
      cylinder('pole',side*8.05,3.55,z,.078,7.1);rod('pole',[side*8.05,6.85,z],[side*6.3,6.85,z],.05);box('dark',side*6.25,6.80,z,.65,.12,.28);
      wire([side*8.05,6.35,z],[0,5.8,z]);
@@ -250,20 +254,20 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
      streetscape.streetFurniture(side,z);
    }
  }
- for(const x of [ROUTE.trackX,-ROUTE.trackX])wire([x,ROUTE.wireY,-525],[x,ROUTE.wireY,675]);
+ for(const x of [route.trackX,-route.trackX])wire([x,route.wireY,-525],[x,route.wireY,675]);
  // TTC-style stop poles and shelters. The front door aligns with the marked stop.
- const curb=Math.sign(ROUTE.trackX);
- ROUTE.stops.forEach((stop,i)=>{
-   cylinder('pole',curb*7.95,1.85,stop.z+5.9,.045,3.5);sign('TTC ? 501',curb*7.95,3.36,stop.z+5.9,.55,.72,-curb*Math.PI/2,'#fff2d8','#b33132','QUEEN EAST');
+ const curb=Math.sign(route.trackX);
+ route.stops.forEach((stop,i)=>{
+   cylinder('pole',curb*7.95,1.85,stop.z+5.9,.045,3.5);sign('TTC '+route.number,curb*7.95,3.36,stop.z+5.9,.55,.72,-curb*Math.PI/2,'#fff2d8','#b33132',route.name.toUpperCase()+' EAST','street',{type:'pole',slot:i});
    box('dark',curb*9.55,2.65,stop.z+1,2.15,.15,4.3);for(const z of [stop.z-.95,stop.z+2.95])for(const x of [8.65,10.45])box('pole',curb*x,1.48,z,.06,2.35,.06);
    box('glass',curb*10.5,1.5,stop.z+1,.035,2.22,4.0);box('wood',curb*10.05,.66,stop.z+1,.5,.10,2.7);
-   sign('501 QUEEN',curb*10.46,1.75,stop.z+1,1.1,1.45,-curb*Math.PI/2,'#eedeb7','#364a3e','EASTBOUND');
+   sign(route.number+' '+route.name.toUpperCase(),curb*10.46,1.75,stop.z+1,1.1,1.45,-curb*Math.PI/2,'#eedeb7','#364a3e','EASTBOUND','street',{type:'shelter',slot:i});
    box('red',curb*7.73,.202,stop.z+5.9,.26,.025,2.4);
  });
- const actors=buildStreetLife(scene,ROUTE,trafficCars);const bikeRing=new THREE.TorusGeometry(.20,.018,5,16);bikeRing.rotateY(Math.PI/2);
+ const actors=buildStreetLife(scene,route,trafficCars);const bikeRing=new THREE.TorusGeometry(.20,.018,5,16);bikeRing.rotateY(Math.PI/2);
  // Repaired pavement, curbside drains and bicycle rings add close-range street scale.
  for(let z=-510;z<660;z+=23){
-   if(ROUTE.crossings.some(c=>Math.abs(c.z-z)<15))continue;
+   if(route.crossings.some(c=>Math.abs(c.z-z)<15))continue;
    for(const side of [-1,1]){
      const patch=new THREE.CircleGeometry(1,32);patch.rotateX(-Math.PI/2);const positions=patch.attributes.position;for(let i=1;i<positions.count;i++){positions.setX(i,positions.getX(i)*(.82+rnd()*.3));positions.setZ(i,positions.getZ(i)*(.82+rnd()*.3));}patch.computeVertexNormals();add(patch,mats.patch,side*5.65,.007,z,.65,1,1.25+rnd());
      box('dark',side*7.20,.014,z+6,.37,.012,.70);
@@ -289,8 +293,23 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
    const mesh=new THREE.InstancedMesh(geometry,material,matrices.length);matrices.forEach((m,i)=>mesh.setMatrixAt(i,m));mesh.instanceMatrix.needsUpdate=true;mesh.castShadow=!groundDetails.has(material);mesh.receiveShadow=true;mesh.computeBoundingSphere();scene.add(mesh);
  }
  for(const {material,geometries} of singleGeometryGroups.values()){const merged=mergeGeometries(geometries);const mesh=new THREE.Mesh(merged,material);mesh.castShadow=!groundDetails.has(material);mesh.receiveShadow=true;scene.add(mesh);geometries.forEach(g=>g.dispose());}
+ routeTexture.needsUpdate=true;const routeLabels=new THREE.Mesh(mergeGeometries(routeSignGeos),routeSignMat);routeLabels.name='Route_Street_And_Stop_Signs';scene.add(routeLabels);
  at.needsUpdate=true;const labels=new THREE.Mesh(mergeGeometries(signGeos),signMat);scene.add(labels);
  const storeGlazing=new THREE.Mesh(mergeGeometries(storeGlazingGeometries),mats.storeGlass);storeGlazing.name='Recessed_Storefront_Glazing';storeGlazing.renderOrder=2;storeGlazing.castShadow=false;storeGlazing.receiveShadow=false;scene.add(storeGlazing);storeGlazingGeometries.forEach(geometry=>geometry.dispose());
  const wires=new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(linePoints,3)),new THREE.LineBasicMaterial({color:0x34463e}));scene.add(wires);
- return {signals,materials:mats,actors,neighbourhood,scenery,architecture:architecturalDetails,buildingCount:shop,awningCount,upperWindowCount,facadeDetailCount,rooflineDetailCount,shopfrontCount,shopfrontFeatureCount,storeGlazingCount,storeGlazing,signCount:signIndex,update(time,dt,alwaysGreen=false){actors.update(time,dt,alwaysGreen);},setNight(amount){const night=THREE.MathUtils.clamp(amount,0,1);actors.setNight(night);streetscape.setNight(night);mats.glass.emissive.setHex(0xffffff);mats.glass.emissiveIntensity=.42*night;signMat.emissive.copy(windowGlow);signMat.emissiveIntensity=.10*night;for(let i=0;i<4;i++){mats['display'+i].emissive.copy(windowGlow);mats['display'+i].emissiveIntensity=.18*night;}},updateSignals(time,alwaysGreen=false){const phase=time%42,state=alwaysGreen||phase<23?'green':phase<27?'amber':'red';signals.forEach(({group})=>group.children.forEach((lamp,i)=>lamp.material.color.setHex(i===(state==='red'?0:state==='amber'?1:2)?[0xff6c46,0xffc76c,0x9edb89][i]:0x29352c)));return state;}};
+ function setRoute(){
+   const ac=routeContext;
+   signals.forEach((signal,i)=>signal.cross=route.crossings[Math.floor(i/2)]);
+   for(const {binding:{type,slot},px,py} of routeSigns){
+     const cross=route.crossings[slot],north=cross.road==='Broadview Ave',direction=north?'NORTHBOUND':'EASTBOUND';
+     const text=type==='road'?cross.road.toUpperCase():type==='cross'?cross.name:type==='pole'?'TTC '+route.number:route.number+' '+route.name.toUpperCase();
+     const sub=type==='pole'?route.name.toUpperCase()+' '+(north?'NORTH':'EAST'):type==='shelter'?direction:'';
+     ac.fillStyle=type==='pole'?'#b33132':type==='shelter'?'#364a3e':'#244c3c';ac.fillRect(px,py,256,128);
+     ac.fillStyle='#f0ead8';ac.textAlign='center';ac.textBaseline='middle';ac.font='bold '+Math.min(32,360/text.length)+'px Arial';ac.fillText(text,px+128,py+(sub?50:64),238);
+     if(sub){ac.font='12px Arial';ac.fillText(sub,px+128,py+86,236);}
+   }
+   routeTexture.needsUpdate=true;
+ }
+ setRoute();
+ return {setRoute,routeSigns,routeTexture,signals,materials:mats,actors,neighbourhood,scenery,architecture:architecturalDetails,buildingCount:shop,awningCount,upperWindowCount,facadeDetailCount,rooflineDetailCount,shopfrontCount,shopfrontFeatureCount,storeGlazingCount,storeGlazing,signCount:signIndex,update(time,dt,alwaysGreen=false){actors.update(time,dt,alwaysGreen);},setNight(amount){const night=THREE.MathUtils.clamp(amount,0,1);actors.setNight(night);streetscape.setNight(night);mats.glass.emissive.setHex(0xffffff);mats.glass.emissiveIntensity=.42*night;signMat.emissive.copy(windowGlow);signMat.emissiveIntensity=.10*night;routeSignMat.emissive.copy(windowGlow);routeSignMat.emissiveIntensity=.10*night;for(let i=0;i<4;i++){mats['display'+i].emissive.copy(windowGlow);mats['display'+i].emissiveIntensity=.18*night;}},updateSignals(time,alwaysGreen=false){const phase=time%42,state=alwaysGreen||phase<23?'green':phase<27?'amber':'red';signals.forEach(({group})=>group.children.forEach((lamp,i)=>lamp.material.color.setHex(i===(state==='red'?0:state==='amber'?1:2)?[0xff6c46,0xffc76c,0x9edb89][i]:0x29352c)));return state;}};
 }
