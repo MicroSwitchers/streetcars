@@ -12,7 +12,7 @@ globalThis.document={body:{dataset:{mode:'one'}},querySelector(selector){return 
 const route={start:-205,end:360,trackX:-1.8,sidewalkX:-7.85,stops:[{z:-124},{z:76},{z:276}],crossings:[{z:-100},{z:100},{z:300}]};
 const canvas={addEventListener(){},setPointerCapture(){}};
 const settings={camera:'auto',swipe:true,reduceMotion:false};
-const camera=new THREE.PerspectiveCamera(48,1.5,.12,1000);
+const camera=new THREE.PerspectiveCamera(48,1.5,.5,1000);
 const view=new StreetcarCamera(camera,canvas,settings,{route});
 const settle=z=>{for(let i=0;i<180;i++)view.update(z,1/60);};
 for(const mode of CAMERA_MODES){
@@ -56,6 +56,10 @@ assert.equal(movingFade.mode,'follow','Fade retains the outgoing mode when the s
 view.update(-204,.1);
 assert.ok(Math.abs(movingFade.from.position.z-movingStart-1)<1e-8,'Outgoing following camera continues travelling with the streetcar');
 let framingChecks=0;
+const parked=Array.from({length:25},(_,i)=>({x:-6.6,z:-240+i*29,length:4.7,moving:false}));
+view.rideContext.traffic={actors:[...parked,{x:6.6,z:-181,length:4.7,moving:false},{x:-1.8,z:-181,length:4.7,moving:true}]};
+const fixtures=Array.from({length:18},(_,i)=>({minX:-8.18,maxX:-8.02,minZ:-230+i*34-.08,maxZ:-230+i*34+.08,maxY:7}));
+view.rideContext.obstacles=()=>fixtures;
 for(const [width,height] of [[1440,960],[390,844],[844,390]])for(const reduceMotion of [false,true])for(const speed of [10/3.6,20/3.6,30/3.6]){
  globalThis.innerWidth=width;globalThis.innerHeight=height;
  dock=height<540?{top:height*.18,left:width-220}:{top:height*.78,left:width*.3};
@@ -64,8 +68,10 @@ for(const [width,height] of [[1440,960],[390,844],[844,390]])for(const reduceMot
  for(let z=route.start;z<=route.end;z+=speed/30){
    view.update(z,1/30);camera.updateMatrixWorld(true);
    if(camera.position.z!==lastAnchor){changes++;lastAnchor=camera.position.z;}
-   assert.equal(camera.position.x,route.sidewalkX,'Observer stays on the sidewalk');
+   assert.equal(camera.position.x,-8.1,'Observer stays behind the curb and parked mirrors');
    assert.equal(camera.position.y,1.65,'Observer stays at eye height');
+   for(const car of parked)assert.ok(Math.abs(camera.position.z-car.z)-car.length/2>=3.2-1e-8,'Observer uses a clear parking gap, including near-plane clearance');
+   for(const o of fixtures)assert.ok(camera.position.z<=o.minZ-.85||camera.position.z>=o.maxZ+.85,'Observer also avoids sidewalk poles');
    for(const x of [-1.3,1.3])for(const y of [.08,3.65])for(const end of [-8.1,8.1]){
      const point=new THREE.Vector3(route.trackX+x,y,z+end).project(camera);
      assert.ok(Math.abs(point.x)<.98&&Math.abs(point.y)<.98,
@@ -84,7 +90,7 @@ settings.camera='auto';settings.reduceMotion=true;view.reset();settle(-205);
 const still=camera.position.clone();for(let i=0;i<600;i++)view.update(-205,1/60);
 assert.ok(camera.position.distanceTo(still)<1e-8,'Calmer camera removes automatic drift');
 const rig={doors:{front:0,rear:0},setDoor(which,value){this.doors.front=this.doors.rear=value;},setDistance(){},update(){}};
-const ride=new Ride(route,rig,'watch');ride.setAlwaysGreen(true);
+const ride=new Ride(route,rig,'watch');ride.setAlwaysGreen(true);ride.setDwellSeconds(10);
 for(let i=0;i<3000&&ride.state.phase!=='atStop';i++)ride.step(.1);
 assert.equal(ride.state.phase,'atStop');for(let i=0;i<90;i++)ride.step(.1);
 assert.equal(ride.state.phase,'atStop','Just watch gives a full pause with the doors open');

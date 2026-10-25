@@ -9,7 +9,8 @@ const sensory=process.argv.includes('--sensory'),phone=process.argv.includes('--
 const auto=process.argv.includes('--auto');
 const routes=process.argv.includes('--routes');
 const districts=process.argv.includes('--districts');
-const routeInput=routes||districts||process.argv.includes('--route-input');
+const sidewalk=process.argv.includes('--sidewalk');
+const routeInput=routes||districts||sidewalk||process.argv.includes('--route-input');
 const morning=process.argv.includes('--morning'),dawn=process.argv.includes('--dawn'),atmosphere=process.argv.includes('--atmosphere');
 const output=join(qa,'renders-live-'+Date.now());await mkdir(output);
 const profile=await mkdtemp(join(qa,'headless-live-'));
@@ -138,6 +139,42 @@ try{
   if(!await evaluate('queenStreet.rig.materials.get("Markings_Atlas").map.source!==queenStreet.streetcars.vehicles[0].rig.materials.get("Markings_Atlas").map.source'))throw Error('Opposite destination boards share a texture source');
   const signs=await evaluate('(()=>{const cells=new Map();for(const s of queenStreet.city.routeSigns)cells.set(s.binding.type+":"+s.binding.slot,s.px+","+s.py);return {roles:cells.size,unique:new Set(cells.values()).size,signCount:queenStreet.city.signCount,stops:document.querySelectorAll("#route-stop-list li").length};})()');
   if(signs.roles!==12||signs.unique!==12||signs.stops!==39)throw Error('Roadside sign roles share an atlas cell or full itinerary is missing: '+JSON.stringify(signs));
+  if(sidewalk){
+   for(const id of ['queen','dundas']){
+    await checkRoute(id);
+    const report=await evaluate(`(()=>{
+     const a=queenStreet;a.updateSettings({mode:'one',camera:'sidewalk',quality:'balanced',weatherMode:'off',night:false,volume:0});a.restart();a.setPaused(true);
+     a.view.hasPose=false;a.view.transition=null;a.view.sidewalkIndex=null;
+     let minimumGap=Infinity,anchors=new Set(),samples=0;
+     const parked=a.city.actors.actors.filter(c=>!c.moving&&c.x<0);
+     for(let z=a.route.start;z<=a.route.end;z+=.5){
+      a.view.update(z,1/30,false);a.camera.updateMatrixWorld(true);anchors.add(a.camera.position.z);
+      for(const car of parked){
+       const gap=Math.abs(a.camera.position.z-car.z)-car.length/2;minimumGap=Math.min(gap,minimumGap);
+       if(gap<3.2-1e-6)throw Error('Sidewalk viewpoint intersects a parked car foreground');
+       const bounds=a.city.actors.models.get(car.variant).levels[0].bounds.clone().applyMatrix4(new a.camera.matrixWorld.constructor().makeRotationY(car.yaw));
+       bounds.translate(a.camera.position.clone().set(car.x,.006,car.z));
+       for(const x of [-1,1])for(const y of [-1,1]){const p=a.camera.position.clone().set(x,y,-1).unproject(a.camera);if(bounds.containsPoint(p))throw Error('Near plane cuts through an actual Blender car');}
+      }
+      for(const o of a.city.sidewalkObstacles())if(o.maxY>.8&&o.minX<a.camera.position.x+.85&&o.maxX>a.camera.position.x-.85&&a.camera.position.z>o.minZ-.85&&a.camera.position.z<o.maxZ+.85)throw Error('Sidewalk observer clips a pole or street fitting');
+      samples++;
+     }
+     a.state.z=-60;a.car.position.z=-60;a.city.actors.setFocus(-60);a.view.hasPose=false;a.view.lastZ=null;a.view.transition=null;a.view.sidewalkIndex=null;a.view.instant=true;a.view.update(-60,0,false);
+     window.__sidewalkUpdate=a.view.update;a.view.update=()=>{};a.graphics.render(a.scene,a.camera);
+     return {route:a.route.id,minimumGap,anchors:anchors.size,samples};
+    })()`);
+    console.log('PASS: Sidewalk observers and near planes avoid actual parked car bounds: '+JSON.stringify(report));
+    const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'sidewalk-clear-'+id+'.png'),Buffer.from(shot.data,'base64'));
+    if(id==='queen'){
+     for(const kind of ['utilitycabinet','newsbox','bikestand','treegrate','stormdrain']){
+      if(!await evaluate(`(()=>{const a=queenStreet,p=a.city.scenery.placements.filter(p=>p.kind===${JSON.stringify(kind)}&&p.x<0).sort((p,q)=>Math.abs(p.z+160)-Math.abs(q.z+160))[0];if(!p)return false;a.camera.clearViewOffset();a.camera.fov=46;a.camera.position.set(p.x+2.4,1.8,p.z+2.8);a.camera.lookAt(p.x,(p.kind==='treegrate'||p.kind==='stormdrain')?.2:.7,p.z);a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);return true;})()`))throw Error('New Blender street fitting is absent: '+kind);
+      const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'street-detail-'+kind+'.png'),Buffer.from(shot.data,'base64'));
+     }
+    }
+    await evaluate('queenStreet.view.update=window.__sidewalkUpdate');
+   }
+   await checkRoute('dundas');
+  }
   if(routes){
   for(const id of ['dundas','queen']){
    await checkRoute(id);

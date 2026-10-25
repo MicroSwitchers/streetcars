@@ -20,7 +20,7 @@ export async function loadStreetProps(){
  }
  const geometries=new Set(),sourceMaterials=new Set();asset.scene.traverse(o=>{if(o.isMesh){geometries.add(o.geometry);sourceMaterials.add(o.material);}});
  geometries.forEach(g=>g.dispose());sourceMaterials.forEach(m=>m.dispose());
- return {models,materials,revision:'blender-street-props-v2'};
+ return {models,materials,revision:'blender-street-props-v3'};
 }
 
 // Static props are instanced in 96 m cells: small shared geometry, local frustum
@@ -186,6 +186,11 @@ export function createStreetscape(c,assets){
    if(n%2===0)ground('hydrant',side*8.75,z+25,-side*Math.PI/2);
    if(n%3===1)ground('meter',side*8.85,z-3,-side*Math.PI/2);
    if(n%6===2)ground('postbox',side*8.95,z+1,-side*Math.PI/2);
+   if(z>-235&&z<385){
+     if(n%3===0)ground('bikestand',side*8.90,z+28,-side*Math.PI/2);
+     if(n%6===1)ground('newsbox',side*9.05,z+24,-side*Math.PI/2);
+     if(n%7===3)ground('utilitycabinet',side*9.05,z-5,-side*Math.PI/2);
+   }
  }
  function park(){
    // Central walkway stays open underneath a cedar pergola; beds and picnic
@@ -231,7 +236,7 @@ export function createStreetscape(c,assets){
      }
      const mesh=new THREE.InstancedMesh(geometry,material,matrices.length);
      matrices.forEach((matrix,i)=>mesh.setMatrixAt(i,matrix));mesh.instanceMatrix.needsUpdate=true;
-     mesh.name='StreetProps_'+kind+'_'+cell;mesh.castShadow=!interior;mesh.receiveShadow=true;mesh.userData.shopInterior=interior;
+     mesh.name='StreetProps_'+kind+'_'+cell;mesh.castShadow=!interior&&!['treegrate','stormdrain'].includes(kind);mesh.receiveShadow=true;mesh.userData.shopInterior=interior;
      mesh.computeBoundingSphere();mesh.computeBoundingBox();scene.add(mesh);stats.meshes.push(mesh);
    }
    stats.instances=placements.length;stats.sourceTriangles=[...assets.models.values()].reduce((n,m)=>n+m.triangles,0);
@@ -240,7 +245,7 @@ export function createStreetscape(c,assets){
    stats.windowLighting=createWindowLighting(scene,mats,stats.displays);
    return stats;
  }
- return {display,shop,streetFurniture,finish,setNight(night){
+ return {display,shop,streetFurniture,treeGrate(side,z){if(z>-235&&z<385&&clear(z,.7))prop('treegrate',side*9.2,.18,z);},drain(side,z){if(z>-235&&z<385&&clear(z,.5))prop('stormdrain',side*7.2,.008,z);},finish,setNight(night){
    mats.gardenLight.emissive.setHex(0xffd2a0);mats.gardenLight.emissiveIntensity=night*1.8;
    for(const material of interiorMaterials.values()){
      material.emissiveIntensity=night*(material.name==='Prop_ShopLamp'?3.2:.25);

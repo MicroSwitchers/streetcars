@@ -21,7 +21,7 @@ function sanitize(s){return {routeId:s.routeId==='dundas'?'dundas':'queen',playM
 export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting,city,route,canvas,gltf}){
  const settings=readSettings(),sound=new StreetcarSounds(settings);
  try{gltf??=await loadStreetcar();}catch(error){$('load-message').textContent='The streetcar could not load. Refresh to try again.';throw error;}
- const car=prepareRoadsideAsset(gltf.scene),trafficTemplate=car.clone(true);scene.add(car);const rig=new StreetcarController(car),ride=new Ride(route,rig,settings.mode),state=ride.state,view=new StreetcarCamera(camera,canvas,settings,{state,route,rig});
+ const car=prepareRoadsideAsset(gltf.scene),trafficTemplate=car.clone(true);scene.add(car);const rig=new StreetcarController(car),ride=new Ride(route,rig,settings.mode),state=ride.state,view=new StreetcarCamera(camera,canvas,settings,{state,route,rig,traffic:city.actors,obstacles:city.sidewalkObstacles});
  ride.onDoors=()=>{if(audioUnlocked&&!state.paused)sound.play('door');};
  ride.onDepart=()=>{if(audioUnlocked&&!state.paused)sound.play('bell');};
  state.lights=settings.lights;rig.setLights({headlights:state.lights,tail:state.lights,markers:state.lights,interior:state.lights});ride.cruise=settings.cruise/3.6;ride.setDwellSeconds(settings.doorDwell);ride.setStopEvery(settings.stopEvery);ride.setAlwaysGreen(settings.alwaysGreen);ride.setStopAtLights(settings.stopAtLights);city.updateSignals(state.time,settings.alwaysGreen);lighting?.addStreetcar(car,rig);

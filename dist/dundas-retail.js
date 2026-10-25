@@ -29,7 +29,7 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
  let night=0,triangleLimit=maxTriangles;
  // The tiny matrix buffers accommodate even a section containing only one
  // merchandise type. The rendered count and triangle ceiling remain capped.
- const capacities={bookshelf:64,recordbin:40,bakerycase:64,grocerstand:64,floriststand:64,coffeecounter:64,hardware:40,bicycle:48,pendant:56,bench:32,bins:32,planter:32,hydrant:32,meter:32,table:4,chair:8};
+ const capacities={bookshelf:64,recordbin:40,bakerycase:64,grocerstand:64,floriststand:64,coffeecounter:64,hardware:40,bicycle:48,pendant:56,bench:32,bins:32,planter:32,hydrant:32,meter:32,table:4,chair:8,utilitycabinet:8,newsbox:8,bikestand:16,treegrate:24,stormdrain:64};
  function makePool(name,geometry,material,capacity,shadow=true){
    const mesh=new THREE.InstancedMesh(geometry,material,capacity);mesh.name='Dundas_Retail_'+name;mesh.count=0;
    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.castShadow=shadow;mesh.receiveShadow=true;
@@ -59,7 +59,7 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
      for(const [name,attribute] of Object.entries(part.geometry.attributes))geometry.setAttribute(name,attribute);
      const illumination=new THREE.InstancedBufferAttribute(new Float32Array(capacity*3),3);illumination.setUsage(THREE.DynamicDrawUsage);
      geometry.setAttribute('instanceIllumination',illumination);
-     parts.push(makePool(kind+'_'+i,geometry,materials.get(part.material),capacity,['bench','bins','planter','hydrant','meter','table','chair'].includes(kind)));
+     parts.push(makePool(kind+'_'+i,geometry,materials.get(part.material),capacity,['bench','bins','planter','hydrant','meter','table','chair','utilitycabinet','newsbox','bikestand'].includes(kind)));
    }
    pools.set(kind,{model,parts,count:0,capacity});
  }
@@ -253,7 +253,9 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
      for(let row=0;row<2;row++)for(const room of rooms)backContents(room,row);
      for(const room of rooms)rearDisplay(room);
      triangleLimit=maxTriangles;
-     const kinds=['bench','planter','bins','hydrant','bench','meter','planter','bicycle'];
+     for(const f of active.filter(f=>f.kind==='tree'))prop('treegrate',f.side*9.3,.18,f.z);
+     for(let z=-224;z<380;z+=29)if(clear(route,z,.5))for(const side of [-1,1])prop('stormdrain',side*7.2,.008,z);
+     const kinds=['bench','planter','bins','hydrant','newsbox','meter','bikestand','bicycle','utilitycabinet','planter','bench'];
      const street=active.filter(f=>f.kind!=='tree').sort((a,b)=>a.z-b.z||a.side-b.side);
      const stride=Math.max(1,Math.ceil(street.length/maxFurniture));
      // Spread the fixed furniture allowance along the whole resident section,

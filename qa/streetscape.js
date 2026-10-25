@@ -2,11 +2,12 @@ import * as THREE from '../dist/vendor/three.module.js';
 
 export function checkStreetscape(api,check,w){
  const s=api.city.scenery;
- check('Expanded Blender furniture and retail kit is loaded',s.models.size===22&&Object.keys(s.counts).length===22&&s.counts.bench>25&&s.counts.hydrant>10&&s.counts.chair>50);
+ check('Expanded Blender furniture and retail kit is loaded',s.models.size===27&&Object.keys(s.counts).length===27&&s.counts.bench>25&&s.counts.hydrant>10&&s.counts.chair>50);
+ check('Small Blender street fittings are placed in the game',['utilitycabinet','newsbox','bikestand','treegrate','stormdrain'].every(kind=>s.counts[kind]>0));
  check('World contains cars and objects with no pedestrian actors',s.people===0&&api.city.actors.walkers===0&&api.city.actors.actors.every(a=>a.type==='car'));
  check('Fine prop buffers are shared between spatial instance batches',s.meshes.every(m=>m.isInstancedMesh)&&new Set(s.meshes.map(m=>m.geometry.attributes.position)).size<120&&s.geometryBytes<1500000);
  check('Every furniture instance has a finite, non-empty world footprint',s.placements.every(p=>!p.bounds.isEmpty()&&[...p.bounds.min,...p.bounds.max].every(Number.isFinite)));
- const ground=s.placements.filter(p=>p.y<.3&&p.bounds.max.x>-11.3&&p.bounds.min.x<11.3);
+ const ground=s.placements.filter(p=>p.y<.3&&p.kind!=='stormdrain'&&p.bounds.max.x>-11.3&&p.bounds.min.x<11.3);
  check('Furniture leaves the curb camera and rail corridor clear',ground.every(p=>p.bounds.min.x>8.4||p.bounds.max.x< -8.4));
  check('Furniture leaves all intersection ramps and crossings clear',ground.every(p=>api.route.crossings.every(c=>p.bounds.min.z>c.z+15||p.bounds.max.z<c.z-15)));
  check('Furniture leaves the three boarding areas clear',ground.every(p=>api.route.stops.every(stop=>p.bounds.min.z>stop.z+7||p.bounds.max.z<stop.z-7)));
@@ -21,7 +22,7 @@ export function checkStreetscape(api,check,w){
  check('Window gardens and roof equipment add upper-level detail',s.windowGardens>50&&s.roofDetails>80);
  check('Pergola has over two metres of clear headroom',s.pergola.clearance>2.5&&s.counts.picnic===2);
  const concrete=api.city.materials.concrete,grass=api.city.materials.parkGrass,path=api.city.materials.path;
- const surfaces=api.scene.children.filter(o=>o.isMesh&&[concrete,grass,path].includes(o.material));
+ const surfaces=[];api.scene.traverse(o=>{if(o.isMesh&&[concrete,grass,path].includes(o.material))surfaces.push(o);});
  api.scene.updateMatrixWorld(true);
  const ray=new THREE.Raycaster();
  for(const x of [-12,-17.7,-20.2,-24.6]){

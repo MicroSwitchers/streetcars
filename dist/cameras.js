@@ -145,36 +145,60 @@ export class StreetcarCamera {
    const key=`watch/${w}/${h}/${offset}/${offsetX}/${fov}`;
    if(key!==this.viewport){this.camera.fov=fov;this.camera.setViewOffset(w,h,offsetX,offset,w,h);this.viewport=key;}
  }
+ chooseSidewalkAnchor(anchor){
+   const route=this.rideContext?.route,side=Math.sign(route?.trackX??-1.8);
+   const x=side*Math.max(8.10,Math.abs(route?.sidewalkX??7.85));
+   // A near plane can cut through a parked roof before the eye enters its mesh.
+   // Pick a gap once per pass, with room for both the observer and foreground.
+   const parked=(this.rideContext?.traffic?.actors??[]).filter(a=>!a.moving&&Math.sign(a.x)===side);
+   const fixtures=(this.rideContext?.obstacles?.()??[]).filter(o=>o.maxY>.8&&o.minX<x+.85&&o.maxX>x-.85);
+   let best=anchor,bestRoom=-Infinity;
+   for(const offset of [0,1,-1,2,-2,3,-3,4,-4,5,-5,6,-6,7,-7,8,-8,9,-9,10,-10,11,-11,12,-12]){
+     const z=anchor+offset;
+     let room=parked.reduce((gap,a)=>Math.min(gap,Math.abs(z-a.z)-a.length/2-3.2),Infinity);
+     for(const o of fixtures)room=Math.min(room,Math.max(o.minZ-z,z-o.maxZ)-.85);
+     if(room>bestRoom){best=z;bestRoom=room;}
+     if(room>=0)return {x,z};
+   }
+   return {x,z:best};
+ }
  updateSidewalk(z,dt,paused){
    const portrait=this.camera.aspect<.8,passEnd=portrait?-15:18;
    if(this.sidewalkIndex===null){
+     this.sidewalkAnchor=null;
      this.sidewalkIndex=this.sidewalkStops.findIndex(point=>z<=point+passEnd);
      if(this.sidewalkIndex<0)this.sidewalkIndex=this.sidewalkStops.length-1;
    }
    let anchor=this.sidewalkStops[this.sidewalkIndex];
-   if(!paused&&z>anchor+passEnd&&this.sidewalkIndex<this.sidewalkStops.length-1){
+   if(!this.sidewalkAnchor||this.sidewalkAnchor.index!==this.sidewalkIndex){
+     this.sidewalkAnchor={...this.chooseSidewalkAnchor(anchor),index:this.sidewalkIndex};
+   }
+   if(!paused&&z>this.sidewalkAnchor.z+passEnd&&this.sidewalkIndex<this.sidewalkStops.length-1){
      this.beginTransition();
-     do{anchor=this.sidewalkStops[++this.sidewalkIndex];}
-     while(z>anchor+passEnd&&this.sidewalkIndex<this.sidewalkStops.length-1);
+     do{
+       anchor=this.sidewalkStops[++this.sidewalkIndex];
+       this.sidewalkAnchor={...this.chooseSidewalkAnchor(anchor),index:this.sidewalkIndex};
+     }while(z>this.sidewalkAnchor.z+passEnd&&this.sidewalkIndex<this.sidewalkStops.length-1);
      this.instant=true;
    }
+   const observer=this.sidewalkAnchor;
    const trackX=this.rideContext?.route.trackX??-1.8;
    // Stay at standing eye height on the sidewalk. Portrait views change
    // stations before the car passes too close to fit in their narrow frame.
    // Stand on the curb side of the path, ahead of trees and pole furniture.
-   this.goal.set(this.rideContext?.route.sidewalkX??Math.sign(trackX)*7.85,1.65,anchor);
+   this.goal.set(observer.x,1.65,observer.z);
    if(!paused||this.instant){
      const side=Math.sign(this.goal.x-trackX),gap=Math.abs(this.goal.x-trackX);
      let low=Infinity,high=-Infinity;
      for(const x of [-1.3,1.3])for(const end of [-8.1,8.1]){
-       const angle=Math.atan2(z+end-anchor,gap-side*x);
+       const angle=Math.atan2(z+end-observer.z,gap-side*x);
        low=Math.min(low,angle);high=Math.max(high,angle);
      }
      // Centre the visible silhouette, rather than lagging behind its midpoint.
      // Essential subject tracking also stays enabled with reduced motion.
      const pan=(low+high)*.5;
      const swipe=this.userView?this.yaw*.07:0;
-     this.target.set(trackX,1.72,anchor+Math.tan(pan+swipe)*gap);
+     this.target.set(trackX,1.72,observer.z+Math.tan(pan+swipe)*gap);
    }
    this.camera.position.copy(this.goal);this.camera.lookAt(this.target);
    this.camera.updateMatrixWorld(true);

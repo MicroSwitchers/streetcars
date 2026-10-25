@@ -12,7 +12,7 @@ export const ROUTE=createRouteSection();
 
 export function buildEnvironment(scene,trafficCars,streetProps,architecturalAssets,route=ROUTE){
  let seed=501;const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
- const mats={},batches=new Map(),dummy=new THREE.Object3D();
+ const mats={},batches=new Map(),dummy=new THREE.Object3D(),cameraObstacles=[];
  const queenScenery=new THREE.Group();queenScenery.name='Queen_Streetscape';scene.add(queenScenery);
  let sceneryLayer=false;const setSceneryLayer=value=>sceneryLayer=value;
  const foliage=createFoliage();
@@ -24,8 +24,8 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
  mats.storeGlass=new THREE.MeshStandardMaterial({color:0xd7e4e6,roughness:.16,metalness:.12,transparent:true,opacity:.14,depthWrite:false,side:THREE.DoubleSide});
  const storeGlazingGeometries=[];let storeGlazingCount=0;
  function add(geometry,material,x,y,z,sx,sy,sz,ry=0,rx=0,rz=0){const cell=Math.floor(z/96),key=String(sceneryLayer)+cell+geometry.uuid+material.uuid;if(!batches.has(key))batches.set(key,{geometry,material,cell,sceneryLayer,matrices:[]});dummy.position.set(x,y,z);dummy.rotation.set(rx,ry,rz);dummy.scale.set(sx,sy,sz);dummy.updateMatrix();batches.get(key).matrices.push(dummy.matrix.clone());}
- const box=(m,x,y,z,sx,sy,sz,ry=0)=>add(boxGeo,mats[m],x,y,z,sx,sy,sz,ry);
- const cylinder=(m,x,y,z,r,h)=>add(cylGeo,mats[m],x,y,z,r,h,r);
+ const box=(m,x,y,z,sx,sy,sz,ry=0)=>{add(boxGeo,mats[m],x,y,z,sx,sy,sz,ry);if(m==='pole'&&y-sy/2<2)cameraObstacles.push({minX:x-sx/2,maxX:x+sx/2,minZ:z-sz/2,maxZ:z+sz/2,maxY:y+sy/2});};
+ const cylinder=(m,x,y,z,r,h)=>{add(cylGeo,mats[m],x,y,z,r,h,r);if(m==='pole'&&y-h/2<2)cameraObstacles.push({minX:x-r,maxX:x+r,minZ:z-r,maxZ:z+r,maxY:y+h/2});};
  function rod(m,a,b,r){const av=new THREE.Vector3(...a),bv=new THREE.Vector3(...b),delta=bv.clone().sub(av);dummy.position.copy(av.add(bv).multiplyScalar(.5));dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.clone().normalize());dummy.scale.set(r,delta.length(),r);dummy.updateMatrix();const cell=Math.floor(dummy.position.z/96),key=String(sceneryLayer)+cell+cylGeo.uuid+mats[m].uuid;if(!batches.has(key))batches.set(key,{geometry:cylGeo,material:mats[m],cell,sceneryLayer,matrices:[]});batches.get(key).matrices.push(dummy.matrix.clone());}
  const wire=(a,b)=>linePoints.push(...a,...b);
  // Small generated surface maps avoid external image requests and repeat seamlessly.
@@ -255,7 +255,7 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
      wire([side*8.05,6.35,z],[0,5.8,z]);
      setSceneryLayer(true);
      if(Math.round(z)%3!==0){
-       cylinder('bark',side*9.2,1.70,z+6,.11,3.1);box('dark',side*9.2,.19,z+6,1.25,.018,1.25);
+       cylinder('bark',side*9.2,1.70,z+6,.11,3.1);box('dark',side*9.2,.19,z+6,1.25,.018,1.25);streetscape.treeGrate(side,z+6);
        for(let j=0;j<6;j++){const a=j*2.40,dx=Math.sin(a)*.85,dz=Math.cos(a)*.85,y=3.3+rnd()*1.3;rod('bark',[side*9.2,2.15,z+6],[side*9.2+dx,y,z+6+dz],.038);const radius=.65+rnd()*.48;add(leafGeo,mats[['leaf','leaf2','leaf3'][j%3]],side*9.2+dx,y+.43,z+6+dz,radius,radius*.95,radius*1.10);}
      }
      streetscape.streetFurniture(side,z);
@@ -272,15 +272,13 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
    sign(route.number+' '+route.name.toUpperCase(),curb*10.46,1.75,stop.z+1,1.1,1.45,-curb*Math.PI/2,'#eedeb7','#364a3e','EASTBOUND','street',{type:'shelter',slot:i});
    box('red',curb*7.73,.202,stop.z+5.9,.26,.025,2.4);
  });
- const actors=buildStreetLife(scene,route,trafficCars);const bikeRing=new THREE.TorusGeometry(.20,.018,5,16);bikeRing.rotateY(Math.PI/2);
+ const actors=buildStreetLife(scene,route,trafficCars);
  // Repaired pavement, curbside drains and bicycle rings add close-range street scale.
  for(let z=-510;z<660;z+=23){
    if(route.crossings.some(c=>Math.abs(c.z-z)<15))continue;
    for(const side of [-1,1]){
      const patch=new THREE.CircleGeometry(1,32);patch.rotateX(-Math.PI/2);const positions=patch.attributes.position;for(let i=1;i<positions.count;i++){positions.setX(i,positions.getX(i)*(.82+rnd()*.3));positions.setZ(i,positions.getZ(i)*(.82+rnd()*.3));}patch.computeVertexNormals();add(patch,mats.patch,side*5.65,.007,z,.65,1,1.25+rnd());
-     box('dark',side*7.20,.014,z+6,.37,.012,.70);
-     for(let k=0;k<6;k++)box('steel',side*7.20,.022,z+5.72+k*.11,.31,.005,.016);
-     if(Math.abs(z%46)<10){cylinder('pole',side*8.2,.64,z+13,.027,.95);add(bikeRing,mats.pole,side*8.2,.91,z+13,1,1,1);}
+     streetscape.drain(side,z+6);
    }
    cylinder('dark',-3.2,.015,z+10,.24,.009);cylinder('steel',-3.2,.021,z+10,.21,.006);
  }
@@ -327,5 +325,9 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
    routeTexture.needsUpdate=true;
  }
  setRoute();
- return {setRoute,queenScenery,districts,routeSigns,routeTexture,signals,materials:mats,actors,neighbourhood,scenery,architecture:architecturalDetails,buildingCount:shop,awningCount,upperWindowCount,facadeDetailCount,rooflineDetailCount,shopfrontCount,shopfrontFeatureCount,storeGlazingCount,storeGlazing,signCount:signIndex,update(time,dt,alwaysGreen=false){actors.update(time,dt,alwaysGreen);},setNight(amount){const night=THREE.MathUtils.clamp(amount,0,1);cityNight=night;actors.setNight(night);streetscape.setNight(night);districts.setNight(night);mats.glass.emissive.setHex(0xffffff);mats.glass.emissiveIntensity=.42*night;mats.officeFacade.emissiveIntensity=.22*night;signMat.emissive.copy(windowGlow);signMat.emissiveIntensity=.10*night;routeSignMat.emissive.copy(windowGlow);routeSignMat.emissiveIntensity=.10*night;for(let i=0;i<4;i++){mats['display'+i].emissive.copy(windowGlow);mats['display'+i].emissiveIntensity=.18*night;}},updateSignals(time,alwaysGreen=false){const phase=time%42,state=alwaysGreen||phase<23?'green':phase<27?'amber':'red';signals.forEach(({group})=>group.children.forEach((lamp,i)=>lamp.material.color.setHex(i===(state==='red'?0:state==='amber'?1:2)?[0xff6c46,0xffc76c,0x9edb89][i]:0x29352c)));return state;}};
+ function sidewalkObstacles(){
+   const props=route.id==='dundas'?districts.retail.placements:scenery.placements;
+   return cameraObstacles.concat(props.filter(p=>!p.interior&&p.y<2).map(p=>p.bounds?{minX:p.bounds.min.x,maxX:p.bounds.max.x,minZ:p.bounds.min.z,maxZ:p.bounds.max.z,maxY:p.bounds.max.y}:{...p,maxY:p.y+streetProps.models.get(p.kind).bounds.max.y*(p.scale??1)}));
+ }
+ return {setRoute,sidewalkObstacles,queenScenery,districts,routeSigns,routeTexture,signals,materials:mats,actors,neighbourhood,scenery,architecture:architecturalDetails,buildingCount:shop,awningCount,upperWindowCount,facadeDetailCount,rooflineDetailCount,shopfrontCount,shopfrontFeatureCount,storeGlazingCount,storeGlazing,signCount:signIndex,update(time,dt,alwaysGreen=false){actors.update(time,dt,alwaysGreen);},setNight(amount){const night=THREE.MathUtils.clamp(amount,0,1);cityNight=night;actors.setNight(night);streetscape.setNight(night);districts.setNight(night);mats.glass.emissive.setHex(0xffffff);mats.glass.emissiveIntensity=.42*night;mats.officeFacade.emissiveIntensity=.22*night;signMat.emissive.copy(windowGlow);signMat.emissiveIntensity=.10*night;routeSignMat.emissive.copy(windowGlow);routeSignMat.emissiveIntensity=.10*night;for(let i=0;i<4;i++){mats['display'+i].emissive.copy(windowGlow);mats['display'+i].emissiveIntensity=.18*night;}},updateSignals(time,alwaysGreen=false){const phase=time%42,state=alwaysGreen||phase<23?'green':phase<27?'amber':'red';signals.forEach(({group})=>group.children.forEach((lamp,i)=>lamp.material.color.setHex(i===(state==='red'?0:state==='amber'?1:2)?[0xff6c46,0xffc76c,0x9edb89][i]:0x29352c)));return state;}};
 }

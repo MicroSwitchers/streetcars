@@ -1,5 +1,20 @@
 # Photo-refined TTC CLRV game asset
 
+The street furniture kit also includes five original Blender models: a louvered
+utility cabinet, newspaper dispenser, cast ring-and-post bicycle stand, tree
+grate and slotted curb drain. Their combined source budget is 3,747 triangles.
+They reuse the existing kit materials and add 132,444 bytes to `street-props.glb`,
+with no image textures, decoders, animation or extra light sources.
+
+The editable kit is `../../street-furniture-game-ready.blend`. Rebuild it with
+Blender 4.5 in background/factory-startup mode using
+`source/build_street_props.py -- --skip-render`; `source/street_detail_models.py`
+contains the five new designs. `source/render_street_details.py` renders their
+review lineup from the saved native file. Queen uses spatial instance batches;
+Dundas reuses fixed instance buffers and its existing 190,000-triangle retail
+ceiling. Flat grates and drains skip shadow casting. Placements leave boarding
+areas, crossings and the curb camera corridor open.
+
 The current editable asset is `../../ttc-clrv-game-ready.blend`.
 The game export is `ttc-clrv-refined.glb`, installed as `../dist/ttc-clrv.glb`.
 All images are packed into Blender and embedded in the GLB.
