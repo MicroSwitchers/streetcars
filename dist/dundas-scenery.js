@@ -27,9 +27,9 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    red:material('Red',0x974c42),green:material('Green',0x4e6c58),
    grass:mats.parkGrass||material('Grass',0x71835a),blue:material('Blue',0x4d747d,.54,.14),
  };
- if(mats.display0?.map)materials.display.map=mats.display0.map;
+ if(mats.display0?.map){materials.display.map=mats.display0.map;materials.display.emissiveMap=mats.display0.map;}
  const leaf=material('Leaf',0x75905b);leaf.map=foliage.map;leaf.alphaTest=.45;leaf.side=THREE.DoubleSide;leaf.shadowSide=THREE.FrontSide;leaf.vertexColors=true;
- materials.display.emissive.setHex(0xffc48a);nightMaterials.push({material:materials.display,power:.32});
+ materials.display.emissive.setHex(0xffc48a);nightMaterials.push({material:materials.display,power:.18});
  // Large curtain walls reflect the night; small occupied windows provide glow.
  // Sharing their emission would turn an entire tower into a bright white panel.
  materials.glass.emissive.setHex(0x9ebbc9);nightMaterials.push({material:materials.glass,power:.018});
