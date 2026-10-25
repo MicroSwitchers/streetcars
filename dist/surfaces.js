@@ -17,6 +17,50 @@ function roughness(source,low,high){
  ctx.putImageData(pixels,0,0);const t=texture(c);t.colorSpace=THREE.NoColorSpace;return t;
 }
 
+// Five small seamless sets, with independent colour, physical relief and
+// roughness. All work happens once at load; no additional per-frame sampling.
+function brickFinish(index){
+ const size=512,cols=8,rows=16,tileX=1.68,tileY=1.168;
+ const palettes=[[151,91,70],[166,112,83],[177,151,112],[112,89,76],[137,123,101]];
+ const mortar=[[119,111,95],[133,123,103],[151,140,118],[108,104,92],[133,128,111]][index];
+ const hash=(x,y,salt=0)=>{let v=Math.imul(x+101,374761393)^Math.imul(y+197,668265263)^Math.imul(index+salt+1,1274126177);v=Math.imul(v^(v>>>13),1274126177);return ((v^(v>>>16))>>>0)/4294967295;};
+ const mod=(x,n)=>(x%n+n)%n,smooth=(a,b,x)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);};
+ const noise=(x,y,period,salt)=>{const ix=Math.floor(x),iy=Math.floor(y),fx=smooth(0,1,x-ix),fy=smooth(0,1,y-iy);const n=(a,b)=>hash(mod(a,period),mod(b,period),salt);return (n(ix,iy)*(1-fx)+n(ix+1,iy)*fx)*(1-fy)+(n(ix,iy+1)*(1-fx)+n(ix+1,iy+1)*fx)*fy;};
+ const colour=canvas(size),height=canvas(size),rough=canvas(size);
+ const contexts=[colour,height,rough].map(c=>c.getContext('2d')),images=contexts.map(c=>c.createImageData(size,size));
+ for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+   const row=Math.floor(y/32);
+   // Half-running bond for most walls. The older brown stock includes regular
+   // header courses; the fifth finish uses alternating header/stretcher rows.
+   const header=index===3?row%8===7:index===4&&row%2===1;
+   const pitch=header?32:64,offset=(row%2)*pitch/2,col=Math.floor((x+offset)/pitch),id=mod(col,header?16:8);
+   const lx=mod(x+offset,pitch),ly=y%32,seed=hash(id,row,3);
+   const clay=noise(x/32,y/32,16,11)-.5,grain=hash(x,y,17)-.5;
+   const edge=noise(x/8,y/8,64,23)-.5;
+   const joint=.0085+(hash(id,row,29)-.5)*.002;
+   const d=Math.min(Math.min(lx,pitch-lx)*tileX/size,Math.min(ly,32-ly)*tileY/size)-joint*.5+edge*.0015;
+   const face=smooth(-.0009,.0012,d),bevel=smooth(0,.0035,d);
+   const fired=(seed-.5)*.13,warm=(hash(id,row,37)-.5)*9;
+   const body=1+fired+clay*.065+grain*.035;
+   const patina=(noise(x/128,y/128,4,43)-.5)*.035;
+   const i=(y*size+x)*4;
+   for(let c=0;c<3;c++){
+     const value=palettes[index][c]*body+(c===0?warm:c===2?-warm*.5:0);
+     images[0].data[i+c]=Math.round((mortar[c]*(1+grain*.025)*(1-face)+value*face)*(1+patina));
+   }
+   // Darker clay is not lower geometry. All fired faces have the same nominal
+   // height, with only shallow pores and softened/chipped mortar edges.
+   const h=255*(.24*(1-face)+(.69+bevel*.13+clay*.018+grain*.009)*face);
+   const r=255*(.96*(1-face)+(.84+(hash(id,row,47)-.5)*.065+grain*.035)*face);
+   for(let c=0;c<3;c++){images[1].data[i+c]=h;images[2].data[i+c]=r;}
+   for(const image of images)image.data[i+3]=255;
+ }
+ contexts.forEach((c,i)=>c.putImageData(images[i],0,0));
+ const map=texture(colour),bumpMap=texture(height),roughnessMap=texture(rough);
+ bumpMap.colorSpace=roughnessMap.colorSpace=THREE.NoColorSpace;
+ return {map,bumpMap,roughnessMap};
+}
+
 // Large, low-contrast variation breaks up identical paving and brick repeats.
 // The height term gives masonry a little weathering where it meets the street.
 function weathering(material,strength,baseDirt=0){
@@ -98,7 +142,7 @@ function worldSurface(material,metres){
 }
 
 // Keep masonry courses at the same scale on both merged and pooled buildings.
-function worldMasonry(material,scaleX=.88,scaleY=1.08){
+function worldMasonry(material,scaleX=1.68,scaleY=1.168){
  const compile=material.onBeforeCompile,key=material.customProgramCacheKey();
  material.onBeforeCompile=function(shader,renderer){
    compile.call(this,shader,renderer);
@@ -213,17 +257,14 @@ export function finishSurfaces(mats,renderer,route){
    m.roughness=1;m.roughnessMap=concreteRoughness;worldMasonry(m,2.6,2.6);weathering(m,.10,.09);
  }
 
- const bases=[[139,76,56],[158,99,72],[171,140,96],[112,85,75],[127,116,96]];
- bases.forEach((base,index)=>{
-   const c=canvas(),b=c.getContext('2d');b.fillStyle='#8d897c';b.fillRect(0,0,512,512);
-   for(let row=0;row<16;row++)for(let col=-1;col<5;col++){
-     const x=col*128+(row%2)*64,y=row*32,f=.81+rnd()*.34;
-     b.fillStyle=`rgb(${base.map(v=>Math.round(v*f)).join(',')})`;b.fillRect(x+2,y+2,124,28);
-     b.fillStyle='#fff2d51c';b.fillRect(x+3,y+2,122,2);b.fillStyle='#281e1b33';b.fillRect(x+3,y+28,122,2);
-     for(let n=0;n<50;n++){b.fillStyle=n%2?'#211c1520':'#ffe8c01d';b.fillRect(x+3+rnd()*120,y+4+rnd()*22,1+rnd()*5,1+rnd()*2);}
-   }
-   const m=mats['brick'+index];m.map=texture(c);m.bumpMap=relief(c);m.bumpScale=.045;m.roughness=1;m.roughnessMap=roughness(c,.82,1.);weathering(m,.13,.14);worldMasonry(m);
- });
+ // Shared 512px colour/height/roughness sets retain the old texture budget.
+ // World-sized courses continue across separate facade meshes and instancing.
+ for(let index=0;index<5;index++){
+   const m=mats['brick'+index];Object.assign(m,brickFinish(index));
+   m.color.setHex(0xffffff);m.metalness=0;m.bumpScale=.007;m.roughness=1;
+   m.userData.brickFinish={tileMetres:[1.68,1.168],courseMetres:.073,stretcherMetres:.21,mapSize:512,bond:index===3?'common':index===4?'english':'running'};
+   weathering(m,.10,.10);worldMasonry(m);
+ }
 
  const windows=canvas(256),wc=windows.getContext('2d'),sky=wc.createLinearGradient(0,0,100,256);
  sky.addColorStop(0,'#88a7b7');sky.addColorStop(.4,'#597a89');sky.addColorStop(.48,'#83969b');sky.addColorStop(.51,'#33464a');sky.addColorStop(1,'#1c2e32');wc.fillStyle=sky;wc.fillRect(0,0,256,256);
