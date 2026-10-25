@@ -1,7 +1,8 @@
-// Simulation seconds: four minutes per weather phase, including a 90-second
+// Simulation seconds: three minutes per weather phase, including a 75-second
 // eased transition. This clock is independent of the shorter day/night clock.
-export const WEATHER_PHASE_SECONDS=240;
-export const WEATHER_TRANSITION_SECONDS=90;
+export const WEATHER_PHASE_SECONDS=180;
+export const WEATHER_TRANSITION_SECONDS=75;
+export const WEATHER_SELECTION_SECONDS=8;
 export const WEATHER_SEQUENCE=['overcast','mist','clear','sunset','sunbreak','rain','storm'];
 export const WEATHER_CYCLE_SECONDS=WEATHER_PHASE_SECONDS*WEATHER_SEQUENCE.length;
 export const WEATHER_MODES=['cycle','random','fixed','off'];
@@ -24,7 +25,7 @@ export const WEATHER={
 };
 // Weather Off keeps neutral, static, diffused daylight; the independent night
 // cycle and all normal vehicle, building and street lighting still work.
-export const WEATHER_OFF={label:'Off',cloud:.9,rain:0,wet:0,haze:0,gold:0,storm:0,volume:0,sun:[34,48,38],enabled:false};
+export const WEATHER_OFF={label:'Off',cloud:.9,rain:0,wet:0,haze:0,gold:0,storm:0,volume:0,sun:[34,48,38],enabled:false,effectWeight:0};
 
 export function weatherPhase(time,sequence=WEATHER_SEQUENCE){
  const duration=WEATHER_PHASE_SECONDS*sequence.length,t=((time%duration)+duration)%duration;
@@ -37,6 +38,8 @@ export function mixWeather(from,to,blend,result={sun:[0,0,0]}){
  for(const name of ['cloud','rain','wet','haze','gold','storm','volume'])result[name]=from[name]+(to[name]-from[name])*blend;
  // Normalize endpoints first: profile directions may have different lengths.
  const a=Math.hypot(...from.sun),b=Math.hypot(...to.sun);
- for(let i=0;i<3;i++)result.sun[i]=from.sun[i]/a+(to.sun[i]/b-from.sun[i]/a)*blend;
- result.enabled=true;return result;
+ const dot=Math.max(-1,Math.min(1,from.sun.reduce((sum,n,i)=>sum+n/a*to.sun[i]/b,0))),angle=Math.acos(dot),sine=Math.sin(angle);
+ const left=sine>.0001?Math.sin((1-blend)*angle)/sine:1-blend,right=sine>.0001?Math.sin(blend*angle)/sine:blend;
+ for(let i=0;i<3;i++)result.sun[i]=from.sun[i]/a*left+to.sun[i]/b*right;
+ result.effectWeight=(from.effectWeight??1)+((to.effectWeight??1)-(from.effectWeight??1))*blend;result.enabled=result.effectWeight>0;return result;
 }

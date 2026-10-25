@@ -1,3 +1,4 @@
+const STREETCAR_GAIN=.9;
 // Deliberate controls and current ride events may play; preparation never queues playback.
 export class StreetcarSounds {
  constructor(settings){
@@ -44,7 +45,7 @@ export class StreetcarSounds {
  fadePassIn(seconds=.5){
   const now=this.context.currentTime,gain=this.passGain.gain,audio=this.passElement;
   const remaining=Math.max(.02,(audio.duration-audio.currentTime)/audio.playbackRate),attack=Math.min(seconds,remaining*.3);
-  this.passVolume=this.settings.volume*.8;this.hold(gain,now);gain.linearRampToValueAtTime(this.passVolume,now+attack);
+  this.passVolume=this.settings.volume*STREETCAR_GAIN;this.hold(gain,now);gain.linearRampToValueAtTime(this.passVolume,now+attack);
   // Fade the recording's end once; per-frame sync must not overwrite this ramp.
   gain.setValueAtTime(this.passVolume,now+Math.max(attack,remaining-.2));gain.linearRampToValueAtTime(0,now+remaining);
  }
@@ -66,7 +67,7 @@ export class StreetcarSounds {
    if(!['NotAllowedError','AbortError'].includes(error.name))throw error;return false;
   }finally{if(this.startToken===token)this.passStarting=false;}
  }
- syncPass(){if(this.passActive&&!this.passPaused&&this.passGain&&this.passVolume!==this.settings.volume*.8)this.fadePassIn(.12);}
+ syncPass(){if(this.passActive&&!this.passPaused&&this.passGain&&this.passVolume!==this.settings.volume*STREETCAR_GAIN)this.fadePassIn(.12);}
  pausePass(){
   if(this.passPaused||(!this.passActive&&!this.passStarting&&!this.passResuming))return;
   const token=++this.passFade;clearTimeout(this.passTimer);this.passStarting=false;this.passResuming=false;

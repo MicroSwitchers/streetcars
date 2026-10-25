@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {WEATHER,WEATHER_OFF,WEATHER_MODES,WEATHER_SEQUENCE,randomWeatherSequence,weatherPhase,mixWeather} from './weather-cycle.js';
+import {WEATHER,WEATHER_OFF,WEATHER_MODES,WEATHER_SEQUENCE,WEATHER_PHASE_SECONDS,WEATHER_SELECTION_SECONDS,randomWeatherSequence,weatherPhase,mixWeather} from './weather-cycle.js';
 export {WEATHER} from './weather-cycle.js';
 export const WET_PATCH_GLSL=`
  float weatherHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
@@ -17,7 +17,12 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
  let preset='overcast',mode='fixed',time=0,cycleTime=0,night=0,focus=0;
  let phase=weatherPhase(0);
  let randomSeed=0,randomSequence=randomWeatherSequence(0);
- const blended={sun:[0,0,0]};
+ const blended={sun:[0,0,0]},selectionBlend={sun:[0,0,0]};
+ let selection=null,selectionId=0,currentProfile=null,environmentState=null,surfaceWetness=null;
+ const copyProfile=p=>({...p,sun:[...p.sun]});
+ const selectionWeight=()=>{const t=Math.min(1,selection.elapsed/WEATHER_SELECTION_SECONDS);return t*t*(3-2*t);};
+ function clearSelection(){if(selection){for(const target of [...selection.fromPair,...selection.toPair])target.dispose();selection=null;}}
+ function selectedProfile(){return mode==='off'?WEATHER_OFF:mode==='cycle'||mode==='random'?mixWeather(WEATHER[phase.from],WEATHER[phase.to],phase.blend,blended):WEATHER[preset];}
  // Compose with road markings, world UVs, window spill and stable shadow hooks.
  for(const name of ['road','trackbed','patch','concrete','curb','stone']){
    const material=mats[name],compile=material.onBeforeCompile,key=material.customProgramCacheKey();
@@ -48,7 +53,7 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
    float cloud(vec2 p){return weatherNoise(p)*.48+weatherNoise(p*2.03)*.26+weatherNoise(p*4.13)*.14+weatherNoise(p*8.07)*.08+weatherNoise(p*16.03)*.04;}
    float density(vec2 p){vec2 warp=vec2(cloud(p*.53+12.),cloud(p*.57-9.));return cloud(p+warp*1.5);}
    void main(){
-     vec3 d=normalize(skyDirection);float h=max(0.,d.y),gold=golden*(1.-night),twilight=max(sin(night*3.141593),gold*.86);
+     vec3 d=normalize(skyDirection);float h=max(0.,d.y),twilight=sin(night*3.141593),gold=max(golden*(1.-night),twilight*.65*(1.-cloudCover*.65));
      float sunFacing=pow(max(0.,dot(d,sunDirection)),4.);
      vec3 day=mix(vec3(.58,.73,.88),vec3(.055,.18,.42),pow(h,.46));
      vec3 dusk=mix(mix(vec3(.88,.49,.29),vec3(.55,.34,.43),1.-sunFacing),vec3(.075,.14,.29),pow(h,.40));
@@ -125,26 +130,43 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
      shader.fragmentShader=shader.fragmentShader.replace('#include <envmap_physical_pars_fragment>',chunk);
    };material.customProgramCacheKey=()=>key+'-weather-hdr-probes-v3';material.needsUpdate=true;
  }
- function probePair(key){
-   if(!environments.has(key)){
-     const p=key==='off'?WEATHER_OFF:WEATHER[key];
-     const pair=[];
-     for(const n of [0,1]){
-       for(const [name,value] of Object.entries({cloudCover:p.cloud,night:n,golden:p.gold,storm:p.storm,weatherTime:0}))probeMaterial.uniforms[name].value=value;
-       probeMaterial.uniforms.sunDirection.value.set(...p.sun).normalize();
-       const cube=new THREE.WebGLCubeRenderTarget(graphics.compatibility?graphics.profile.probe:128,{type:THREE.HalfFloatType});new THREE.CubeCamera(.5,1000,cube).update(renderer,probeScene);
-       pair.push(pmrem.fromCubemap(cube.texture));cube.dispose();
-     }environments.set(key,pair);
+ function profilePair(p){
+   const pair=[];
+   for(const n of [0,1]){
+     for(const [name,value] of Object.entries({cloudCover:p.cloud,night:n,golden:p.gold,storm:p.storm,weatherTime:0}))probeMaterial.uniforms[name].value=value;
+     probeMaterial.uniforms.sunDirection.value.set(...p.sun).normalize();
+     const cube=new THREE.WebGLCubeRenderTarget(graphics.compatibility?graphics.profile.probe:128,{type:THREE.HalfFloatType});new THREE.CubeCamera(.5,1000,cube).update(renderer,probeScene);
+     pair.push(pmrem.fromCubemap(cube.texture));cube.dispose();
    }
+   return pair;
+ }
+ function probePair(key){
+   if(!environments.has(key))environments.set(key,profilePair(key==='off'?WEATHER_OFF:WEATHER[key]));
    return environments.get(key);
  }
- function environment(){
+ function environmentRecipe(){
    const cycling=mode==='cycle'||mode==='random',from=mode==='off'?'off':cycling?phase.from:preset;
-   const to=cycling?phase.to:from,blend=cycling?phase.blend:0;
-   const pair=probePair(from),next=blend>0?probePair(to):pair;
-   scene.environment=graphics.compatibility?blendedAtlas(pair,next,blend,from+':'+to):pair[0].texture;nightEnvironment.value=pair[1].texture;environmentBlend.value=night;
+   const to=cycling?phase.to:from,blend=cycling?phase.blend:0,pair=probePair(from),next=blend>0?probePair(to):pair;
+   return {pair,next,blend,key:from+':'+to,keep:[from,to]};
+ }
+ // Freeze just two small reflection atlases when a weather selection changes.
+ // This captures the exact current mix, including an interrupted transition.
+ // Main scene shaders still sample the same bounded number of maps.
+ function freezeRecipe({pair,next,blend}){
+   const result=[];
+   for(const n of [0,1]){
+     const target=new THREE.WebGLRenderTarget(pair[0].width,pair[0].height,{type:THREE.HalfFloatType,depthBuffer:false});target.texture.mapping=THREE.CubeUVReflectionMapping;
+     atlasUniforms.day.value=pair[0].texture;atlasUniforms.night.value=pair[1].texture;atlasUniforms.nextDay.value=next[0].texture;atlasUniforms.nextNight.value=next[1].texture;atlasUniforms.nightMix.value=n;atlasUniforms.weatherMix.value=blend;
+     const previous=renderer.getRenderTarget();try{renderer.setRenderTarget(target);renderer.render(atlasScene,atlasCamera);}finally{renderer.setRenderTarget(previous);}result.push(target);
+   }
+   lastAtlasKey='';return result;
+ }
+ function environment(){
+   const recipe=selection?{pair:selection.fromPair,next:selection.toPair,blend:selectionWeight(),key:'selection:'+selectionId,keep:selection.keep}:environmentRecipe();
+   const {pair,next,blend,key,keep}=recipe;environmentState=recipe;
+   scene.environment=graphics.compatibility?blendedAtlas(pair,next,blend,key):pair[0].texture;nightEnvironment.value=pair[1].texture;environmentBlend.value=night;
    nextEnvironment.value=next[0].texture;nextNightEnvironment.value=next[1].texture;profileBlend.value=blend;
-   if(graphics.compatibility)for(const [key,unused] of environments)if(key!==from&&key!==to){unused.forEach(target=>target.dispose());environments.delete(key);}
+   if(graphics.compatibility)for(const [key,unused] of environments)if(!keep.includes(key)){unused.forEach(target=>target.dispose());environments.delete(key);}
  }
  // One seeded particle batch. Drops fall only outdoors, above the vehicles.
  const count=4500,positions=new Float32Array(count*3),seeds=new Float32Array(count);
@@ -167,15 +189,45 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
      gl_FragColor=vec4(dropColor,a);}`});
  const rain=new THREE.Points(geometry,rainMaterial);rain.name='Windblown_Rain';rain.frustumCulled=false;rain.renderOrder=3;scene.add(rain);
  graphics.bindAtmosphere(lighting);
- function apply(){phase=weatherPhase(cycleTime,mode==='random'?randomSequence:WEATHER_SEQUENCE);const p=mode==='off'?WEATHER_OFF:mode==='cycle'||mode==='random'?mixWeather(WEATHER[phase.from],WEATHER[phase.to],phase.blend,blended):WEATHER[preset];
-   uniforms.cloudCover.value=p.cloud;uniforms.rainAmount.value=p.rain;uniforms.wetness.value=p.wet;uniforms.night.value=night;uniforms.golden.value=p.gold;uniforms.storm.value=p.storm;rain.visible=p.rain>.001;
-   uniforms.weatherTime.value=mode==='off'?0:time;
-   sunDirection.set(...p.sun).normalize();environment();lighting.setWeather(p,night);graphics.setWeather(p.wet,p.rain,uniforms.weatherTime.value,night,p);}
- return {uniforms,sky,rain,geometry,presets:WEATHER,get preset(){return preset;},get time(){return time;},get mode(){return mode;},get cycleTime(){return cycleTime;},get phase(){return {...phase};},environmentBlend,profileBlend,
-   snapshotClock(){return {time,cycleTime};},restoreClock(saved){if(saved&&Number.isFinite(saved.time)&&saved.time>=0&&Number.isFinite(saved.cycleTime)&&saved.cycleTime>=0){time=saved.time;cycleTime=saved.cycleTime;}},
-   configure(nextMode,value,seed=0){mode=WEATHER_MODES.includes(nextMode)?nextMode:'cycle';preset=Object.hasOwn(WEATHER,value)?value:'overcast';if(randomSeed!==(seed>>>0)){randomSeed=seed>>>0;randomSequence=randomWeatherSequence(randomSeed);}},
-   setPreset(value){preset=Object.hasOwn(WEATHER,value)?value:'overcast';apply();},
-   update(dt,z,nightAmount,ratio=1){const elapsed=Math.min(.1,Math.max(0,dt));if(mode!=='off')time+=elapsed;if(mode==='cycle'||mode==='random')cycleTime+=elapsed;focus=z;night=nightAmount;rainMaterial.uniforms.focus.value=focus;rainMaterial.uniforms.pixelRatio.value=Math.min(2,ratio);apply();},
-   rebuildEnvironments(){for(const pair of environments.values())pair.forEach(p=>p.dispose());environments.clear();lastAtlasKey='';apply();},
-   environments,get reflectionAtlas(){return atlas;},dispose(){atlas?.dispose();atlasQuad.geometry.dispose();atlasMaterial.dispose();sky.removeFromParent();rain.removeFromParent();sky.geometry.dispose();skyMaterial.dispose();probeMaterial.dispose();pmrem.dispose();for(const pair of environments.values())pair.forEach(p=>p.dispose());geometry.dispose();rainMaterial.dispose();}};
+ function apply(elapsed=0){
+   phase=weatherPhase(cycleTime,mode==='random'?randomSequence:WEATHER_SEQUENCE);
+   const target=selectedProfile(),p=selection?mixWeather(selection.from,selection.to,selectionWeight(),selectionBlend):target;currentProfile=p;
+   const wetTarget=Math.max(p.wet,p.rain*.9);
+   if(surfaceWetness===null)surfaceWetness=wetTarget;
+   else surfaceWetness+=(wetTarget-surfaceWetness)*(1-Math.exp(-elapsed/(wetTarget>surfaceWetness?6:75)));
+   if(mode==='off'&&!selection)surfaceWetness=0;
+   const wet=surfaceWetness*(p.effectWeight??1);
+   uniforms.cloudCover.value=p.cloud;uniforms.rainAmount.value=p.rain;uniforms.wetness.value=wet;uniforms.night.value=night;uniforms.golden.value=p.gold;uniforms.storm.value=p.storm;rain.visible=p.rain>.001;
+   // Keep the final cloud positions when Weather Off freezes the sky.
+   uniforms.weatherTime.value=time;
+   sunDirection.set(...p.sun).normalize();environment();lighting.setWeather(p,night);graphics.setWeather(wet,p.rain,uniforms.weatherTime.value,night,p);
+ }
+ function configure(nextMode,value,seed=0){
+   const chosenMode=WEATHER_MODES.includes(nextMode)?nextMode:'cycle',chosenPreset=Object.hasOwn(WEATHER,value)?value:'overcast',chosenSeed=seed>>>0;
+   const changed=chosenMode!==mode||chosenMode==='fixed'&&chosenPreset!==preset||chosenMode==='random'&&chosenSeed!==randomSeed;
+   const from=changed&&currentProfile?copyProfile(currentProfile):null,fromPair=from&&environmentState?freezeRecipe(environmentState):null;
+   if(changed)clearSelection();mode=chosenMode;preset=chosenPreset;
+   if(randomSeed!==chosenSeed){randomSeed=chosenSeed;randomSequence=randomWeatherSequence(randomSeed);}
+   if(fromPair){
+     phase=weatherPhase(cycleTime,mode==='random'?randomSequence:WEATHER_SEQUENCE);
+     const to=copyProfile(selectedProfile()),recipe=environmentRecipe(),toPair=freezeRecipe(recipe);
+     selection={from,to,fromPair,toPair,keep:recipe.keep,elapsed:0};selectionId++;
+   }
+ }
+ return {uniforms,sky,rain,geometry,presets:WEATHER,get preset(){return preset;},get time(){return time;},get mode(){return mode;},get cycleTime(){return cycleTime;},get phase(){return {...phase};},get transitioning(){return !!selection;},environmentBlend,profileBlend,
+   snapshotClock(){return {time,cycleTime,phaseSeconds:WEATHER_PHASE_SECONDS};},restoreClock(saved){if(saved&&Number.isFinite(saved.time)&&saved.time>=0&&Number.isFinite(saved.cycleTime)&&saved.cycleTime>=0){time=saved.time;cycleTime=saved.cycleTime*WEATHER_PHASE_SECONDS/(saved.phaseSeconds===WEATHER_PHASE_SECONDS?WEATHER_PHASE_SECONDS:240);}},
+   configure,setPreset(value){configure('fixed',value,randomSeed);apply();},
+   update(dt,z,nightAmount,ratio=1,advanceClock=true){
+     const elapsed=Math.min(.1,Math.max(0,dt));
+     if(advanceClock){if(mode!=='off'||selection)time+=elapsed;if(!selection&&(mode==='cycle'||mode==='random'))cycleTime+=elapsed;}
+     if(selection){selection.elapsed+=elapsed;if(selection.elapsed>=WEATHER_SELECTION_SECONDS)clearSelection();}
+     focus=z;night=nightAmount;rainMaterial.uniforms.focus.value=focus;rainMaterial.uniforms.pixelRatio.value=Math.min(2,ratio);apply(elapsed);
+   },
+   rebuildEnvironments(){
+     const pending=selection?{from:copyProfile(selection.from),to:copyProfile(selection.to),elapsed:selection.elapsed,keep:selection.keep}:null;
+     clearSelection();environmentState=null;for(const pair of environments.values())pair.forEach(p=>p.dispose());environments.clear();lastAtlasKey='';
+     if(pending){selection={...pending,fromPair:profilePair(pending.from),toPair:profilePair(pending.to)};selectionId++;}apply();
+   },
+   environments,get reflectionAtlas(){return atlas;},dispose(){clearSelection();atlas?.dispose();atlasQuad.geometry.dispose();atlasMaterial.dispose();sky.removeFromParent();rain.removeFromParent();sky.geometry.dispose();skyMaterial.dispose();probeMaterial.dispose();pmrem.dispose();for(const pair of environments.values())pair.forEach(p=>p.dispose());geometry.dispose();rainMaterial.dispose();}
+ };
 }

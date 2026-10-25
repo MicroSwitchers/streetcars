@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
 import {WEATHER,WEATHER_OFF,WEATHER_SEQUENCE,WEATHER_PHASE_SECONDS,WEATHER_TRANSITION_SECONDS,WEATHER_CYCLE_SECONDS,weatherPhase,mixWeather} from '../dist/weather-cycle.js';
-import {DAY_NIGHT,nightLevel} from '../dist/day-night.js';
+import {DAY_NIGHT,nightLevel,restoreDayNightTime} from '../dist/day-night.js';
 assert.equal(weatherPhase(0).from,'overcast');
-assert.ok(WEATHER_TRANSITION_SECONDS>=60&&WEATHER_PHASE_SECONDS>=240);
+assert.equal(WEATHER_PHASE_SECONDS,180);assert.equal(WEATHER_TRANSITION_SECONDS,75);
 assert.equal(DAY_NIGHT.night,12);
-assert.ok(DAY_NIGHT.dusk>=30&&DAY_NIGHT.dawn>=30&&DAY_NIGHT.day>=240);
+assert.ok(DAY_NIGHT.dusk>=60&&DAY_NIGHT.dawn>=60&&DAY_NIGHT.day>=240);
+for(const duration of [312,342])for(let time=0;time<duration;time+=.25){
+ const smooth=x=>x*x*(3-2*x),level=time<240?0:time<270?smooth((time-240)/30):time<282?1:1-smooth((time-282)/(duration-282));
+ assert.ok(Math.abs(nightLevel(restoreDayNightTime(time,duration))-level)<1e-10,'legacy checkpoint retains brightness');
+}
 for(const [name,p] of Object.entries(WEATHER)){
  assert.ok(p.cloud>=.4&&p.volume<=.016,name+' remains subdued');
  assert.ok(Math.hypot(...p.sun)>0);
@@ -18,7 +22,7 @@ for(let tick=0;tick<=WEATHER_CYCLE_SECONDS*60;tick++){
  seen.add(phase.from);
  for(const key of ['cloud','rain','wet','haze','gold','storm','volume']){
   assert.ok(Number.isFinite(profile[key])&&profile[key]>=0&&profile[key]<=1);
-  if(previous){const delta=Math.abs(profile[key]-previous[key]);largestStep=Math.max(largestStep,delta);assert.ok(delta<.0003,'no weather jumps at '+time);}
+  if(previous){const delta=Math.abs(profile[key]-previous[key]);largestStep=Math.max(largestStep,delta);assert.ok(delta<.00034,'no weather jumps at '+time);}
  }
  const direction=profile.sun.map(x=>x/Math.hypot(...profile.sun));
  if(previous)assert.ok(Math.hypot(...direction.map((x,i)=>x-previous.direction[i]))<.001,'smooth sun movement');
@@ -26,7 +30,7 @@ for(let tick=0;tick<=WEATHER_CYCLE_SECONDS*60;tick++){
  previous={...profile,direction};samples++;
 }
 assert.equal(seen.size,WEATHER_SEQUENCE.length);
-assert.ok(nightTransitions>=5,'weather continues across multiple days and nights');
+assert.ok(nightTransitions>=3,'weather continues across multiple days and nights');
 for(let i=0;i<WEATHER_SEQUENCE.length;i++){
  const boundary=i*WEATHER_PHASE_SECONDS;
  const left=weatherPhase(boundary-1e-6),right=weatherPhase(boundary+1e-6);

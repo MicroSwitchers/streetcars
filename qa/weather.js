@@ -1,24 +1,29 @@
 export function checkWeather(api,check,w){
  const fx=api.weather,graphics=api.graphics,u=graphics.uniforms,previous={weather:api.settings.weather,night:api.settings.night,dayNightCycle:api.settings.dayNightCycle};
  api.setPaused(true);
+ const settle=()=>{for(let i=0;i<81;i++)fx.update(.1,api.state.z,api.nightAmount,api.renderer.getPixelRatio(),false);};
+ api.updateSettings({weatherMode:'off'});settle();
  const lights=[];api.scene.traverse(o=>{if(o.isLight)lights.push(o);});
- api.updateSettings({weather:'clear',night:false,dayNightCycle:true});const sunlight=api.lighting.sun.intensity,fog=api.scene.fog.density;
+ api.updateSettings({weatherMode:'fixed',weather:'clear',night:false,dayNightCycle:true});settle();const sunlight=api.lighting.sun.intensity,fog=api.scene.fog.density;
  check('Clear weather keeps the road dry and rain hidden',fx.uniforms.wetness.value===0&&!fx.rain.visible&&u.wetness.value===0);
  api.updateSettings({weather:'overcast'});
+ settle();
  check('Overcast changes cloud cover and softens direct daylight',api.lighting.sun.intensity<sunlight*.4&&fx.uniforms.cloudCover.value>.8&&!fx.rain.visible);
  api.updateSettings({weather:'mist'});
+ settle();
  check('Mist adds distance haze without falling rain',api.scene.fog.density>fog*3&&!fx.rain.visible);
  api.updateSettings({weather:'rain',night:true});
- check('Rain coordinates clouds, wet materials, ripples and reflections',fx.rain.visible&&fx.uniforms.rainAmount.value===1&&fx.uniforms.wetness.value===1&&u.wetness.value===1&&u.weatherNight.value===1);
+ settle();
+ check('Rain coordinates clouds, wet materials, ripples and reflections',fx.rain.visible&&fx.uniforms.rainAmount.value===1&&fx.uniforms.wetness.value>.4&&u.wetness.value===fx.uniforms.wetness.value&&u.weatherNight.value===1);
  check('Rain uses one bounded batch without extra shadow maps',fx.rain.isPoints&&fx.geometry.attributes.position.count===4500&&!fx.rain.castShadow);
  const gl=api.renderer.getContext(),width=gl.drawingBufferWidth,height=gl.drawingBufferHeight;
  function pixels(){graphics.render(api.scene,api.camera);const bytes=new Uint8Array(width*height*4);gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,bytes);return bytes;}
  function difference(a,b){let total=0,changed=0;for(let i=0;i<width*Math.floor(height*.50)*4;i+=4){let d=0;for(let c=0;c<3;c++)d+=Math.abs(a[i+c]-b[i+c]);total+=d;if(d>12)changed++;}return {mean:total/(width*Math.floor(height*.50)*3),changed};}
- const wet=pixels();u.wetness.value=0;const noReflection=pixels();u.wetness.value=1;
+ const film=fx.uniforms.wetness.value,wet=pixels();u.wetness.value=0;const noReflection=pixels();u.wetness.value=film;
  const reflection=difference(wet,noReflection);
  check('Wet pavement reflects measurable rendered street and lamp detail',reflection.mean>.3&&reflection.changed>200);
  fx.uniforms.wetness.value=0;u.wetness.value=0;const dry=pixels();
- const material=difference(noReflection,dry);fx.uniforms.wetness.value=1;u.wetness.value=1;
+ const material=difference(noReflection,dry);fx.uniforms.wetness.value=film;u.wetness.value=film;
  check('Water film changes the actual PBR pavement shading',material.mean>.1&&material.changed>100);
  const time=fx.time;api.step(.05);check('Pausing freezes weather animation',fx.time===time);
  const buffer=fx.geometry.attributes.position.array;

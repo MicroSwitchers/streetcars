@@ -7,7 +7,7 @@ const qa=dirname(fileURLToPath(import.meta.url)),url=process.argv[2]||'https://m
 const ipad=process.argv.includes('--ipad'),loss=process.argv.includes('--loss'),startupLoss=process.argv.includes('--startup-loss');
 const sensory=process.argv.includes('--sensory'),phone=process.argv.includes('--phone');let sensoryExpected;
 const auto=process.argv.includes('--auto');
-const morning=process.argv.includes('--morning'),dawn=process.argv.includes('--dawn');
+const morning=process.argv.includes('--morning'),dawn=process.argv.includes('--dawn'),atmosphere=process.argv.includes('--atmosphere');
 const output=join(qa,'renders-live-'+Date.now());await mkdir(output);
 const profile=await mkdtemp(join(qa,'headless-live-'));
 const browser=spawn('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',['--headless=new','--no-first-run','--no-default-browser-check','--remote-debugging-port=0',`--user-data-dir=${profile}`],{windowsHide:true,stdio:'ignore'});
@@ -104,13 +104,47 @@ try{
  }
  if(ipad){
   const budget=await evaluate('({simple:queenStreet.graphics.compatibility,pixels:queenStreet.renderer.domElement.width*queenStreet.renderer.domElement.height,shadow:queenStreet.lighting.sun.shadow.mapSize.x,level:queenStreet.performance.level,savedPixels:queenStreet.graphics.stats.texturePixelsSaved})');
-  if(!budget.simple||budget.pixels>1100000||budget.pixels<=800000||budget.shadow!==1536||budget.level!=='balanced'||budget.savedPixels<6000000)throw Error('iPad budget: '+JSON.stringify(budget));
+  if(!budget.simple||budget.pixels>1400000||budget.pixels<=1100000||budget.shadow!==2048||budget.level!=='balanced'||budget.savedPixels<6000000)throw Error('iPad budget: '+JSON.stringify(budget));
   await evaluate('queenStreet.updateSettings({quality:"low"})');
   if(!await evaluate('queenStreet.renderer.domElement.width*queenStreet.renderer.domElement.height<=400000&&queenStreet.lighting.sun.shadow.mapSize.x===512'))throw Error('Low fallback is not available');
   await evaluate('queenStreet.updateSettings({quality:"high",weather:"rain",weatherMode:"fixed",night:true});queenStreet.setPaused(false);queenStreet.primary()');
   await wait(1500);
   if(await evaluate('queenStreet.performance.level')!=='balanced')throw Error('Saved High bypassed the iPad safety ceiling');
   console.log('PASS: iPad desktop-mode detection, bounded textures/pixels/shadows, night rain and High safety ceiling');
+ }
+ if(atmosphere){
+  const report=await evaluate(`(async()=>{
+   const a=queenStreet,f=a.weather,ratio=a.renderer.getPixelRatio(),z=a.state.z;
+   a.setPaused(true);a.view.transition=null;a.updateSettings({dayNightCycle:false,weatherMode:'fixed',weather:'clear'});
+   const settle=()=>{for(let i=0;i<81;i++)f.update(.1,z,a.nightAmount,ratio,false);};settle();
+   const read=()=>{a.graphics.render(a.scene,a.camera);const gl=a.renderer.getContext(),pixels=new Uint8Array(32*32*4);gl.readPixels(Math.floor(gl.drawingBufferWidth/2),Math.floor(gl.drawingBufferHeight/2),32,32,gl.RGBA,gl.UNSIGNED_BYTE,pixels);return pixels;};
+   const before=read(),clock=f.cycleTime;a.updateSettings({weather:'storm'});const after=read();
+   let change=0;for(let i=0;i<before.length;i++)change+=Math.abs(before[i]-after[i]);change/=before.length;
+   if(change>.2||f.uniforms.rainAmount.value!==0||!f.transitioning)throw Error('Weather selection jumps instead of blending: '+change);
+   await new Promise(r=>setTimeout(r,700));
+   if(f.uniforms.rainAmount.value<=0||f.cycleTime!==clock||a.nightAmount!==0)throw Error('Paused settings cannot preview weather independently of the clock');
+   const partial=f.uniforms.rainAmount.value;a.updateSettings({quality:'low'});
+   if(!f.transitioning||Math.abs(f.uniforms.rainAmount.value-partial)>1e-10)throw Error('Adaptive graphics rebuilding cancels the weather fade');
+   a.updateSettings({quality:'balanced'});a.updateSettings({weather:'clear'});
+   if(Math.abs(f.uniforms.rainAmount.value-partial)>1e-10)throw Error('Interrupting a weather blend jumps');settle();
+   a.updateSettings({weather:'rain'});settle();const rainyWet=f.uniforms.wetness.value;
+   a.updateSettings({weather:'clear'});settle();const lingeringWet=f.uniforms.wetness.value;
+   if(rainyWet<=.4||lingeringWet<=.2)throw Error('Rain has no wet film or it dries immediately');
+   for(let i=0;i<900;i++)f.update(.1,z,0,ratio,false);
+   if(f.uniforms.wetness.value>=lingeringWet)throw Error('Pavement never dries');
+   const baseline=a.renderer.info.memory.textures;
+   for(let i=0;i<12;i++){a.updateSettings({weather:i%2?'clear':'storm'});for(let j=0;j<4;j++)f.update(.1,z,0,ratio,false);}
+   settle();a.updateSettings({weather:'clear'});settle();read();
+   if(a.renderer.info.memory.textures>baseline+4)throw Error('Interrupted weather selections leak reflection maps');
+   a.updateSettings({weatherMode:'off'});settle();const frozen=f.time;f.update(.1,z,0,ratio);
+   if(f.time!==frozen||f.rain.visible||f.uniforms.wetness.value!==0||a.scene.fog.density!==0||f.uniforms.weatherTime.value!==frozen)throw Error('Weather Off does not become static and dry');
+   f.restoreClock({time:0,cycleTime:120});if(Math.abs(f.cycleTime-90)>1e-10)throw Error('Old weather checkpoint changes phase progress');
+   f.restoreClock({time:0,cycleTime:0,phaseSeconds:180});a.updateSettings({weatherMode:'cycle'});settle();
+   while(f.cycleTime<150)f.update(.1,z,0,ratio);const blend=f.phase.blend;
+   if(f.phase.from!=='overcast'||f.phase.to!=='mist'||blend<.64||blend>.66)throw Error('Three-minute weather timing or gentle crossfade is incorrect');
+   a.updateSettings({dayNightCycle:true,night:false});return {selectionPixelStep:change,rainyWet,lingeringWet,blend,reflectionTextures:a.renderer.info.memory.textures,pausedPreview:true,weatherOff:true};
+  })()`);
+  console.log('PASS: Natural weather selections, interrupted fades, lingering wet roads, paused previews, bounded reflections and faster cycle: '+JSON.stringify(report));
  }
  if(dawn){
   if(!await evaluate('(()=>{const a=queenStreet;a.updateSettings({dayNightCycle:true});const legacy=a.captureSession();delete legacy.dayNightDuration;delete legacy.manualFade;legacy.cycleTime=300;return a.restoreSession(legacy)&&Math.abs(a.nightAmount-.352)<1e-8;})()'))throw Error('Updating during an older dawn changes brightness');

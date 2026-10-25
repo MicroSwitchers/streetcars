@@ -50,8 +50,8 @@ export async function checkStreetcarTraffic(api,check,gameWindow){
  check('Pausing holds opposing traffic as well',actor.z===pausedZ);
  api.setPaused(false);api.updateSettings({dayNightCycle:true,night:false});
  api.step(240);check('Daylight lasts 240 seconds',api.nightAmount===0);
- api.step(15);check('Dusk reaches its midpoint in fifteen seconds',Math.abs(api.nightAmount-.5)<1e-8);
- api.step(15);check('Full night begins after a thirty-second dusk',api.nightAmount===1);
+ api.step(30);check('Dusk reaches its midpoint in thirty seconds',Math.abs(api.nightAmount-.5)<1e-8);
+ api.step(30);check('Full night begins after a sixty-second dusk',api.nightAmount===1);
  api.step(11.9);check('Full night remains for twelve seconds',api.nightAmount===1);
  api.step(.1);api.step(30);check('Dawn follows the short night',Math.abs(api.nightAmount-.5)<1e-8);
  api.step(30);check('Day returns after the sixty-second dawn',api.nightAmount===0);

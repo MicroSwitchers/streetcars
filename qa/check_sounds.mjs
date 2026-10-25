@@ -51,6 +51,7 @@ for(const action of ['pausePass','stopPass']){
 {
  const s=fresh();await s.startPass(20);
  const gain=s.passGain.gain,count=gain.events.length;
+  check('Streetcar recording is gently boosted without changing the master volume',Math.abs(s.passVolume-.315)<1e-10&&s.settings.volume===.35&&gain.events.some(e=>e[0]==='ramp'&&Math.abs(e[1]-.315)<1e-10));
  for(let i=0;i<200;i++)s.syncPass();
  check('Per-frame sync leaves the startup and end fades alone',gain.events.length===count);
  const token=s.passFade,pauses=media.pauses;s.pausePass();const pausedToken=s.passFade;

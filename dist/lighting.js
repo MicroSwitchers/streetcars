@@ -171,7 +171,7 @@ export function createDaylight(renderer,scene){
    sun.color.lerp(sunsetSun,twilight*(1-overcast)*.60);
    hemi.intensity*=1+overcast*.25;fill.intensity*=1-overcast*.25;
    scene.environmentIntensity*=1-overcast*.18;
-   scene.fog.density=weather.enabled===false?0:THREE.MathUtils.lerp(.0019,.0044,night)+weather.haze*.009;
+   scene.fog.density=weather.enabled===false?0:(THREE.MathUtils.lerp(.0019,.0044,night)+weather.haze*.009)*(weather.effectWeight??1);
    scene.fog.color.lerp(weatherFog.copy(weatherDayFog).lerp(weatherNightFog,night),overcast*.30+weather.haze*.30);
    const gold=(weather.gold??0)*(1-night);
    sun.color.lerp(goldenSun,gold);sun.intensity*=1+gold*.15;

@@ -4,7 +4,7 @@ The default sensory view uses a single Go press. Go becomes bright green with a 
 
 Hold the Settings control continuously for **3 seconds** with touch, mouse, pen, Space or Enter. A filling bar and countdown show progress; releasing early, dragging away, losing focus or hiding the page cancels the hold. The menu pauses the ride and restores its prior pause state on close.
 
-The weather control cycles through slow cycling, Random, all eight fixed types and Off. Random follows a saved shuffled sequence with the same four-minute phases and gentle 90-second blends. Day/night works separately. Signal stopping defaults to off and remains optional; new installations default to Single press, with older saved play modes reset to Single press once for this update; later explicit mode choices persist. Validated preferences?including the ready cue, street names, mode, weather, sound, camera, stop options and night-light switch?persist in local storage across reloads and PWA updates.
+The weather control cycles through slow cycling, Random, all eight fixed types and Off. Random follows a saved shuffled sequence with the same three-minute phases and gentle 75-second blends. Day/night works separately. Signal stopping defaults to off and remains optional; new installations default to Single press, with older saved play modes reset to Single press once for this update; later explicit mode choices persist. Validated preferences?including the ready cue, street names, mode, weather, sound, camera, stop options and night-light switch?persist in local storage across reloads and PWA updates.
 
 Play online: **https://microswitchers.github.io/streetcars/**
 
@@ -53,8 +53,8 @@ See [installation, automatic updates and deployment](DEPLOYMENT.md) and
 The starting look is subdued overcast, with slow weather and day/night cycles.
 Settings > Weather offers **Slow cycle**, **Random**, **One weather type**, and **Off**.
 The fixed type is saved separately, so switching modes retains your choice.
-Weather phases last four minutes, with a gradual 90-second blend. Daylight lasts
-four minutes, dusk and dawn each take 30 seconds, and full night lasts 12 seconds.
+Weather phases last three minutes, with a gradual 75-second blend. Daylight lasts
+four minutes, dusk and dawn each take 60 seconds, and full night lasts 12 seconds.
 
 The sun stays behind a cloud veil. Sunny looks use gentle rays, restrained warm
 light and softer wet-pavement highlights, without daytime bloom or an exposure
@@ -92,7 +92,7 @@ Bell and horn buttons are optional in every mode and can be hidden separately. T
 
 The **Always green traffic lights** setting is enabled by default and keeps the displayed signals, streetcar driving logic and background traffic in agreement. It works in every driving mode and can be changed while paused. Turning it off restores the timed green/amber/red cycle. **Stop at red lights** can be switched off separately; when enabled, a bottom-right indicator shows the current signal. Scheduled stops and door controls still work normally. Both choices are remembered in this browser.
 
-Enable **Day/night cycle** in settings for 240 seconds of daylight, a 30-second dusk, 12 seconds of full night, and a 60-second dawn. The short night adds warm shop-window glow and cooler outdoor lighting. The Day/Night button then appears in the top bar and switches directly between the two parts of the cycle. Turning the cycle off restores daylight.
+Enable **Day/night cycle** in settings for 240 seconds of daylight, a 60-second dusk, 12 seconds of full night, and a 60-second dawn. The short night adds warm shop-window glow and cooler outdoor lighting. The Day/Night button then appears in the top bar and eases between the two parts of the cycle over eight seconds. Turning the cycle off restores daylight.
 
 ## Settings and input
 
@@ -166,4 +166,6 @@ Check departure timing with `node qa/check_departure_bell.mjs` and the real reco
 
 Full auto has no Go, Pause or Resume control. It starts and repeats the ride automatically. The P shortcut is disabled. Full auto also keeps running behind Settings. Hidden tabs and graphics recovery may suspend rendering internally; returning to a running tab resumes automatically. Play-mode preferences from before `playModeVersion: 1` migrate to Single press once, preserving all other settings. Future explicit mode choices remain persistent.
 
-Every page load begins in morning daylight, including offline launches, update/recovery reloads and browsers with a saved night selection. Morning holds until the first departure, unless Night is explicitly selected. Always green traffic lights defaults on and doors stay open for five seconds; existing installations receive these defaults once (other custom door durations are retained). Later choices remain saved. Dawn fades over one minute, and manual Day/Night changes ease over eight seconds. iPad reflections now blend continuously with the sky; Balanced uses 1.1 million drawing pixels and a 1536-pixel shadow map, with Low available as before.
+Every page load begins in morning daylight, including offline launches, update/recovery reloads and browsers with a saved night selection. Morning holds until the first departure, unless Night is explicitly selected. Always green traffic lights defaults on and doors stay open for five seconds; existing installations receive these defaults once (other custom door durations are retained). Later choices remain saved. Dawn fades over one minute, and manual Day/Night changes ease over eight seconds. iPad reflections now blend continuously with the sky; Balanced uses 1.4 million drawing pixels and a 2048-pixel shadow map, with Low available as before.
+
+Weather selections now crossfade over eight seconds, including interrupted changes and Weather Off. The sky, rain, fog, lighting and cached reflections share the transition; selecting weather never changes day/night. Paused Settings previews still finish their fades while the automatic clocks stay still. Rain wets the pavement promptly, and the film dries over a longer period after the rain stops. Dawn and dusk tint the clouds gently without an exposed sun disc or increased glare. The Day/Night button follows the actual scene, and selecting Night retains its full short night after the fade. The streetcar travel recording is 12.5% louder, with bell, horn, master volume and anti-pop fades unchanged.
