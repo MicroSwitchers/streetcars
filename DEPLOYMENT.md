@@ -117,11 +117,13 @@ Run `node qa/check_live.mjs` on Windows with Chrome installed to verify the publ
 
 ## iPad graphics and context recovery
 
-Apple mobile devices (including iPad Safari desktop mode) use a separate forward renderer with a 30 fps cap. iPads normally use the 1,400,000-pixel / 2048-shadow Balanced profile; Low and recovery use 400,000 pixels and a 512-pixel shadow map. It keeps the game models, PBR materials, weather sky/rain and night lights, while omitting the desktop MRT/AO, volumetric and screen-space reflection passes. Balanced allows eight local spot lights and four cabin point lights; Low allows four and two. Large livery and sign textures are reduced to at most 2048 pixels per side before GPU upload. Automatic quality stays within the forward renderer and its Low/Balanced budgets.
+Apple mobile devices (including iPad Safari desktop mode) use a separate forward renderer with a 30 fps cap. iPads normally use the 1,100,000-pixel / 1536-shadow Balanced profile; Low and recovery use 400,000 pixels and a 512-pixel shadow map. It keeps the game models, PBR materials, weather sky/rain and night lights, while omitting the desktop MRT/AO, volumetric and screen-space reflection passes. Balanced allows six local spot lights and three cabin point lights; Low allows four and two. Large livery and sign textures are reduced to at most 2048 pixels per side before GPU upload. Automatic quality stays within the forward renderer and its Low/Balanced budgets.
 
 Context-loss listeners install before renderer creation. A failure pauses rendering, preserves the ride when available and persists the safe renderer for subsequent loads. Context restoration rebuilds reflection probes and leaves the player paused at the same position. A GPU startup failure can still trigger PWA update checking. Normal desktop rendering remains available on devices without a recorded GPU failure.
 
 Checks: `node qa/check_graphics_budget.mjs`; `node qa/check_live.mjs <PWA URL> --ipad --loss`; `node qa/check_live.mjs <PWA URL> --startup-loss`; and `node qa/check_live.mjs <PWA URL> --loss`. These simulate device detection and actual WebGL context loss/restoration in Chrome; they do not substitute for a physical iPad test.
+
+`node qa/check_live.mjs <PWA URL> --ipad --route-input` checks real touch hit testing on the route badge, title and arrow, then verifies the selected route survives an offline reload. Use `--routes` instead for complete Queen and Dundas journeys as well.
 
 ## Sensory controls validation
 

@@ -12,7 +12,8 @@ export const QUALITY={
  low:{label:'Low',maxDpr:1,pixels:550000,samples:0,shadow:1024,aoScale:3,aoSamples:6,volumeScale:5,volumeSteps:12,reflectionSteps:8}
 };
 export const COMPATIBILITY_QUALITY={...QUALITY.low,label:'Safe graphics',pixels:400000,shadow:512,spots:4,points:2,probe:64};
-export const TABLET_QUALITY={...COMPATIBILITY_QUALITY,label:'Sharper tablet graphics',maxDpr:1.5,pixels:1400000,shadow:2048,spots:8,points:4,probe:128};
+// Leave headroom for moving traffic and night rain on older iPads.
+export const TABLET_QUALITY={...COMPATIBILITY_QUALITY,label:'Balanced tablet graphics',maxDpr:1.25,pixels:1100000,shadow:1536,spots:6,points:3,probe:128};
 export function qualityProfile(level,compatibility=false){return compatibility?(level==='low'?COMPATIBILITY_QUALITY:TABLET_QUALITY):QUALITY[level];}
 export function initialQuality(device={}){return device.recovering||device.memory&&device.memory<=2?'low':device.compatibility?(device.appleTablet?'balanced':'low'):device.coarse||device.memory&&device.memory<=4?'balanced':'high';}
 export function renderRatio(profile,width,height,dpr=1){return Math.max(.1,Math.min(dpr,profile.maxDpr,Math.sqrt(profile.pixels/Math.max(1,width*height))));}

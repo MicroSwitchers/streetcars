@@ -246,7 +246,7 @@ select{background:#182a30;color:#f9efda;border-color:#a9bdb52e}
 @media(max-height:500px){#stop-line{top:27%}#stop-line .route-strip{height:110px}}
 
 /* Route selection stays visible even when other toolbar labels are compact. */
-.route-selector{cursor:pointer;color:inherit;text-align:left}.route-selector:focus-visible{outline:3px solid #ffe1a8;outline-offset:3px}.route-selector:disabled{cursor:default}.route-selector #route-title{font-size:24px;font-weight:750;letter-spacing:-.03em}.route-switch-glyph{font-size:24px;color:#ffe1a8}.route-selector:disabled .route-switch-glyph{opacity:.35}
+.route-selector{pointer-events:auto;touch-action:manipulation;cursor:pointer;color:inherit;text-align:left}.route-selector:focus-visible{outline:3px solid #ffe1a8;outline-offset:3px}.route-selector:disabled{cursor:default}.route-selector #route-title{font-size:24px;font-weight:750;letter-spacing:-.03em}.route-switch-glyph{font-size:24px;color:#ffe1a8}.route-selector:disabled .route-switch-glyph{opacity:.35}
 #route-fade{position:fixed;inset:0;background:#202d32;opacity:0;pointer-events:none;z-index:1}.topbar,.ride-dock,.sound-controls,#stop-line,.signal-status{z-index:2}
 @media(max-width:850px){.topbar .route-selector{gap:5px}.route-switch-glyph{font-size:19px}.route-selector .route-badge{flex-shrink:0}}
 

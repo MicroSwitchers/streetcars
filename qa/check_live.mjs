@@ -8,6 +8,7 @@ const ipad=process.argv.includes('--ipad'),loss=process.argv.includes('--loss'),
 const sensory=process.argv.includes('--sensory'),phone=process.argv.includes('--phone');let sensoryExpected;
 const auto=process.argv.includes('--auto');
 const routes=process.argv.includes('--routes');
+const routeInput=routes||process.argv.includes('--route-input');
 const morning=process.argv.includes('--morning'),dawn=process.argv.includes('--dawn'),atmosphere=process.argv.includes('--atmosphere');
 const output=join(qa,'renders-live-'+Date.now());await mkdir(output);
 const profile=await mkdtemp(join(qa,'headless-live-'));
@@ -105,7 +106,7 @@ try{
  }
  if(ipad){
   const budget=await evaluate('({simple:queenStreet.graphics.compatibility,pixels:queenStreet.renderer.domElement.width*queenStreet.renderer.domElement.height,shadow:queenStreet.lighting.sun.shadow.mapSize.x,level:queenStreet.performance.level,savedPixels:queenStreet.graphics.stats.texturePixelsSaved})');
-  if(!budget.simple||budget.pixels>1400000||budget.pixels<=1100000||budget.shadow!==2048||budget.level!=='balanced'||budget.savedPixels<3000000)throw Error('iPad budget: '+JSON.stringify(budget));
+  if(!budget.simple||budget.pixels>1100000||budget.pixels<=1000000||budget.shadow!==1536||budget.level!=='balanced'||budget.savedPixels<3000000)throw Error('iPad budget: '+JSON.stringify(budget));
   await evaluate('queenStreet.updateSettings({quality:"low"})');
   if(!await evaluate('queenStreet.renderer.domElement.width*queenStreet.renderer.domElement.height<=400000&&queenStreet.lighting.sun.shadow.mapSize.x===512'))throw Error('Low fallback is not available');
   await evaluate('queenStreet.updateSettings({quality:"high",weather:"rain",weatherMode:"fixed",night:true});queenStreet.setPaused(false);queenStreet.primary()');
@@ -113,18 +114,30 @@ try{
   if(await evaluate('queenStreet.performance.level')!=='balanced')throw Error('Saved High bypassed the iPad safety ceiling');
   console.log('PASS: iPad desktop-mode detection, bounded textures/pixels/shadows, night rain and High safety ceiling');
  }
- if(routes){
-  const checkRoute=async id=>{
+ if(routeInput){
+  const checkRoute=async(id,selector='.route-switch-glyph')=>{
    for(let i=0;i<100&&await evaluate('!!queenStreet.routeTransition');i++)await wait(100);
    const current=await evaluate('queenStreet.route.id');
-   if(current!==id){await evaluate('document.getElementById("route-select").click()');for(let i=0;i<100&&await evaluate('!!queenStreet.routeTransition');i++)await wait(100);}
+   if(current!==id){
+    const point=await evaluate(`(()=>{const button=document.getElementById('route-select'),r=button.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(),x=r.x+r.width/2,y=r.y+r.height/2;return {x,y,hit:document.elementFromPoint(x,y)?.closest('#route-select')===button};})()`);
+    if(!point.hit)throw Error('Route button cannot receive a tap at '+selector);
+    const {x,y}=point;
+    if(ipad||phone){await send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});await send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
+    else{await send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,x,y});await send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,x,y});}
+    for(let i=0;i<100&&await evaluate('!!queenStreet.routeTransition');i++)await wait(100);
+   }
    if(!await evaluate('queenStreet.route.id==='+JSON.stringify(id)+'&&!queenStreet.routeTransition'))throw Error('Route button did not select '+id);
   };
+  for(const selector of ['.route-badge','#route-title','.route-switch-glyph']){
+   if(await evaluate(`(()=>{const r=document.querySelector('#route-select '+${JSON.stringify(selector)}).getBoundingClientRect();return r.width>0&&r.height>0;})()`))await checkRoute(await evaluate('queenStreet.route.id==="queen"?"dundas":"queen"'),selector);
+  }
   await checkRoute('dundas');
+  console.log('PASS: Real '+(ipad||phone?'touch':'mouse')+' input selects both routes from every visible part of the route button');
   if(!await evaluate('document.querySelector(".route-badge").textContent==="505"&&document.getElementById("route-title").textContent==="Dundas Street"&&queenStreet.route.stops[0].label==="Dundas West Station"&&queenStreet.rig.materials.get("Markings_Atlas").map.image instanceof HTMLCanvasElement&&queenStreet.streetcars.vehicles[0].rig.materials.get("Markings_Atlas").map.image instanceof HTMLCanvasElement'))throw Error('Route identity, stop labels or destination-board textures are stale');
   if(!await evaluate('queenStreet.rig.materials.get("Markings_Atlas").map.source!==queenStreet.streetcars.vehicles[0].rig.materials.get("Markings_Atlas").map.source'))throw Error('Opposite destination boards share a texture source');
   const signs=await evaluate('(()=>{const cells=new Map();for(const s of queenStreet.city.routeSigns)cells.set(s.binding.type+":"+s.binding.slot,s.px+","+s.py);return {roles:cells.size,unique:new Set(cells.values()).size,signCount:queenStreet.city.signCount,stops:document.querySelectorAll("#route-stop-list li").length};})()');
   if(signs.roles!==12||signs.unique!==12||signs.stops!==39)throw Error('Roadside sign roles share an atlas cell or full itinerary is missing: '+JSON.stringify(signs));
+  if(routes){
   for(const id of ['dundas','queen']){
    await checkRoute(id);
    const report=await evaluate(`(async()=>{
@@ -149,6 +162,7 @@ try{
   await checkRoute('dundas');
   const checkpoint=await evaluate('(()=>{const a=queenStreet;a.updateSettings({mode:"watch",doorDwell:0,volume:0});a.ride.trafficAhead=()=>null;for(let i=0;i<10000&&(a.route.stopOffset<2||a.routeTransition);i++)a.step(.1);a.setPaused(true);const s=a.captureSession(),manifest=document.querySelector("link[rel=manifest]");sessionStorage.setItem("queen-street-update-session:"+new URL("./",manifest.href).href,JSON.stringify(s));sessionStorage.setItem("route-checkpoint-expected",JSON.stringify({offset:a.route.stopOffset,z:a.state.z}));return {offset:a.route.stopOffset,z:a.state.z};})()');
   if(checkpoint.offset<2)throw Error('No later-section checkpoint was reached');
+  }
  }
  if(atmosphere){
   const report=await evaluate(`(async()=>{
@@ -208,7 +222,7 @@ try{
  ready=false;for(let i=0;i<900;i++){ready=await evaluate('!!window.queenStreet?.ready');if(ready)break;await wait(100);}
  if(!ready||errors.length)throw Error('Installed live game did not reload offline: '+JSON.stringify(errors));
  if(morning&&!await evaluate('queenStreet.nightAmount===0&&!queenStreet.settings.night&&queenStreet.settings.volume===.2'))throw Error('Offline relaunch did not reset to morning');
- if(routes&&!await evaluate('queenStreet.route.id==="dundas"&&queenStreet.settings.routeId==="dundas"&&queenStreet.nightAmount===0&&document.querySelector(".route-badge").textContent==="505"'))throw Error('Offline reload lost the selected route or morning start');
+ if(routeInput&&!await evaluate('queenStreet.route.id==="dundas"&&queenStreet.settings.routeId==="dundas"&&queenStreet.nightAmount===0&&document.querySelector(".route-badge").textContent==="505"'))throw Error('Offline reload lost the selected route or morning start');
  if(routes&&!await evaluate('(()=>{const expected=JSON.parse(sessionStorage.getItem("route-checkpoint-expected"));return queenStreet.route.stopOffset===expected.offset&&Math.abs(queenStreet.state.z-expected.z)<1e-8;})()'))throw Error('Offline update/recovery checkpoint lost its itinerary section');
  if(morning&&!await evaluate('queenStreet.settings.alwaysGreen===false&&queenStreet.settings.doorDwell===15&&queenStreet.captureSession().manualFade===null&&queenStreet.captureSession().cycleTime===0&&queenStreet.state.time>=29.9'))throw Error('Nighttime checkpoint did not restore in morning with later preferences retained');
  if(morning)console.log('PASS: Offline update/recovery checkpoint starts in daylight, clears its night fade and preserves the ride and later settings');
