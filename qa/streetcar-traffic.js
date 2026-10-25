@@ -49,14 +49,14 @@ export async function checkStreetcarTraffic(api,check,gameWindow){
  const pausedZ=actor.z;api.step(.1);
  check('Pausing holds opposing traffic as well',actor.z===pausedZ);
  api.setPaused(false);api.updateSettings({dayNightCycle:true,night:false});
- api.step(100);check('Daylight lasts 100 seconds',api.nightAmount===0);
- api.step(3);check('Dusk reaches its midpoint in three seconds',Math.abs(api.nightAmount-.5)<1e-8);
- api.step(3);check('Full night begins after a six-second dusk',api.nightAmount===1);
+ api.step(240);check('Daylight lasts 240 seconds',api.nightAmount===0);
+ api.step(15);check('Dusk reaches its midpoint in fifteen seconds',Math.abs(api.nightAmount-.5)<1e-8);
+ api.step(15);check('Full night begins after a thirty-second dusk',api.nightAmount===1);
  api.step(11.9);check('Full night remains for twelve seconds',api.nightAmount===1);
- api.step(.1);api.step(3);check('Dawn follows the short night',Math.abs(api.nightAmount-.5)<1e-8);
- api.step(3);check('Day returns after the six-second dawn',api.nightAmount===0);
- api.toggleDayNight();check('Night button also lights the approaching car',api.nightAmount===1&&actor.rig.materials.get('Amber_Indicators').emissiveIntensity>3);
- api.step(12);api.step(6);check('Manually selected night also ends promptly',api.nightAmount===0);
+ api.step(.1);api.step(30);check('Dawn follows the short night',Math.abs(api.nightAmount-.5)<1e-8);
+ api.step(30);check('Day returns after the sixty-second dawn',api.nightAmount===0);
+ api.toggleDayNight();api.step(8);check('Night button also lights the approaching car after its fade',api.nightAmount===1&&actor.rig.materials.get('Amber_Indicators').emissiveIntensity>3);
+ api.step(64);check('Manually selected night also ends after its gradual dawn',api.nightAmount===0);
  api.updateSettings({dayNightCycle:false});api.restart();api.setPaused(true);
  api.view.transition=null;api.view.instant=true;api.view.update(api.state.z,0);
 }

@@ -22,7 +22,7 @@ export function checkWeatherModes(api,check,w,selected='cycle'){
  fx.update(.1,api.state.z,1);api.graphics.render(api.scene,api.camera);
  check('Off leaves the sky static and the weather clock stopped',fx.time===time&&fx.cycleTime===clock&&fx.uniforms.weatherTime.value===0);
  check('Night and street lighting still work with weather off',api.nightAmount===1&&api.lighting.streetLights.fixtures.some(f=>f.light.intensity>0));
- api.toggleDayNight();check('Day/night button works with weather off',api.nightAmount===0);
+ api.toggleDayNight();const wasPausedAtToggle=api.state.paused;api.state.paused=false;api.step(8);api.state.paused=wasPausedAtToggle;check('Day/night button fades to day with weather off',api.nightAmount===0);
  check('Off is saved to local storage',JSON.parse(w.localStorage.getItem('queen-street-ride-settings-v1')).weatherMode==='off');
  choose('cycle');api.updateSettings({night:false});
  const z=api.state.z,buffer=fx.geometry.attributes.position.array;

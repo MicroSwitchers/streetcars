@@ -117,7 +117,7 @@ Run `node qa/check_live.mjs` on Windows with Chrome installed to verify the publ
 
 ## iPad graphics and context recovery
 
-Apple mobile devices (including iPad Safari desktop mode) use a separate forward renderer with a 30 fps cap. iPads normally use the 800,000-pixel / 1024-shadow Balanced profile; Low and recovery use 400,000 pixels and a 512-pixel shadow map. It keeps the game models, PBR materials, weather sky/rain and night lights, while omitting the desktop MRT/AO, volumetric and screen-space reflection passes. Balanced allows six local spot lights and three cabin point lights; Low allows four and two. Large livery and sign textures are reduced to at most 2048 pixels per side before GPU upload. Automatic quality stays within the forward renderer and its Low/Balanced budgets.
+Apple mobile devices (including iPad Safari desktop mode) use a separate forward renderer with a 30 fps cap. iPads normally use the 1,100,000-pixel / 1536-shadow Balanced profile; Low and recovery use 400,000 pixels and a 512-pixel shadow map. It keeps the game models, PBR materials, weather sky/rain and night lights, while omitting the desktop MRT/AO, volumetric and screen-space reflection passes. Balanced allows six local spot lights and three cabin point lights; Low allows four and two. Large livery and sign textures are reduced to at most 2048 pixels per side before GPU upload. Automatic quality stays within the forward renderer and its Low/Balanced budgets.
 
 Context-loss listeners install before renderer creation. A failure pauses rendering, preserves the ride when available and persists the safe renderer for subsequent loads. Context restoration rebuilds reflection probes and leaves the player paused at the same position. A GPU startup failure can still trigger PWA update checking. Normal desktop rendering remains available on devices without a recorded GPU failure.
 
@@ -129,4 +129,12 @@ Checks: `node qa/check_graphics_budget.mjs`; `node qa/check_live.mjs <PWA URL> -
 
 ## Sharper iPad profile
 
-Auto now starts iPads in the forward Balanced profile: 800,000 drawing pixels, a 1024-pixel sun shadow map, six nearby spot lights, three cabin point lights and 128-pixel reflection probes. It retains the 30 fps cap, bounded probe cache and 2048-pixel texture limit. It still avoids desktop MRT, volumetric and screen-space reflection passes. Settings enables Auto, Low and Balanced on these devices; High is capped at Balanced. Low and a recorded graphics-failure startup retain the previous 400,000-pixel / 512-shadow profile. Auto adapts using thresholds appropriate to a 30 fps target rather than treating the intentional frame cap as a performance problem.
+Auto now starts iPads in the forward Balanced profile: 1,100,000 drawing pixels, a 1536-pixel sun shadow map, six nearby spot lights, three cabin point lights and 128-pixel reflection probes. It retains the 30 fps cap, bounded probe cache and 2048-pixel texture limit. It still avoids desktop MRT, volumetric and screen-space reflection passes. Settings enables Auto, Low and Balanced on these devices; High is capped at Balanced. Low and a recorded graphics-failure startup retain the previous 400,000-pixel / 512-shadow profile. Auto adapts using thresholds appropriate to a 30 fps target rather than treating the intentional frame cap as a performance problem.
+
+## Morning starts and smooth dawn
+
+New launches and fresh rides start at the morning/daylight beginning of the clock, even if a night choice was saved. Other preferences persist. An automatic application-update checkpoint continues its existing lighting clock and any in-progress manual fade, preventing an update from flashing a running night scene into daylight.
+
+Dawn now takes 60 seconds; full night remains short at 12 seconds. The Day/Night control fades over eight seconds and supports reversing midway. On the iPad renderer, cached day/night/weather reflection atlases are mixed in a small GPU pass rather than swapping maps at 50% night. The scene uses one stable blended environment texture, keeping the main material shaders lightweight. Balanced increases to 1.1 million drawing pixels and 1536-pixel sun shadows; Low and the recovery fallback remain unchanged.
+
+`node qa/check_live.mjs <PWA URL> --ipad --morning --dawn` verifies saved-night overrides, the higher budget, rendered dawn continuity, eight-second manual fades and morning startup offline. Reflection-map identity stays stable across dawn. An update checkpoint still restores its clock for a continuous ride.

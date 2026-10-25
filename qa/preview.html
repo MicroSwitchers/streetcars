@@ -214,8 +214,10 @@ try{
    check('Day/night lighting transitions smoothly',api.nightAmount>.45&&api.nightAmount<.55&&api.lighting.sun.intensity<3.2);
    check('Twilight fog warms toward sunset',api.scene.fog.color.r>api.scene.fog.color.b);
    api.toggleDayNight();
+   api.step(8);
    check('Day/night button switches back to day',api.nightAmount===0&&!api.settings.night);
    api.toggleDayNight();
+   api.step(8);
    check('Day/night button switches to night',api.nightAmount===1&&api.settings.night);
    check('Night activates warm street lamps near the streetcar',api.lighting.streetLights.fixtures.some(fixture=>fixture.light.intensity>0&&fixture.bulb.material.emissiveIntensity>0));
    api.updateSettings({dayNightCycle:false});
@@ -236,7 +238,7 @@ try{
    check('Per-leg playback rate can span the full expected journey',expectedRate>.4&&expectedRate<1.6);
  }
  const scenario=params.get('scene');
- if(scenario==='night'||params.has('night-lamps')){api.updateSettings({dayNightCycle:true,night:false,stopAtLights:true});api.toggleDayNight();api.setPaused(true);}
+ if(scenario==='night'||params.has('night-lamps')){api.updateSettings({dayNightCycle:true,night:true,stopAtLights:true});api.setPaused(true);}
  if(scenario==='intersection'){
    api.setPaused(true);api.view.transition=null;api.view.update=()=>{};
    api.camera.position.set(-138,8,api.route.crossings[0].z+14);

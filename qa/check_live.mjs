@@ -7,6 +7,7 @@ const qa=dirname(fileURLToPath(import.meta.url)),url=process.argv[2]||'https://m
 const ipad=process.argv.includes('--ipad'),loss=process.argv.includes('--loss'),startupLoss=process.argv.includes('--startup-loss');
 const sensory=process.argv.includes('--sensory'),phone=process.argv.includes('--phone');let sensoryExpected;
 const auto=process.argv.includes('--auto');
+const morning=process.argv.includes('--morning'),dawn=process.argv.includes('--dawn');
 const output=join(qa,'renders-live-'+Date.now());await mkdir(output);
 const profile=await mkdtemp(join(qa,'headless-live-'));
 const browser=spawn('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',['--headless=new','--no-first-run','--no-default-browser-check','--remote-debugging-port=0',`--user-data-dir=${profile}`],{windowsHide:true,stdio:'ignore'});
@@ -30,6 +31,7 @@ try{
  }
  if(phone){await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:2,mobile:true});await send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});}
  if(auto)await send('Page.addScriptToEvaluateOnNewDocument',{source:'try{if(!sessionStorage.getItem("auto-test-seeded")){localStorage.setItem("queen-street-ride-settings-v1",JSON.stringify({mode:"watch",volume:.2,atmosphereVersion:3}));sessionStorage.setItem("auto-test-seeded","1");}}catch{}'});
+ if(morning)await send('Page.addScriptToEvaluateOnNewDocument',{source:'try{if(!sessionStorage.getItem("morning-test-seeded")){localStorage.setItem("queen-street-ride-settings-v1",JSON.stringify({mode:"one",playModeVersion:1,night:true,dayNightCycle:true,volume:.2,atmosphereVersion:3}));sessionStorage.setItem("morning-test-seeded","1");}}catch{}'});
  if(startupLoss)await send('Page.addScriptToEvaluateOnNewDocument',{source:'try{if(localStorage.getItem("queen-street-safe-graphics-v1")!=="1"){const original=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){const gl=original.call(this,type,...args);if(type==="webgl2"&&gl)setTimeout(()=>gl.getExtension("WEBGL_lose_context").loseContext(),0);return gl;};}}catch{}'});
  await send('Page.navigate',{url});
  if(startupLoss){
@@ -48,6 +50,7 @@ try{
  if(!cache)throw Error('Live offline cache did not complete');
  const game=await evaluate('({release:document.querySelector("meta[name=queen-street-release]").content,loadingHidden:document.querySelector("#loading").hidden,triangles:queenStreet.renderer.info.render.triangles,serviceWorker:!!navigator.serviceWorker.controller,manifest:document.querySelector("link[rel=manifest]").href,credits:document.querySelector(".sound-credits").textContent.includes("craigsmith")&&document.querySelector(".sound-credits").textContent.includes("mcpable")})');
  if(!game.loadingHidden||game.triangles<=0||!game.serviceWorker||!game.credits||errors.length)throw Error(JSON.stringify({game,errors}));
+ if(morning&&!await evaluate('queenStreet.nightAmount===0&&!queenStreet.settings.night&&queenStreet.settings.volume===.2'))throw Error('A saved night preference prevented a morning launch');
  if(auto){
   if(!await evaluate('queenStreet.settings.mode==="one"&&queenStreet.settings.volume===.2&&!document.getElementById("pause")'))throw Error('Legacy settings did not migrate to Single press without losing preferences');
   await evaluate('queenStreet.updateSettings({mode:"watch",doorDwell:0,alwaysGreen:true,stopAtLights:false});queenStreet.restart();queenStreet.ride.trafficAhead=()=>null');await wait(200);
@@ -96,13 +99,18 @@ try{
  }
  if(ipad){
   const budget=await evaluate('({simple:queenStreet.graphics.compatibility,pixels:queenStreet.renderer.domElement.width*queenStreet.renderer.domElement.height,shadow:queenStreet.lighting.sun.shadow.mapSize.x,level:queenStreet.performance.level,savedPixels:queenStreet.graphics.stats.texturePixelsSaved})');
-  if(!budget.simple||budget.pixels>800000||budget.pixels<=400000||budget.shadow!==1024||budget.level!=='balanced'||budget.savedPixels<6000000)throw Error('iPad budget: '+JSON.stringify(budget));
+  if(!budget.simple||budget.pixels>1100000||budget.pixels<=800000||budget.shadow!==1536||budget.level!=='balanced'||budget.savedPixels<6000000)throw Error('iPad budget: '+JSON.stringify(budget));
   await evaluate('queenStreet.updateSettings({quality:"low"})');
   if(!await evaluate('queenStreet.renderer.domElement.width*queenStreet.renderer.domElement.height<=400000&&queenStreet.lighting.sun.shadow.mapSize.x===512'))throw Error('Low fallback is not available');
   await evaluate('queenStreet.updateSettings({quality:"high",weather:"rain",weatherMode:"fixed",night:true});queenStreet.setPaused(false);queenStreet.primary()');
   await wait(1500);
   if(await evaluate('queenStreet.performance.level')!=='balanced')throw Error('Saved High bypassed the iPad safety ceiling');
   console.log('PASS: iPad desktop-mode detection, bounded textures/pixels/shadows, night rain and High safety ceiling');
+ }
+ if(dawn){
+  const report=await evaluate('(async()=>{const a=queenStreet;a.setPaused(true);a.updateSettings({weatherMode:"fixed",weather:"overcast",night:false,dayNightCycle:true});a.view.transition=null;const gl=a.renderer.getContext(),pixels=new Uint8Array(32*32*4);let previous=null,peak=0,env;for(let i=0;i<=60;i++){const t=282+i,n=i===60?0:1-(i/60)**2*(3-2*i/60);a.weather.update(0,a.state.z,n);a.graphics.render(a.scene,a.camera);if(!env)env=a.scene.environment;else if(env!==a.scene.environment)throw Error("Reflection map switches during dawn");gl.readPixels(Math.floor(gl.drawingBufferWidth/2),Math.floor(gl.drawingBufferHeight/2),32,32,gl.RGBA,gl.UNSIGNED_BYTE,pixels);if(previous){let change=0;for(let j=0;j<pixels.length;j++)change+=Math.abs(pixels[j]-previous[j]);peak=Math.max(peak,change/pixels.length);}previous=new Uint8Array(pixels);}a.updateSettings({night:false});a.toggleDayNight();if(a.nightAmount!==0)throw Error("Night button jumps immediately");a.setPaused(false);for(let i=0;i<40;i++)a.step(.1);const midpoint=a.nightAmount;if(midpoint<.4||midpoint>.6)throw Error("Night button does not ease gradually");for(let i=0;i<41;i++)a.step(.1);a.toggleDayNight();if(a.nightAmount<.99)throw Error("Day button jumps immediately");return {peakMeanPixelStep:peak,manualMidpoint:midpoint,stableAtlas:!!a.weather.reflectionAtlas};})()');
+  if(report.peakMeanPixelStep>8)throw Error('Abrupt rendered dawn: '+JSON.stringify(report));
+  console.log('PASS: Smooth 60-second rendered dawn and gradual Day/Night controls: '+JSON.stringify(report));
  }
  if(loss){
   await evaluate('queenStreet.renderer.forceContextLoss()');await wait(250);
@@ -118,6 +126,7 @@ try{
  await send('Page.reload',{ignoreCache:true});
  ready=false;for(let i=0;i<900;i++){ready=await evaluate('!!window.queenStreet?.ready');if(ready)break;await wait(100);}
  if(!ready||errors.length)throw Error('Installed live game did not reload offline: '+JSON.stringify(errors));
+ if(morning&&!await evaluate('queenStreet.nightAmount===0&&!queenStreet.settings.night&&queenStreet.settings.volume===.2'))throw Error('Offline relaunch did not reset to morning');
  if(sensory&&await evaluate('JSON.stringify(queenStreet.settings)')!==sensoryExpected)throw Error('Saved sensory preferences did not survive offline reload');
  if(auto&&!await evaluate('queenStreet.settings.mode==="watch"&&!queenStreet.state.paused&&document.querySelector(".ride-dock").hidden'))throw Error('Explicit Full auto preference did not restore and run');
  if(sensory)console.log('PASS: all last-used preferences survive a full offline browser reload');

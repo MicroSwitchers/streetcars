@@ -92,7 +92,7 @@ Bell and horn buttons are optional in every mode and can be hidden separately. T
 
 The optional **Always green traffic lights** setting keeps the displayed signals, streetcar driving logic and background traffic in agreement. It works in every driving mode and can be changed while paused. Turning it off restores the timed green/amber/red cycle. **Stop at red lights** can be switched off separately; when enabled, a bottom-right indicator shows the current signal. Scheduled stops and door controls still work normally. Both choices are remembered in this browser.
 
-Enable **Day/night cycle** in settings for 240 seconds of daylight, a 30-second dusk, 12 seconds of full night, and a 30-second dawn. The short night adds warm shop-window glow and cooler outdoor lighting. The Day/Night button then appears in the top bar and switches directly between the two parts of the cycle. Turning the cycle off restores daylight.
+Enable **Day/night cycle** in settings for 240 seconds of daylight, a 30-second dusk, 12 seconds of full night, and a 60-second dawn. The short night adds warm shop-window glow and cooler outdoor lighting. The Day/Night button then appears in the top bar and switches directly between the two parts of the cycle. Turning the cycle off restores daylight.
 
 ## Settings and input
 
@@ -165,3 +165,5 @@ The Blender car models can be checked with `node qa/check_graphics.mjs carAssets
 Check departure timing with `node qa/check_departure_bell.mjs` and the real recordings in Chrome with `node qa/check_graphics.mjs departureBell offlineDepartureBell`. Check delayed audio with `node qa/check_sounds.mjs` and `node qa/check_graphics.mjs audioActivation offlineAudioActivation`. The timing checks cover loads finishing after cancellation, expired button requests, pause/resume races, repeated stop updates and natural recording completion. Check the daylight/brake policy with `node qa/check_graphics.mjs daytimeBrakes daytimeBrakesPhone offlineDaytimeBrakes`; this includes a rendered-pixel check for actual red car-brake emission and tests normal stops, manual braking, coasting, night controls and the oncoming streetcar.
 
 Full auto has no Go, Pause or Resume control. It starts and repeats the ride automatically. The P shortcut is disabled. Full auto also keeps running behind Settings. Hidden tabs and graphics recovery may suspend rendering internally; returning to a running tab resumes automatically. Play-mode preferences from before `playModeVersion: 1` migrate to Single press once, preserving all other settings. Future explicit mode choices remain persistent.
+
+Every fresh launch begins in morning daylight, including offline launches and browsers with a saved night selection. Dawn fades over one minute, and manual Day/Night changes ease over eight seconds. iPad reflections now blend continuously with the sky; Balanced uses 1.1 million drawing pixels and a 1536-pixel shadow map, with Low available as before.

@@ -1,4 +1,4 @@
-export const DAY_NIGHT={day:240,dusk:30,night:12,dawn:30,nightStart:270,duration:312};
+export const DAY_NIGHT={day:240,dusk:30,night:12,dawn:60,nightStart:270,duration:342};
 
 export function nightLevel(time){
  const t=((time%DAY_NIGHT.duration)+DAY_NIGHT.duration)%DAY_NIGHT.duration;

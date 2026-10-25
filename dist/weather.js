@@ -96,6 +96,26 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
  const environments=new Map(),pmrem=new THREE.PMREMGenerator(renderer),probeScene=new THREE.Scene();
  const probeMaterial=skyMaterial.clone(),probe=new THREE.Mesh(sky.geometry,probeMaterial);probeScene.add(probe);
  const nightEnvironment={value:scene.environment},environmentBlend={value:0},nextEnvironment={value:scene.environment},nextNightEnvironment={value:scene.environment},profileBlend={value:0};
+ // Blend the small PMREM atlas once, rather than switching maps at half-night
+ // or adding four environment samples to every street and vehicle fragment.
+ let atlas=null,lastAtlasKey='',lastAtlasNight=-1,lastAtlasBlend=-1;
+ const atlasUniforms={day:{value:null},night:{value:null},nextDay:{value:null},nextNight:{value:null},nightMix:{value:0},weatherMix:{value:0}};
+ const atlasMaterial=new THREE.ShaderMaterial({depthTest:false,depthWrite:false,toneMapped:false,uniforms:atlasUniforms,
+  vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}',
+  fragmentShader:'varying vec2 vUv;uniform sampler2D day;uniform sampler2D night;uniform sampler2D nextDay;uniform sampler2D nextNight;uniform float nightMix;uniform float weatherMix;void main(){vec4 a=mix(texture2D(day,vUv),texture2D(night,vUv),nightMix);vec4 b=mix(texture2D(nextDay,vUv),texture2D(nextNight,vUv),nightMix);gl_FragColor=mix(a,b,weatherMix);}'});
+ const atlasScene=new THREE.Scene(),atlasQuad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),atlasMaterial),atlasCamera=new THREE.Camera();atlasScene.add(atlasQuad);
+ function blendedAtlas(pair,next,blend,key){
+  if(!atlas||atlas.width!==pair[0].width||atlas.height!==pair[0].height){
+   atlas?.dispose();atlas=new THREE.WebGLRenderTarget(pair[0].width,pair[0].height,{type:THREE.HalfFloatType,depthBuffer:false});
+   atlas.texture.mapping=THREE.CubeUVReflectionMapping;lastAtlasKey='';
+  }
+  if(key!==lastAtlasKey||Math.abs(night-lastAtlasNight)>=1/1024||Math.abs(blend-lastAtlasBlend)>=1/1024||night===0&&lastAtlasNight!==0||night===1&&lastAtlasNight!==1){
+   atlasUniforms.day.value=pair[0].texture;atlasUniforms.night.value=pair[1].texture;atlasUniforms.nextDay.value=next[0].texture;atlasUniforms.nextNight.value=next[1].texture;atlasUniforms.nightMix.value=night;atlasUniforms.weatherMix.value=blend;
+   const previous=renderer.getRenderTarget();try{renderer.setRenderTarget(atlas);renderer.render(atlasScene,atlasCamera);}finally{renderer.setRenderTarget(previous);}
+   lastAtlasKey=key;lastAtlasNight=night;lastAtlasBlend=blend;
+  }
+  return atlas.texture;
+ }
  const environmentMaterials=new Set();scene.traverse(o=>{if(o.isMesh)for(const m of Array.isArray(o.material)?o.material:[o.material])if(m.isMeshStandardMaterial&&!m.envMap)environmentMaterials.add(m);});
  for(const material of graphics.compatibility?[]:environmentMaterials){const compile=material.onBeforeCompile,key=material.customProgramCacheKey();
    material.onBeforeCompile=function(shader,renderer){compile.call(this,shader,renderer);Object.assign(shader.uniforms,{weatherNightEnvironment:nightEnvironment,weatherEnvironmentBlend:environmentBlend,weatherNextEnvironment:nextEnvironment,weatherNextNightEnvironment:nextNightEnvironment,weatherProfileBlend:profileBlend});
@@ -122,7 +142,7 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
    const cycling=mode==='cycle'||mode==='random',from=mode==='off'?'off':cycling?phase.from:preset;
    const to=cycling?phase.to:from,blend=cycling?phase.blend:0;
    const pair=probePair(from),next=blend>0?probePair(to):pair;
-   scene.environment=pair[graphics.compatibility&&night>=.5?1:0].texture;nightEnvironment.value=pair[1].texture;environmentBlend.value=night;
+   scene.environment=graphics.compatibility?blendedAtlas(pair,next,blend,from+':'+to):pair[0].texture;nightEnvironment.value=pair[1].texture;environmentBlend.value=night;
    nextEnvironment.value=next[0].texture;nextNightEnvironment.value=next[1].texture;profileBlend.value=blend;
    if(graphics.compatibility)for(const [key,unused] of environments)if(key!==from&&key!==to){unused.forEach(target=>target.dispose());environments.delete(key);}
  }
@@ -156,6 +176,6 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
    configure(nextMode,value,seed=0){mode=WEATHER_MODES.includes(nextMode)?nextMode:'cycle';preset=Object.hasOwn(WEATHER,value)?value:'overcast';if(randomSeed!==(seed>>>0)){randomSeed=seed>>>0;randomSequence=randomWeatherSequence(randomSeed);}},
    setPreset(value){preset=Object.hasOwn(WEATHER,value)?value:'overcast';apply();},
    update(dt,z,nightAmount,ratio=1){const elapsed=Math.min(.1,Math.max(0,dt));if(mode!=='off')time+=elapsed;if(mode==='cycle'||mode==='random')cycleTime+=elapsed;focus=z;night=nightAmount;rainMaterial.uniforms.focus.value=focus;rainMaterial.uniforms.pixelRatio.value=Math.min(2,ratio);apply();},
-   rebuildEnvironments(){for(const pair of environments.values())pair.forEach(p=>p.dispose());environments.clear();apply();},
-   environments,dispose(){sky.removeFromParent();rain.removeFromParent();sky.geometry.dispose();skyMaterial.dispose();probeMaterial.dispose();pmrem.dispose();for(const pair of environments.values())pair.forEach(p=>p.dispose());geometry.dispose();rainMaterial.dispose();}};
+   rebuildEnvironments(){for(const pair of environments.values())pair.forEach(p=>p.dispose());environments.clear();lastAtlasKey='';apply();},
+   environments,get reflectionAtlas(){return atlas;},dispose(){atlas?.dispose();atlasQuad.geometry.dispose();atlasMaterial.dispose();sky.removeFromParent();rain.removeFromParent();sky.geometry.dispose();skyMaterial.dispose();probeMaterial.dispose();pmrem.dispose();for(const pair of environments.values())pair.forEach(p=>p.dispose());geometry.dispose();rainMaterial.dispose();}};
 }
