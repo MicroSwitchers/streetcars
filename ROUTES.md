@@ -24,6 +24,8 @@ Verification: `node qa/check_routes.mjs` covers both complete trips at both stop
 
 Research checked on 24 October 2026 informs the following west-to-east visual progression. These are practical scenery regions, rather than official neighbourhood boundaries. The world remains peopleless: buildings, vehicles, objects and greenery provide the detail. Reference photographs inform original procedural geometry and materials; no source photographs or textures are copied into the app.
 
+Dundas reuses Queen's Blender-built shop merchandise, street furniture and heritage architecture kit. Nearby display bays have 2.3-metre furnished recesses with thin glazing, varied interior light colours and pavement illumination. Sculpted cornices, stone hoods, fire escapes, roof details, striped awnings and branched leaf crowns add depth. Brick, stone, plaster, timber and roof finishes use mipmapped surface detail. Each section updates fixed instance buffers with capped authored-asset counts; the iPad pixel, shadow, light and frame-rate settings remain unchanged.
+
 | Route section | Visual character and placement |
 | --- | --- |
 | Dundas West Station to Sterling Road | Brick commercial rows, converted houses, small apartments and varied rooflines around Roncesvalles. |

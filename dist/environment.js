@@ -308,7 +308,7 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
  at.needsUpdate=true;const labels=new THREE.Mesh(mergeGeometries(signGeos),signMat);queenScenery.add(labels);
  const storeGlazing=new THREE.Mesh(mergeGeometries(storeGlazingGeometries),mats.storeGlass);storeGlazing.name='Recessed_Storefront_Glazing';storeGlazing.renderOrder=2;storeGlazing.castShadow=false;storeGlazing.receiveShadow=false;queenScenery.add(storeGlazing);storeGlazingGeometries.forEach(geometry=>geometry.dispose());
  const wires=new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(linePoints,3)),new THREE.LineBasicMaterial({color:0x34463e}));scene.add(wires);
- const districts=createDundasScenery({scene,route,mats,foliage});let cityNight=0;
+ const districts=createDundasScenery({scene,route,mats,foliage,streetProps,architecturalAssets});let cityNight=0;
  function setRoute(){
    queenScenery.visible=route.id!=='dundas';districts.setRoute();
    scenery.windowLighting.setSources(queenScenery.visible?scenery.displays:districts.displays);

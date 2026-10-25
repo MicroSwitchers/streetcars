@@ -98,7 +98,7 @@ function worldSurface(material,metres){
 }
 
 // Keep masonry courses at the same scale on both merged and pooled buildings.
-function worldMasonry(material){
+function worldMasonry(material,scaleX=.88,scaleY=1.08){
  const compile=material.onBeforeCompile,key=material.customProgramCacheKey();
  material.onBeforeCompile=function(shader,renderer){
    compile.call(this,shader,renderer);
@@ -109,7 +109,7 @@ function worldMasonry(material){
      #endif
      masonryPosition=modelMatrix*masonryPosition;masonryNormal=mat3(modelMatrix)*masonryNormal;
      vec2 masonryUv=vec2(abs(masonryNormal.x)>abs(masonryNormal.z)?masonryPosition.z:masonryPosition.x,
-       abs(masonryNormal.y)>.5?masonryPosition.z:masonryPosition.y)/vec2(.88,1.08);
+       abs(masonryNormal.y)>.5?masonryPosition.z:masonryPosition.y)/vec2(${scaleX.toFixed(2)},${scaleY.toFixed(2)});
      #ifdef USE_MAP
        vMapUv=masonryUv;
      #endif
@@ -121,7 +121,7 @@ function worldMasonry(material){
      #endif
      #include <project_vertex>`);
  };
- material.customProgramCacheKey=()=>key+'-world-masonry-v1';material.needsUpdate=true;
+ material.customProgramCacheKey=()=>key+`-world-masonry-v2-${scaleX}-${scaleY}`;material.needsUpdate=true;
 }
 
 // Embedded rail heads, grooves and paint share the pavement's depth surface.
@@ -206,6 +206,12 @@ export function finishSurfaces(mats,renderer,route){
  for(let i=0;i<180;i++){cc.fillStyle='#686c641b';cc.beginPath();cc.arc(rnd()*512,rnd()*512,rnd()*1.3+.3,0,Math.PI*2);cc.fill();}
  const concreteMap=texture(concrete),concreteBump=relief(concrete),concreteRoughness=roughness(concrete,.83,1.);
  for(const name of ['concrete','curb','stone','warmStone']){const m=mats[name];m.map=concreteMap;m.color.set(name==='curb'?0xd3cfc4:name==='warmStone'?0xd7c8ad:0xd2d0c8);m.bumpMap=concreteBump;m.bumpScale=.016;m.roughness=1;m.roughnessMap=concreteRoughness;worldSurface(m,2.6);weathering(m,.085);}
+ // Vertical Dundas walls need wall-oriented UVs; pavement UVs would stretch
+ // every aggregate fleck into a stripe up the facade.
+ for(const name of ['dundasStone','dundasPlaster'])if(mats[name]){
+   const m=mats[name];m.map=concreteMap;m.bumpMap=concreteBump;m.bumpScale=name==='dundasStone'?.014:.008;
+   m.roughness=1;m.roughnessMap=concreteRoughness;worldMasonry(m,2.6,2.6);weathering(m,.10,.09);
+ }
 
  const bases=[[139,76,56],[158,99,72],[171,140,96],[112,85,75],[127,116,96]];
  bases.forEach((base,index)=>{
@@ -225,10 +231,20 @@ export function finishSurfaces(mats,renderer,route){
  wc.fillStyle='#151e2538';for(let x=0;x<256;x+=40)wc.fillRect(x,132,24,124);
  mats.glass.map=texture(windows);mats.glass.color.setHex(0xb8cbd0);mats.glass.metalness=.18;mats.glass.roughness=.16;mats.glass.envMapIntensity=1.1;
  mats.storeGlass.map=mats.glass.map;mats.storeGlass.color.setHex(0xe1ecee);mats.storeGlass.metalness=.05;mats.storeGlass.roughness=.13;mats.storeGlass.envMapIntensity=.65;
+ if(mats.dundasCurtainGlass){const m=mats.dundasCurtainGlass;m.map=mats.glass.map;m.color.setHex(0xadc2c6);m.metalness=.18;m.roughness=.19;m.envMapIntensity=1.1;}
+ if(mats.dundasStoreGlass){const m=mats.dundasStoreGlass;m.map=mats.storeGlass.map;m.color.copy(mats.storeGlass.color);m.metalness=.05;m.roughness=.13;m.envMapIntensity=.65;}
  // Fine felt texture keeps the roofs from reading as perfectly flat plastic.
  const roofing=canvas(256),rc=roofing.getContext('2d');rc.fillStyle='#898b86';rc.fillRect(0,0,256,256);
  for(let i=0;i<12000;i++){rc.fillStyle=i%2?'#dddcd42a':'#171e252b';rc.fillRect(rnd()*256,rnd()*256,1+rnd()*2,1);}
  mats.roof.bumpMap=relief(roofing);mats.roof.bumpScale=.018;mats.roof.roughnessMap=roughness(roofing,.86,1.);mats.roof.roughness=1;worldSurface(mats.roof,1.8);weathering(mats.roof,.12);
+ if(mats.dundasRoof){const m=mats.dundasRoof;m.bumpMap=mats.roof.bumpMap;m.bumpScale=.018;m.roughnessMap=mats.roof.roughnessMap;m.roughness=1;worldSurface(m,1.8);weathering(m,.12);}
+ // Low-contrast, mipmapped timber grain gives the AGO ribs and porches a
+ // material finish without repeating high-contrast lines in distant views.
+ if(mats.dundasTimber){
+   const wood=canvas(256),w=wood.getContext('2d');w.fillStyle='#c5b391';w.fillRect(0,0,256,256);
+   for(let i=0;i<7000;i++){w.fillStyle=i%2?'#66523e12':'#f1debd17';w.fillRect(rnd()*256,rnd()*256,.5+rnd(),2+rnd()*12);}
+   const m=mats.dundasTimber;m.map=texture(wood);m.bumpMap=relief(wood);m.bumpScale=.006;m.roughnessMap=roughness(wood,.78,.96);m.roughness=1;worldMasonry(m,1.4,2.8);weathering(m,.08,.08);
+ }
  // Mipmapped, irregular turf variation gives the garden floor scale without
  // parallel grass stripes or thousands of distant blade meshes.
  const turf=canvas(256),tc=turf.getContext('2d');tc.fillStyle='#82906a';tc.fillRect(0,0,256,256);

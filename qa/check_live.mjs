@@ -149,7 +149,7 @@ try{
      const before=a.state.z,pending=a.routeTransition,elapsed=pending?.elapsed,switched=pending?.switched,speed=a.state.speed;
      a.step(.1);a.servedStops.forEach((served,index)=>{if(served)seen.add(index);});
      if(pending&&elapsed>0&&!switched&&a.routeTransition&&!a.routeTransition.switched&&speed>.1){if(a.state.z<=before)throw Error('Streetcar froze during a section fade');movingFadeFrames++;}
-     if(a.route.stopOffset!==lastOffset){if(a.route.id==='dundas'&&a.city.districts.stats.overflow)throw Error('A Dundas section exhausted its scenery pool');sections++;if(a.route.stopOffset===0&&seen.size===total){looped=true;break;}lastOffset=a.route.stopOffset;}
+     if(a.route.stopOffset!==lastOffset){if(a.route.id==='dundas'&&a.city.districts.stats.overflow)throw Error('A Dundas section exhausted its scenery pool: '+JSON.stringify({offset:a.route.stopOffset,stats:a.city.districts.stats}));sections++;if(a.route.stopOffset===0&&seen.size===total){looped=true;break;}lastOffset=a.route.stopOffset;}
      if(i%500===0)await new Promise(r=>setTimeout(r,0));
     }
     let after=0;a.scene.traverse(()=>after++);
@@ -170,33 +170,68 @@ try{
    const s=JSON.parse(JSON.stringify(window.__districtSnapshot));s.itinerary.offset=offset;s.ride.state.z=-150;if(!a.restoreSession(s))throw Error('Cannot stage scenery section '+offset);
    const heroZ=offset===18?4:offset===23?-8:offset===29?-14:offset===30?-24:-124;
    a.updateSettings({night});a.camera.clearViewOffset();a.camera.fov=58;a.camera.position.set(offset>=34?-5:5,7,heroZ-48);a.camera.lookAt(offset>=34?40:-16,5,heroZ);a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);
-   const d=a.city.districts;let objects=0,hash=0;a.scene.traverse(()=>objects++);d.group.traverse(o=>{if(o.instanceMatrix)for(let i=0;i<o.count*16;i++)hash=(Math.imul(hash,31)+Math.round(o.instanceMatrix.array[i]*100))|0;});
+   const d=a.city.districts,m=a.city.materials;let objects=0,hash=0,resources=0;a.scene.traverse(()=>objects++);d.group.traverse(o=>{if(o.instanceMatrix)for(let i=0;i<o.count*16;i++)hash=(Math.imul(hash,31)+Math.round(o.instanceMatrix.array[i]*100))|0;if(o.isMesh)for(const ch of o.uuid+o.geometry.uuid+o.material.uuid)resources=(Math.imul(resources,31)+ch.charCodeAt(0))|0;});
    if(new Set(d.displays.map(w=>w.index)).size!==d.displays.length)throw Error('Shop lighting sources reuse storefront IDs');
-   return {offset,hash,objects,geometries:a.renderer.info.memory.geometries,textures:a.renderer.info.memory.textures,stats:JSON.parse(JSON.stringify(d.stats)),zones:d.zones,landmarks:d.landmarks,windowSources:a.city.scenery.windowLighting.windows.length};
+   const rooms=d.frontages.filter(f=>f.room).map(f=>({kind:f.kind,index:f.index,side:f.side,front:f.room.front,back:f.room.back,width:f.room.width,z:f.room.z}));
+   const glazing=d.group.getObjectByName('Dundas_glazing'),mappedGlazing=!!glazing&&glazing.material===m.dundasStoreGlass&&glazing.material.map===m.storeGlass.map&&!!glazing.material.map&&glazing.material.transparent&&glazing.material.opacity<=.25&&!glazing.material.depthWrite;
+   const roomMaterials=Array.from({length:7},(_,i)=>d.group.getObjectByName('Dundas_roomWall'+i)?.material===(i?m['shopWall'+i]:m.shopInteriorWall)&&d.group.getObjectByName('Dundas_roomCeiling'+i)?.material===(i?m['shopCeiling'+i]:m.shopInteriorCeiling)&&d.group.getObjectByName('Dundas_roomStrip'+i)?.material===m['shopStrip'+i]).every(Boolean);
+   const masonryMaterials=new Set(d.group.children.filter(o=>o.isMesh&&[m.brick0,m.brick1,m.brick2,m.brick3,m.brick4].includes(o.material)&&o.material.map&&o.material.bumpMap&&o.material.roughnessMap).map(o=>o.material)).size;
+   return {offset,hash,resources,objects,geometries:a.renderer.info.memory.geometries,textures:a.renderer.info.memory.textures,stats:JSON.parse(JSON.stringify(d.stats)),retail:JSON.parse(JSON.stringify(d.retail.stats)),facades:JSON.parse(JSON.stringify(d.facades.stats)),rooms,mappedGlazing,roomMaterials,masonryMaterials,glazingCount:glazing.count,zones:d.zones,landmarks:d.landmarks,windowSources:a.city.scenery.windowLighting.windows.length};
   };})()`);
+  // Diagnose every fixed-pool capacity in one run before the first staged
+  // screenshot can stop at an early failure and conceal later sections.
+  const poolDiagnostics=await evaluate(`(()=>{const result=[];for(let offset=0;offset<=36;offset++){const s=window.__districtStage(offset);result.push({offset,base:{overflow:s.stats.overflow,overflows:s.stats.overflows||{},triangles:s.stats.triangles},retail:{overflow:s.retail.overflow,overflows:s.retail.overflows||{},triangles:s.retail.triangles},facades:{overflow:s.facades.overflow,overflows:s.facades.overflows||{},triangles:s.facades.triangles}});}return result;})()`);
+  await writeFile(join(output,'dundas-pool-diagnostics.json'),JSON.stringify(poolDiagnostics,null,2));
+  const overflowingSections=poolDiagnostics.filter(s=>s.base.overflow||s.retail.overflow||s.facades.overflow);
+  if(overflowingSections.length)throw Error('Dundas pool capacity failures across all 37 offsets: '+JSON.stringify(overflowingSections));
+  const photo=async name=>{const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,name+'.png'),Buffer.from(shot.data,'base64'));};
+  const changeComparisonRoute=async id=>{
+   await evaluate('queenStreet.selectRoute('+JSON.stringify(id)+')');
+   for(let i=0;i<150&&await evaluate('!!queenStreet.routeTransition');i++)await wait(100);
+   if(!await evaluate('queenStreet.route.id==='+JSON.stringify(id)+'&&!queenStreet.routeTransition'))throw Error('Comparison route did not change');
+  };
+  await changeComparisonRoute('queen');
+  await evaluate(`(()=>{const a=queenStreet,s=a.captureSession();s.ride.state.z=-150;a.restoreSession(s);a.updateSettings({quality:'balanced',weatherMode:'off',night:false});for(let i=0;i<81;i++)a.weather.update(.1,a.state.z,0,a.renderer.getPixelRatio(),false);a.camera.clearViewOffset();a.camera.fov=58;a.camera.position.set(5,7,-172);a.camera.lookAt(-16,5,-124);a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);})()`);
+  await photo('queen-comparison-day');
+  await changeComparisonRoute('dundas');
+  const assertBudget=sample=>{
+   if(sample.stats.overflow||sample.stats.meshes>55||sample.stats.triangles>110000)throw Error('Dundas exceeds its fixed base scenery budget: '+JSON.stringify(sample.stats));
+   for(const name of ['retail','facades'])if(!sample[name]||sample[name].overflow||sample[name].triangles>145000)throw Error('Dundas '+name+' exceeds its authored asset budget: '+JSON.stringify(sample[name]));
+   if(!sample.mappedGlazing||!sample.roomMaterials||sample.masonryMaterials<3)throw Error('Dundas lost Queen glazing, interior lighting materials or mapped masonry: '+JSON.stringify({offset:sample.offset,mappedGlazing:sample.mappedGlazing,roomMaterials:sample.roomMaterials,masonryMaterials:sample.masonryMaterials}));
+   if(sample.rooms.some(r=>Math.abs(r.back-r.front-2.3)>.00001||r.width<=0)||sample.glazingCount!==sample.rooms.length)throw Error('Shopfronts do not have matching glazed 2.3-metre room recesses: '+JSON.stringify({offset:sample.offset,rooms:sample.rooms,glazingCount:sample.glazingCount}));
+  };
   const stages=[0,6,13,15,16,18,20,23,26,29,30,33,34,36];
   const samples=[];
   for(const offset of stages){
    const sample=await evaluate(`window.__districtStage(${offset})`);samples.push(sample);
-   if(sample.stats.overflow||sample.stats.meshes>25||sample.stats.triangles>55000)throw Error('Dundas exceeds its fixed scenery budget: '+JSON.stringify(sample.stats));
-   const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'dundas-'+offset+'.png'),Buffer.from(shot.data,'base64'));
+   assertBudget(sample);
+   if([0,6,13,15,16,26,33].includes(offset)&&(!sample.rooms.length||!sample.retail.rooms||!sample.retail.instances||!sample.facades.instances||!sample.facades.counts.cornice||!sample.facades.counts.archedhood))throw Error('Commerce section lacks actual Blender shop contents or architectural detail: '+JSON.stringify({offset,retail:sample.retail,facades:sample.facades}));
+   if(offset===36&&(!sample.retail.furniture||!sample.facades.counts.cornice||!sample.facades.counts.archedhood))throw Error('Residential approach lacks furnished sidewalks and heritage house details');
+   await photo('dundas-'+offset);
   }
   if(new Set(samples.map(s=>s.hash)).size<10)throw Error('Neighbourhood geometry does not change along Dundas');
   const landmarks=samples.flatMap(s=>s.landmarks);
   for(const [id,side] of [['ago',-1],['hospital',1],['square',-1],['spectrum',-1],['regent-park',1],['library',1],['station',-1]])if(!landmarks.some(f=>f.id===id&&f.side===side))throw Error('Missing or misplaced '+id);
   if(!landmarks.some(f=>f.id==='library'&&f.index>33.12)||!landmarks.some(f=>f.id==='spectrum'&&f.index<29.12))throw Error('Landmark occupies the wrong intersection corner');
   if(!await evaluate('queenStreet.city.districts.group.visible&&!queenStreet.city.queenScenery.visible'))throw Error('Queen scenery shows through Dundas');
+  // Warm every possible resident offset, including the intermediate ones that
+  // a two-stop section advance normally skips. Compare after all lazy uploads.
+  for(let offset=0;offset<=36;offset++)assertBudget(await evaluate('window.__districtStage('+offset+')'));
   const baseline=await evaluate('window.__districtStage(0)');
-  for(const offset of [...stages].reverse()){
+  for(let offset=36;offset>=0;offset--){
    const s=await evaluate(`window.__districtStage(${offset})`);
-   if(s.objects!==baseline.objects||s.geometries!==baseline.geometries||s.textures!==baseline.textures)throw Error('Scenery resources grow between sections: '+JSON.stringify({baseline,s}));
+   assertBudget(s);
+   if(s.resources!==baseline.resources||s.objects!==baseline.objects||s.geometries!==baseline.geometries||s.textures!==baseline.textures)throw Error('Scenery resources grow or change identity between sections: '+JSON.stringify({baseline,s}));
   }
+  await evaluate('window.__districtStage(6,true)');
+  if(!await evaluate('queenStreet.city.districts.retail.stats.rooms>0&&new Set(queenStreet.city.districts.displays.map(w=>w.lighting.style)).size>=3&&queenStreet.city.materials.shopStrip0.emissiveIntensity>0'))throw Error('Dundas shops lost their varied interior night lighting');
+  await photo('dundas-shops-night');
   await evaluate('window.__districtStage(23,true)');
   if(!await evaluate('queenStreet.city.scenery.windowLighting.night.value===1&&queenStreet.city.scenery.windowLighting.windows.length>0'))throw Error('Dundas windows do not supply nighttime pavement light');
   const nightShot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'dundas-downtown-night.png'),Buffer.from(nightShot.data,'base64'));
   await evaluate('window.__districtStage(0);queenStreet.view.update=window.__districtView;queenStreet.restart()');
   if(routes)await evaluate('(()=>{const a=queenStreet;window.__districtStage(2);const s=a.captureSession(),manifest=document.querySelector("link[rel=manifest]");sessionStorage.setItem("queen-street-update-session:"+new URL("./",manifest.href).href,JSON.stringify(s));sessionStorage.setItem("route-checkpoint-expected",JSON.stringify({offset:a.route.stopOffset,z:a.state.z}));})()');
-  console.log('PASS: Distinct Dundas scenery, hidden Queen facades, stable geometry/textures across every district and night window lighting');
+  console.log('PASS: Distinct Dundas scenery with Queen-quality authored assets, recessed shops and mapped materials; 37 offsets retain bounded resources and night window lighting');
   await writeFile(join(output,'districts.json'),JSON.stringify(samples,null,2));
  }
  if(atmosphere){
