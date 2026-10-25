@@ -51,7 +51,7 @@ for(const mode of ['one','doors','watch'])for(const hz of [20,60,144]){
  step(1/60,1);assert.equal(events.length,2,'manual stop then power rings once');
 }
 {
- const {ride,events,step}=setup();ride.setAlwaysGreen(false);ride.route={...route,crossings:[{z:21}]};
+ const {ride,events,step}=setup();ride.setAlwaysGreen(false);ride.setStopAtLights(true);ride.route={...route,crossings:[{z:21}]};
  ride.state.time=28;ride.go();for(let i=0;i<200;i++){step();if(ride.state.z===1)break;}
  assert.equal(ride.state.z,1);assert.equal(ride.state.speed,0);assert.equal(events.length,1);
  for(let i=0;i<60;i++)step();assert.equal(events.length,1);

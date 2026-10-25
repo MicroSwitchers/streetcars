@@ -1,10 +1,10 @@
 // Engine-neutral ride logic. Just watch alone departs and repeats automatically.
 export class Ride {
- constructor(route,rig,mode='one'){this.route=route;this.rig=rig;this.state={};this.mode=mode;this.cruise=20/3.6;this.alwaysGreen=false;this.stopAtLights=true;this.dwellSeconds=10;this.stopEvery=1;this.restart();}
+ constructor(route,rig,mode='one'){this.route=route;this.rig=rig;this.state={};this.mode=mode;this.cruise=20/3.6;this.alwaysGreen=true;this.stopAtLights=false;this.dwellSeconds=5;this.stopEvery=1;this.restart();}
  scheduled(index){return index===this.route.stops.length-1||index%this.stopEvery===0;}
  nextScheduledStop(index){while(index<this.route.stops.length&&!this.scheduled(index))index++;return index;}
  setStopEvery(value){this.stopEvery=+value===2?2:1;const s=this.state;let index=this.route.stops.findIndex(stop=>stop.z>s.z+.02);if(index<0)index=this.route.stops.length;s.nextStop=this.nextScheduledStop(index);}
- setDwellSeconds(value){this.dwellSeconds=[0,5,10,15,20,30].includes(+value)?+value:10;}
+ setDwellSeconds(value){this.dwellSeconds=[0,5,10,15,20,30].includes(+value)?+value:5;}
  get remainingDwell(){return this.state.doors&&this.state.currentStop>=0?Math.max(0,this.dwellSeconds-this.state.dwell):0;}
  get dwellReady(){return this.dwellSeconds===0||this.remainingDwell<=1e-7;}
  setAlwaysGreen(value){this.alwaysGreen=!!value;this.syncSignal();}

@@ -51,7 +51,7 @@ the new worker is allowed to install.
 
 An installed update applies automatically when the ride is paused, waiting to
 start, or dwelling at the last stop. Position, selected stops, door state, dwell
-timer, day/night and weather clocks, settings and pause state survive the reload.
+timer, weather clock, settings and pause state survive the reload. Every page load resets the lighting clock to morning daylight.
 An active ride continues until a safe point. Other open tabs retain their older
 cached assets until they can update too. Old caches are removed only after all
 remaining clients report the current release.
@@ -133,8 +133,8 @@ Auto now starts iPads in the forward Balanced profile: 1,100,000 drawing pixels,
 
 ## Morning starts and smooth dawn
 
-New launches and fresh rides start at the morning/daylight beginning of the clock, even if a night choice was saved. Other preferences persist. An automatic application-update checkpoint continues its existing lighting clock and any in-progress manual fade, preventing an update from flashing a running night scene into daylight.
+New launches and fresh rides start at the morning/daylight beginning of the clock, even if a night choice was saved. Other preferences persist. Application-update and graphics-recovery reloads also reset the lighting clock and any manual fade to morning, while retaining the ride position and other settings. The morning clock waits for the first departure; an explicit Night selection still works before departure. In-place graphics restoration retains lighting continuity.
 
 Dawn now takes 60 seconds; full night remains short at 12 seconds. The Day/Night control fades over eight seconds and supports reversing midway. On the iPad renderer, cached day/night/weather reflection atlases are mixed in a small GPU pass rather than swapping maps at 50% night. The scene uses one stable blended environment texture, keeping the main material shaders lightweight. Balanced increases to 1.1 million drawing pixels and 1536-pixel sun shadows; Low and the recovery fallback remain unchanged.
 
-`node qa/check_live.mjs <PWA URL> --ipad --morning --dawn` verifies saved-night overrides, the higher budget, rendered dawn continuity, eight-second manual fades and morning startup offline. Reflection-map identity stays stable across dawn. An update checkpoint still restores its clock for a continuous ride.
+`node qa/check_live.mjs <PWA URL> --ipad --morning --dawn` verifies saved-night overrides, the higher budget, rendered dawn continuity, eight-second manual fades and morning startup offline. Reflection-map identity stays stable across dawn. The morning check also seeds a nighttime update/recovery checkpoint and verifies that the offline reload restores the ride in daylight. Always green defaults on and door dwell defaults to five seconds, with a one-time migration of the older defaults; subsequent choices persist.

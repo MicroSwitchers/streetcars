@@ -3,6 +3,7 @@ import {Ride} from '../dist/ride.js';
 import {AdaptiveQuality,QUALITY,initialQuality,renderRatio} from '../dist/performance.js';
 const route={start:0,end:205,stops:[20,60,100,140,180].map(z=>({z})),crossings:[]};
 function rig(){return {doors:{front:0,rear:0},target:0,setDoor(which,v,instant){this.target=v;if(instant)this.doors.front=this.doors.rear=v;},setDistance(v){this.distance=v;},setBrake(){},update(dt){const change=Math.sign(this.target-this.doors.front)*Math.min(Math.abs(this.target-this.doors.front),dt);this.doors.front+=change;this.doors.rear=this.doors.front;}};}
+const defaults=new Ride(route,rig());assert.equal(defaults.alwaysGreen,true);assert.equal(defaults.stopAtLights,false);assert.equal(defaults.dwellSeconds,5);defaults.state.time=30;defaults.syncSignal();assert.equal(defaults.state.signal,'green');defaults.setDwellSeconds('invalid');assert.equal(defaults.dwellSeconds,5);
 let trips=0,timedHolds=0;
 for(const mode of ['one','doors','watch'])for(const stopEvery of [1,2])for(const dwell of [0,5,10,30])for(const hz of [20,60]){
  const model=rig(),ride=new Ride(route,model,mode);ride.setStopEvery(stopEvery);ride.setDwellSeconds(dwell);ride.setAlwaysGreen(true);
