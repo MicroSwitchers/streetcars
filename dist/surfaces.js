@@ -97,6 +97,33 @@ function worldSurface(material,metres){
  material.needsUpdate=true;
 }
 
+// Keep masonry courses at the same scale on both merged and pooled buildings.
+function worldMasonry(material){
+ const compile=material.onBeforeCompile,key=material.customProgramCacheKey();
+ material.onBeforeCompile=function(shader,renderer){
+   compile.call(this,shader,renderer);
+   shader.vertexShader=shader.vertexShader.replace('#include <project_vertex>',`
+     vec4 masonryPosition=vec4(transformed,1.);vec3 masonryNormal=normal;
+     #ifdef USE_INSTANCING
+       masonryPosition=instanceMatrix*masonryPosition;masonryNormal=mat3(instanceMatrix)*masonryNormal;
+     #endif
+     masonryPosition=modelMatrix*masonryPosition;masonryNormal=mat3(modelMatrix)*masonryNormal;
+     vec2 masonryUv=vec2(abs(masonryNormal.x)>abs(masonryNormal.z)?masonryPosition.z:masonryPosition.x,
+       abs(masonryNormal.y)>.5?masonryPosition.z:masonryPosition.y)/vec2(.88,1.08);
+     #ifdef USE_MAP
+       vMapUv=masonryUv;
+     #endif
+     #ifdef USE_BUMPMAP
+       vBumpMapUv=masonryUv;
+     #endif
+     #ifdef USE_ROUGHNESSMAP
+       vRoughnessMapUv=masonryUv;
+     #endif
+     #include <project_vertex>`);
+ };
+ material.customProgramCacheKey=()=>key+'-world-masonry-v1';material.needsUpdate=true;
+}
+
 // Embedded rail heads, grooves and paint share the pavement's depth surface.
 // Integrating each strip over its pixel footprint prevents subpixel sparkle,
 // without stacking near-coplanar geometry or widening the physical rail gauge.
@@ -189,7 +216,7 @@ export function finishSurfaces(mats,renderer,route){
      b.fillStyle='#fff2d51c';b.fillRect(x+3,y+2,122,2);b.fillStyle='#281e1b33';b.fillRect(x+3,y+28,122,2);
      for(let n=0;n<50;n++){b.fillStyle=n%2?'#211c1520':'#ffe8c01d';b.fillRect(x+3+rnd()*120,y+4+rnd()*22,1+rnd()*5,1+rnd()*2);}
    }
-   const m=mats['brick'+index];m.map=texture(c);m.bumpMap=relief(c);m.bumpScale=.045;m.roughness=1;m.roughnessMap=roughness(c,.82,1.);weathering(m,.13,.14);
+   const m=mats['brick'+index];m.map=texture(c);m.bumpMap=relief(c);m.bumpScale=.045;m.roughness=1;m.roughnessMap=roughness(c,.82,1.);weathering(m,.13,.14);worldMasonry(m);
  });
 
  const windows=canvas(256),wc=windows.getContext('2d'),sky=wc.createLinearGradient(0,0,100,256);

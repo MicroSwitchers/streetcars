@@ -178,6 +178,9 @@ export function createDaylight(renderer,scene){
    hemi.color.lerp(goldenSky,gold*.45);hemi.groundColor.lerp(goldenGround,gold*.45);hemi.intensity*=1-gold*.10;
    fill.intensity*=1-gold*.2;scene.environmentIntensity*=1-gold*.05;
    scene.fog.color.lerp(goldenFog,gold*.35);renderer.toneMappingExposure=1;
+   // The tablet's short far plane clips the full sky dome. Its inexpensive
+   // background must follow the same atmosphere instead of staying daytime grey.
+   if(renderer.userData.compatibility)scene.background.copy(scene.fog.color);
  }
  function addStreetcar(car,rig){
    streetcarRigs.add(rig);rig.setNight(nightAmount);

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 // Static additions share the main street's material batches and do not enter the rail corridor.
 export function buildNeighbourhood(c){
- const {scene,route,mats,mat,box,cylinder,rod,add,sign,rnd,leafGeo,canvasMap}=c;
+ const {scene,route,mats,mat,box,cylinder,rod,add,sign,rnd,leafGeo,canvasMap,setSceneryLayer=()=>{}}=c;
  mat('parkGrass',0x6c7c50);mat('fence',0x3d4b40,.68,.3);mat('roofTile',0x73564a);mat('path',0xb7ad94);mat('warmStone',0xb6a58a);mat('rust',0x8c5e46);
  const pitchedRoof=new THREE.BufferGeometry();pitchedRoof.setAttribute('position',new THREE.Float32BufferAttribute([-.5,0,-.5,.5,0,-.5,-.5,0,.5,.5,0,.5,-.5,1,0,.5,1,0],3));pitchedRoof.setIndex([0,2,4,1,5,3,0,4,5,0,5,1,2,3,5,2,5,4,0,1,3,0,3,2]);pitchedRoof.computeVertexNormals();
  // Side streets continue beyond the crossing instead of ending at empty asphalt.
@@ -47,6 +47,7 @@ export function buildNeighbourhood(c){
      for(const side of [-1,1]){
        // Keep the centre intersection open; sidewalk strips meet the main sidewalk beyond it.
        for(let x=sideStreetSidewalkInnerEdge+3;x<137;x+=3)box('stone',side*x,.184,cross.z+end*8.5,.018,.004,3.05);
+       setSceneryLayer(true);
        for(let j=0;j<11;j++){
          const x=side*(15.5+j*10.8),width=10.65,depth=10.1;
          const variation=(j*2+Math.abs(cross.z/100)+end+4)%4;
@@ -152,6 +153,7 @@ export function buildNeighbourhood(c){
          }
          sideStreetBuildings++;
        }
+       setSceneryLayer(false);
        for(let x=24;x<137;x+=23){cylinder('pole',side*x,3.3,cross.z+end*8.1,.065,6.2);rod('pole',[side*x,6.3,cross.z+end*8.1],[side*x,6.3,cross.z+end*6.5],.045);box('dark',side*x,6.26,cross.z+end*6.4,.24,.10,.48);}
      }
    }
@@ -169,6 +171,7 @@ export function buildNeighbourhood(c){
    }
  }
  // A small green setback interrupts the north-side row near the start of the drive.
+ setSceneryLayer(true);
  const park={minZ:-178,maxZ:-143,frontX:-11.45,backX:-28};
  box('parkGrass',-19.5,.12,-160.5,16.2,.16,34.7);box('path',-18.9,.216,-160.4,15.0,.024,2.45);
  for(const z of [park.minZ,park.maxZ]){box('warmStone',-19.6,.38,z,16.8,.40,.36);rod('fence',[-27.7,1.05,z],[-11.5,1.05,z],.025);for(let x=-27.5;x<-11.5;x+=.48)rod('fence',[x,.56,z],[x,1.06,z],.015);}
@@ -194,5 +197,6 @@ export function buildNeighbourhood(c){
    for(const [a,b] of [[[.57,-.58],[.92,-.1]],[[.92,-.1],[.57,.58]],[[.57,.58],[.57,0]],[[.57,0],[.92,-.1]],[[.57,0],[.94,.35]],[[.94,.35],[.57,.58]],[[.92,-.1],[.94,.35]]])rod('rust',[-12,a[0],z+a[1]],[-12,b[0],z+b[1]],.018);
    box('rubber',-12,.98,z-.12,.14,.055,.24);rod('steel',[-12,.96,z+.35],[-12,1.14,z+.43],.018);rod('rubber',[-12.2,1.14,z+.43],[-11.8,1.14,z+.43],.022);
  }
+ setSceneryLayer(false);
  return {pitchedRoof,park,sideStreetBuildings,sideStreetWindows,finishedEndWalls,sideElevationDetails,sideStreetAwnings,crosswalkStripes,mainCrosswalkStripeCount,sideCrosswalkStripeCount,mainCrosswalkCenterOffset,sideCrosswalkCenterOffset,mainCrosswalkSpacing:1.30,sideCrosswalkSpacing:1.38,mainCrosswalkOrientation:'along-Queen-Street',sideCrosswalkOrientation:'along-side-street',mainCrosswalkStripeSize:[.46,3.2],sideCrosswalkStripeSize:[3.2,.46],sideStreetSidewalkInnerEdge};
 }

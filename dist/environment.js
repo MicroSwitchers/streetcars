@@ -5,6 +5,7 @@ import {mergeGeometries} from 'geometry-utils';
 import {createFoliage} from './surfaces.js';
 import {createStreetscape} from './streetscape.js';
 import {createArchitecture} from './architecture.js';
+import {createDundasScenery} from './dundas-scenery.js';
 
 import {createRouteSection} from './routes.js';
 export const ROUTE=createRouteSection();
@@ -12,6 +13,8 @@ export const ROUTE=createRouteSection();
 export function buildEnvironment(scene,trafficCars,streetProps,architecturalAssets,route=ROUTE){
  let seed=501;const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
  const mats={},batches=new Map(),dummy=new THREE.Object3D();
+ const queenScenery=new THREE.Group();queenScenery.name='Queen_Streetscape';scene.add(queenScenery);
+ let sceneryLayer=false;const setSceneryLayer=value=>sceneryLayer=value;
  const foliage=createFoliage();
  const boxGeo=new THREE.BoxGeometry(1,1,1),cylGeo=new THREE.CylinderGeometry(1,1,1,12),leafGeo=foliage.geometry,linePoints=[];
  const mat=(name,color,roughness=.85,metalness=0)=>mats[name]=new THREE.MeshStandardMaterial({color,roughness,metalness});
@@ -19,10 +22,10 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
  mat('awningRed',0x9e4a3d);mat('awningGreen',0x536b58);mat('awningBlue',0x4e6970);mat('awningOchre',0xb38a50);mat('awningCream',0xe7d7b6);
  mats.storeGlass=new THREE.MeshStandardMaterial({color:0xd7e4e6,roughness:.16,metalness:.12,transparent:true,opacity:.14,depthWrite:false,side:THREE.DoubleSide});
  const storeGlazingGeometries=[];let storeGlazingCount=0;
- function add(geometry,material,x,y,z,sx,sy,sz,ry=0,rx=0,rz=0){const cell=Math.floor(z/96),key=cell+geometry.uuid+material.uuid;if(!batches.has(key))batches.set(key,{geometry,material,cell,matrices:[]});dummy.position.set(x,y,z);dummy.rotation.set(rx,ry,rz);dummy.scale.set(sx,sy,sz);dummy.updateMatrix();batches.get(key).matrices.push(dummy.matrix.clone());}
+ function add(geometry,material,x,y,z,sx,sy,sz,ry=0,rx=0,rz=0){const cell=Math.floor(z/96),key=String(sceneryLayer)+cell+geometry.uuid+material.uuid;if(!batches.has(key))batches.set(key,{geometry,material,cell,sceneryLayer,matrices:[]});dummy.position.set(x,y,z);dummy.rotation.set(rx,ry,rz);dummy.scale.set(sx,sy,sz);dummy.updateMatrix();batches.get(key).matrices.push(dummy.matrix.clone());}
  const box=(m,x,y,z,sx,sy,sz,ry=0)=>add(boxGeo,mats[m],x,y,z,sx,sy,sz,ry);
  const cylinder=(m,x,y,z,r,h)=>add(cylGeo,mats[m],x,y,z,r,h,r);
- function rod(m,a,b,r){const av=new THREE.Vector3(...a),bv=new THREE.Vector3(...b),delta=bv.clone().sub(av);dummy.position.copy(av.add(bv).multiplyScalar(.5));dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.clone().normalize());dummy.scale.set(r,delta.length(),r);dummy.updateMatrix();const cell=Math.floor(dummy.position.z/96),key=cell+cylGeo.uuid+mats[m].uuid;if(!batches.has(key))batches.set(key,{geometry:cylGeo,material:mats[m],cell,matrices:[]});batches.get(key).matrices.push(dummy.matrix.clone());}
+ function rod(m,a,b,r){const av=new THREE.Vector3(...a),bv=new THREE.Vector3(...b),delta=bv.clone().sub(av);dummy.position.copy(av.add(bv).multiplyScalar(.5));dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.clone().normalize());dummy.scale.set(r,delta.length(),r);dummy.updateMatrix();const cell=Math.floor(dummy.position.z/96),key=String(sceneryLayer)+cell+cylGeo.uuid+mats[m].uuid;if(!batches.has(key))batches.set(key,{geometry:cylGeo,material:mats[m],cell,sceneryLayer,matrices:[]});batches.get(key).matrices.push(dummy.matrix.clone());}
  const wire=(a,b)=>linePoints.push(...a,...b);
  // Small generated surface maps avoid external image requests and repeat seamlessly.
  function brickTexture(base){const c=document.createElement('canvas');c.width=256;c.height=256;const ctx=c.getContext('2d');ctx.fillStyle='#776e61';ctx.fillRect(0,0,256,256);for(let row=0;row<16;row++)for(let col=-1;col<5;col++){const n=.82+rnd()*.26;ctx.fillStyle=`rgb(${base.map(v=>Math.round(v*n)).join(',')})`;ctx.fillRect(col*64+(row%2)*32+1,row*16+1,62,14);}const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(8,5);t.anisotropy=4;return t;}
@@ -101,12 +104,13 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
 
    }
  }
- const neighbourhood=buildNeighbourhood({scene,route,mats,mat,box,cylinder,rod,add,sign,rnd,leafGeo,canvasMap});
+ const neighbourhood=buildNeighbourhood({scene:queenScenery,route,mats,mat,box,cylinder,rod,add,sign,rnd,leafGeo,canvasMap,setSceneryLayer});
  const streetscape=createStreetscape({scene,route,mats,mat,box,cylinder,rod,add,sign,leafGeo},streetProps);
  const architecture=createArchitecture({scene,route,mats},architecturalAssets);
  const shopNames=['PAPER & INK','QUEEN RECORDS','THE CORNER CAFE','WEST END BOOKS','BELLWOODS CYCLE','STUDIO 501','GOLDEN PHO','THREAD & NEEDLE','CITY FLOWERS','NIGHT OWL','VINYL EXCHANGE','QUEEN HARDWARE','PARKDALE MARKET','SILVER SCREEN','GOOD NEIGHBOUR','THE LITTLE BAKERY'];
  const signColours=['#283e37','#883e31','#303f52','#d1bc83','#344548','#6c513d'];
  let shop=0,awningCount=0,upperWindowCount=0,facadeDetailCount=0,rooflineDetailCount=0,shopfrontCount=0,shopfrontFeatureCount=0;
+ setSceneryLayer(true);
  for(const side of [-1,1]){
    for(let z=-518;z<675;){const width=7.5+rnd()*4.4,mid=z+width/2;z+=width+.12;if(route.crossings.some(c=>Math.abs(mid-c.z)<width/2+11)||(side===-1&&mid+width/2>-179&&mid-width/2<-142))continue;
      const height=7.0+rnd()*7.0,material=shop%7===0?plaster[shop%3]:'brick'+Math.floor(rnd()*5),depth=8+rnd()*3;
@@ -241,17 +245,20 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
      shop++;
    }
  }
+ setSceneryLayer(false);
  // Street furniture, catenary supports and planted pockets along both sidewalks.
  for(let z=-510;z<=665;z+=34){
    if(route.crossings.some(c=>Math.abs(z-c.z)<14))continue;
    for(const side of [-1,1]){
      cylinder('pole',side*8.05,3.55,z,.078,7.1);rod('pole',[side*8.05,6.85,z],[side*6.3,6.85,z],.05);box('dark',side*6.25,6.80,z,.65,.12,.28);
      wire([side*8.05,6.35,z],[0,5.8,z]);
+     setSceneryLayer(true);
      if(Math.round(z)%3!==0){
        cylinder('bark',side*9.2,1.70,z+6,.11,3.1);box('dark',side*9.2,.19,z+6,1.25,.018,1.25);
        for(let j=0;j<6;j++){const a=j*2.40,dx=Math.sin(a)*.85,dz=Math.cos(a)*.85,y=3.3+rnd()*1.3;rod('bark',[side*9.2,2.15,z+6],[side*9.2+dx,y,z+6+dz],.038);const radius=.65+rnd()*.48;add(leafGeo,mats[['leaf','leaf2','leaf3'][j%3]],side*9.2+dx,y+.43,z+6+dz,radius,radius*.95,radius*1.10);}
      }
      streetscape.streetFurniture(side,z);
+     setSceneryLayer(false);
    }
  }
  for(const x of [route.trackX,-route.trackX])wire([x,route.wireY,-525],[x,route.wireY,675]);
@@ -276,28 +283,36 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
    }
    cylinder('dark',-3.2,.015,z+10,.24,.009);cylinder('steel',-3.2,.021,z+10,.21,.006);
  }
+ setSceneryLayer(true);
  // Distant skyline and a restrained CN Tower silhouette south-east of the corridor.
  for(const side of [-1,1])for(let z=-510;z<730;z+=34){const h=16+rnd()*35;const x=side*(65+rnd()*50),w=12+rnd()*14;box('skyline',x,h/2,z,w,h,15+rnd()*16);for(let y=5;y<h-2;y+=3.8)box('glass',x-side*(w/2+.015),y,z,.025,.85,11); }
  cylinder('skyline',78,48,190,1.4,96);cylinder('skyline',78,78,190,5.8,4);cylinder('dark',78,80,190,4.5,1.5);cylinder('skyline',78,96,190,.38,31);cylinder('skyline',78,112,190,.12,9);
  const scenery=streetscape.finish();
  const architecturalDetails=architecture.finish();
+ queenScenery.add(...scenery.meshes,...architecturalDetails.meshes);
+ setSceneryLayer(false);
  const groundDetails=new Set(['road','trackbed','patch','groove','steel','white','yellow','stone'].map(name=>mats[name]));
  const singleGeometryGroups=new Map();
- for(const {geometry,material,matrices,cell} of batches.values()){
+ for(const {geometry,material,matrices,cell,sceneryLayer:original} of batches.values()){
+   const parent=original?queenScenery:scene;
    if(geometry===boxGeo&&[mats.brick0,mats.brick1,mats.brick2,mats.brick3,mats.brick4].includes(material)){
      material.map.repeat.set(1,1);
      const geometries=matrices.map(matrix=>{const g=geometry.clone().applyMatrix4(matrix),position=g.attributes.position,normal=g.attributes.normal,uv=g.attributes.uv;for(let i=0;i<position.count;i++){const x=position.getX(i),y=position.getY(i),z=position.getZ(i);uv.setXY(i,(Math.abs(normal.getX(i))>.5?z:x)/.88,(Math.abs(normal.getY(i))>.5?z:y)/1.08);}return g;});
-     const merged=mergeGeometries(geometries);const mesh=new THREE.Mesh(merged,material);mesh.castShadow=mesh.receiveShadow=true;scene.add(mesh);geometries.forEach(g=>g.dispose());continue;
+     const merged=mergeGeometries(geometries);const mesh=new THREE.Mesh(merged,material);mesh.castShadow=mesh.receiveShadow=true;parent.add(mesh);geometries.forEach(g=>g.dispose());continue;
    }
-   if(matrices.length===1){const key=cell+material.uuid;if(!singleGeometryGroups.has(key))singleGeometryGroups.set(key,{material,geometries:[]});singleGeometryGroups.get(key).geometries.push(geometry.clone().applyMatrix4(matrices[0]));continue;}
-   const mesh=new THREE.InstancedMesh(geometry,material,matrices.length);matrices.forEach((m,i)=>mesh.setMatrixAt(i,m));mesh.instanceMatrix.needsUpdate=true;mesh.castShadow=!groundDetails.has(material);mesh.receiveShadow=true;mesh.computeBoundingSphere();scene.add(mesh);
+   if(matrices.length===1){const key=String(original)+cell+material.uuid;if(!singleGeometryGroups.has(key))singleGeometryGroups.set(key,{material,parent,geometries:[]});singleGeometryGroups.get(key).geometries.push(geometry.clone().applyMatrix4(matrices[0]));continue;}
+   const mesh=new THREE.InstancedMesh(geometry,material,matrices.length);matrices.forEach((m,i)=>mesh.setMatrixAt(i,m));mesh.instanceMatrix.needsUpdate=true;mesh.castShadow=!groundDetails.has(material);mesh.receiveShadow=true;mesh.computeBoundingSphere();parent.add(mesh);
  }
- for(const {material,geometries} of singleGeometryGroups.values()){const merged=mergeGeometries(geometries);const mesh=new THREE.Mesh(merged,material);mesh.castShadow=!groundDetails.has(material);mesh.receiveShadow=true;scene.add(mesh);geometries.forEach(g=>g.dispose());}
+ for(const {material,parent,geometries} of singleGeometryGroups.values()){const merged=mergeGeometries(geometries);const mesh=new THREE.Mesh(merged,material);mesh.castShadow=!groundDetails.has(material);mesh.receiveShadow=true;parent.add(mesh);geometries.forEach(g=>g.dispose());}
  routeTexture.needsUpdate=true;const routeLabels=new THREE.Mesh(mergeGeometries(routeSignGeos),routeSignMat);routeLabels.name='Route_Street_And_Stop_Signs';scene.add(routeLabels);
- at.needsUpdate=true;const labels=new THREE.Mesh(mergeGeometries(signGeos),signMat);scene.add(labels);
- const storeGlazing=new THREE.Mesh(mergeGeometries(storeGlazingGeometries),mats.storeGlass);storeGlazing.name='Recessed_Storefront_Glazing';storeGlazing.renderOrder=2;storeGlazing.castShadow=false;storeGlazing.receiveShadow=false;scene.add(storeGlazing);storeGlazingGeometries.forEach(geometry=>geometry.dispose());
+ at.needsUpdate=true;const labels=new THREE.Mesh(mergeGeometries(signGeos),signMat);queenScenery.add(labels);
+ const storeGlazing=new THREE.Mesh(mergeGeometries(storeGlazingGeometries),mats.storeGlass);storeGlazing.name='Recessed_Storefront_Glazing';storeGlazing.renderOrder=2;storeGlazing.castShadow=false;storeGlazing.receiveShadow=false;queenScenery.add(storeGlazing);storeGlazingGeometries.forEach(geometry=>geometry.dispose());
  const wires=new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(linePoints,3)),new THREE.LineBasicMaterial({color:0x34463e}));scene.add(wires);
+ const districts=createDundasScenery({scene,route,mats,foliage});let cityNight=0;
  function setRoute(){
+   queenScenery.visible=route.id!=='dundas';districts.setRoute();
+   scenery.windowLighting.setSources(queenScenery.visible?scenery.displays:districts.displays);
+   streetscape.setNight(cityNight);districts.setNight(cityNight);
    const ac=routeContext;
    signals.forEach((signal,i)=>signal.cross=route.crossings[Math.floor(i/2)]);
    for(const {binding:{type,slot},px,py} of routeSigns){
@@ -311,5 +326,5 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
    routeTexture.needsUpdate=true;
  }
  setRoute();
- return {setRoute,routeSigns,routeTexture,signals,materials:mats,actors,neighbourhood,scenery,architecture:architecturalDetails,buildingCount:shop,awningCount,upperWindowCount,facadeDetailCount,rooflineDetailCount,shopfrontCount,shopfrontFeatureCount,storeGlazingCount,storeGlazing,signCount:signIndex,update(time,dt,alwaysGreen=false){actors.update(time,dt,alwaysGreen);},setNight(amount){const night=THREE.MathUtils.clamp(amount,0,1);actors.setNight(night);streetscape.setNight(night);mats.glass.emissive.setHex(0xffffff);mats.glass.emissiveIntensity=.42*night;signMat.emissive.copy(windowGlow);signMat.emissiveIntensity=.10*night;routeSignMat.emissive.copy(windowGlow);routeSignMat.emissiveIntensity=.10*night;for(let i=0;i<4;i++){mats['display'+i].emissive.copy(windowGlow);mats['display'+i].emissiveIntensity=.18*night;}},updateSignals(time,alwaysGreen=false){const phase=time%42,state=alwaysGreen||phase<23?'green':phase<27?'amber':'red';signals.forEach(({group})=>group.children.forEach((lamp,i)=>lamp.material.color.setHex(i===(state==='red'?0:state==='amber'?1:2)?[0xff6c46,0xffc76c,0x9edb89][i]:0x29352c)));return state;}};
+ return {setRoute,queenScenery,districts,routeSigns,routeTexture,signals,materials:mats,actors,neighbourhood,scenery,architecture:architecturalDetails,buildingCount:shop,awningCount,upperWindowCount,facadeDetailCount,rooflineDetailCount,shopfrontCount,shopfrontFeatureCount,storeGlazingCount,storeGlazing,signCount:signIndex,update(time,dt,alwaysGreen=false){actors.update(time,dt,alwaysGreen);},setNight(amount){const night=THREE.MathUtils.clamp(amount,0,1);cityNight=night;actors.setNight(night);streetscape.setNight(night);districts.setNight(night);mats.glass.emissive.setHex(0xffffff);mats.glass.emissiveIntensity=.42*night;signMat.emissive.copy(windowGlow);signMat.emissiveIntensity=.10*night;routeSignMat.emissive.copy(windowGlow);routeSignMat.emissiveIntensity=.10*night;for(let i=0;i<4;i++){mats['display'+i].emissive.copy(windowGlow);mats['display'+i].emissiveIntensity=.18*night;}},updateSignals(time,alwaysGreen=false){const phase=time%42,state=alwaysGreen||phase<23?'green':phase<27?'amber':'red';signals.forEach(({group})=>group.children.forEach((lamp,i)=>lamp.material.color.setHex(i===(state==='red'?0:state==='amber'?1:2)?[0xff6c46,0xffc76c,0x9edb89][i]:0x29352c)));return state;}};
 }

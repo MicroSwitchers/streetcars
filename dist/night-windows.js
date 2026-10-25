@@ -52,8 +52,12 @@ function variedWindows(material){
 // transparent decals. Soft mullion shadows widen away from each shop window.
 export function createWindowLighting(scene,mats,displays){
  const count=24,night={value:0},positions={value:Array.from({length:count},()=>new THREE.Vector4())},colors={value:Array.from({length:count},()=>new THREE.Vector4())};
- const windows=displays.filter(b=>b.lighting.style!==6).map(b=>({...b,lightColor:new THREE.Color(b.lighting.color).multiplyScalar(b.lighting.power)}));
- const shopSources=windows.filter((w,i)=>i===windows.findIndex(b=>b.index===w.index));
+ let windows=[],shopSources=[];
+ function setSources(sources){
+   windows=sources.filter(b=>b.lighting.style!==6).map(b=>({...b,lightColor:new THREE.Color(b.lighting.color).multiplyScalar(b.lighting.power)}));
+   shopSources=windows.filter((w,i)=>i===windows.findIndex(b=>b.index===w.index));
+   const z=lastFocus;lastFocus=Infinity;update(Number.isFinite(z)?z:0);
+ }
  let lastFocus=Infinity,amount=0;
  const irradiance=`
    vec3 shopIrradiance=vec3(0.);
@@ -108,13 +112,14 @@ export function createWindowLighting(scene,mats,displays){
      const w=shopSources.filter(b=>b.side===f.side&&b.index%2===f.group).sort((a,b)=>Math.abs(a.z-z)-Math.abs(b.z-z))[0];
      f.window=w;if(!w){f.light.intensity=0;continue;}
      const fade=1-THREE.MathUtils.smoothstep(Math.abs(w.z-z),4,8.5);
-     f.light.color.setHex(w.lighting.color);f.light.position.set(w.side*11.80,2.40,w.z);
+     f.light.color.setHex(w.lighting.color);f.light.position.set(w.windowX+w.side*.91,2.40,w.z);
      f.light.intensity=amount*11*w.lighting.power*fade;
    }
  }
  const before=scene.onBeforeRender;
  scene.onBeforeRender=function(renderer,world,camera,target){before.call(this,renderer,world,camera,target);update(camera.position.z);};
- return {fixtures,windows,positions,colors,night,update,setNight(value){
+ setSources(displays);
+ return {fixtures,get windows(){return windows;},positions,colors,night,update,setSources,setNight(value){
    const next=THREE.MathUtils.clamp(value,0,1);if(next===amount)return;
    amount=next;night.value=amount;const z=lastFocus;lastFocus=Infinity;if(Number.isFinite(z))update(z);
  },dispose(){fixtures.forEach(f=>f.light.removeFromParent());scene.onBeforeRender=before;}};

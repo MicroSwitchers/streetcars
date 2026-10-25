@@ -8,7 +8,8 @@ const ipad=process.argv.includes('--ipad'),loss=process.argv.includes('--loss'),
 const sensory=process.argv.includes('--sensory'),phone=process.argv.includes('--phone');let sensoryExpected;
 const auto=process.argv.includes('--auto');
 const routes=process.argv.includes('--routes');
-const routeInput=routes||process.argv.includes('--route-input');
+const districts=process.argv.includes('--districts');
+const routeInput=routes||districts||process.argv.includes('--route-input');
 const morning=process.argv.includes('--morning'),dawn=process.argv.includes('--dawn'),atmosphere=process.argv.includes('--atmosphere');
 const output=join(qa,'renders-live-'+Date.now());await mkdir(output);
 const profile=await mkdtemp(join(qa,'headless-live-'));
@@ -20,7 +21,7 @@ try{
  const page=(await(await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(p=>p.type==='page');
  socket=new WebSocket(page.webSocketDebuggerUrl);await new Promise((r,j)=>{socket.onopen=r;socket.onerror=j;});
  let id=0;const pending=new Map(),errors=[];
- socket.onmessage=event=>{const m=JSON.parse(event.data),p=pending.get(m.id);if(m.method==='Runtime.exceptionThrown')errors.push(m.params.exceptionDetails.text+': '+m.params.exceptionDetails.exception?.description);if(p){pending.delete(m.id);m.error?p.reject(Error(JSON.stringify(m.error))):p.resolve(m.result);}};
+ socket.onmessage=event=>{const m=JSON.parse(event.data),p=pending.get(m.id);if(m.method==='Runtime.exceptionThrown')errors.push(m.params.exceptionDetails.text+': '+m.params.exceptionDetails.exception?.description);if(m.method==='Runtime.consoleAPICalled'&&m.params.type==='error'){const message=m.params.args.map(a=>a.value??a.description??'').join(' ');if(/WebGLProgram|shader error|VALIDATE_STATUS/i.test(message))errors.push(message);}if(p){pending.delete(m.id);m.error?p.reject(Error(JSON.stringify(m.error))):p.resolve(m.result);}};
  const send=(method,params={})=>new Promise((resolve,reject)=>{const request=++id;pending.set(request,{resolve,reject});socket.send(JSON.stringify({id:request,method,params}));});
  const evaluate=async expression=>{const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(JSON.stringify(r.exceptionDetails));return r.result?.value;};
  await send('Page.enable');await send('Runtime.enable');
@@ -148,7 +149,7 @@ try{
      const before=a.state.z,pending=a.routeTransition,elapsed=pending?.elapsed,switched=pending?.switched,speed=a.state.speed;
      a.step(.1);a.servedStops.forEach((served,index)=>{if(served)seen.add(index);});
      if(pending&&elapsed>0&&!switched&&a.routeTransition&&!a.routeTransition.switched&&speed>.1){if(a.state.z<=before)throw Error('Streetcar froze during a section fade');movingFadeFrames++;}
-     if(a.route.stopOffset!==lastOffset){sections++;if(a.route.stopOffset===0&&seen.size===total){looped=true;break;}lastOffset=a.route.stopOffset;}
+     if(a.route.stopOffset!==lastOffset){if(a.route.id==='dundas'&&a.city.districts.stats.overflow)throw Error('A Dundas section exhausted its scenery pool');sections++;if(a.route.stopOffset===0&&seen.size===total){looped=true;break;}lastOffset=a.route.stopOffset;}
      if(i%500===0)await new Promise(r=>setTimeout(r,0));
     }
     let after=0;a.scene.traverse(()=>after++);
@@ -163,6 +164,40 @@ try{
   const checkpoint=await evaluate('(()=>{const a=queenStreet;a.updateSettings({mode:"watch",doorDwell:0,volume:0});a.ride.trafficAhead=()=>null;for(let i=0;i<10000&&(a.route.stopOffset<2||a.routeTransition);i++)a.step(.1);a.setPaused(true);const s=a.captureSession(),manifest=document.querySelector("link[rel=manifest]");sessionStorage.setItem("queen-street-update-session:"+new URL("./",manifest.href).href,JSON.stringify(s));sessionStorage.setItem("route-checkpoint-expected",JSON.stringify({offset:a.route.stopOffset,z:a.state.z}));return {offset:a.route.stopOffset,z:a.state.z};})()');
   if(checkpoint.offset<2)throw Error('No later-section checkpoint was reached');
   }
+ }
+ if(districts){
+  await evaluate(`(()=>{const a=queenStreet;a.updateSettings({mode:'one',quality:'balanced',volume:0,weatherMode:'off',dayNightCycle:true,night:false});a.restart();a.setPaused(true);for(let i=0;i<81;i++)a.weather.update(.1,a.state.z,0,a.renderer.getPixelRatio(),false);window.__districtSnapshot=a.captureSession();window.__districtView=a.view.update;a.view.update=()=>{};window.__districtStage=(offset,night=false)=>{
+   const s=JSON.parse(JSON.stringify(window.__districtSnapshot));s.itinerary.offset=offset;s.ride.state.z=-150;if(!a.restoreSession(s))throw Error('Cannot stage scenery section '+offset);
+   const heroZ=offset===18?4:offset===23?-8:offset===29?-14:offset===30?-24:-124;
+   a.updateSettings({night});a.camera.clearViewOffset();a.camera.fov=58;a.camera.position.set(offset>=34?-5:5,7,heroZ-48);a.camera.lookAt(offset>=34?40:-16,5,heroZ);a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);
+   const d=a.city.districts;let objects=0,hash=0;a.scene.traverse(()=>objects++);d.group.traverse(o=>{if(o.instanceMatrix)for(let i=0;i<o.count*16;i++)hash=(Math.imul(hash,31)+Math.round(o.instanceMatrix.array[i]*100))|0;});
+   if(new Set(d.displays.map(w=>w.index)).size!==d.displays.length)throw Error('Shop lighting sources reuse storefront IDs');
+   return {offset,hash,objects,geometries:a.renderer.info.memory.geometries,textures:a.renderer.info.memory.textures,stats:JSON.parse(JSON.stringify(d.stats)),zones:d.zones,landmarks:d.landmarks,windowSources:a.city.scenery.windowLighting.windows.length};
+  };})()`);
+  const stages=[0,6,13,15,16,18,20,23,26,29,30,33,34,36];
+  const samples=[];
+  for(const offset of stages){
+   const sample=await evaluate(`window.__districtStage(${offset})`);samples.push(sample);
+   if(sample.stats.overflow||sample.stats.meshes>25||sample.stats.triangles>55000)throw Error('Dundas exceeds its fixed scenery budget: '+JSON.stringify(sample.stats));
+   const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'dundas-'+offset+'.png'),Buffer.from(shot.data,'base64'));
+  }
+  if(new Set(samples.map(s=>s.hash)).size<10)throw Error('Neighbourhood geometry does not change along Dundas');
+  const landmarks=samples.flatMap(s=>s.landmarks);
+  for(const [id,side] of [['ago',-1],['hospital',1],['square',-1],['spectrum',-1],['regent-park',1],['library',1],['station',-1]])if(!landmarks.some(f=>f.id===id&&f.side===side))throw Error('Missing or misplaced '+id);
+  if(!landmarks.some(f=>f.id==='library'&&f.index>33.12)||!landmarks.some(f=>f.id==='spectrum'&&f.index<29.12))throw Error('Landmark occupies the wrong intersection corner');
+  if(!await evaluate('queenStreet.city.districts.group.visible&&!queenStreet.city.queenScenery.visible'))throw Error('Queen scenery shows through Dundas');
+  const baseline=await evaluate('window.__districtStage(0)');
+  for(const offset of [...stages].reverse()){
+   const s=await evaluate(`window.__districtStage(${offset})`);
+   if(s.objects!==baseline.objects||s.geometries!==baseline.geometries||s.textures!==baseline.textures)throw Error('Scenery resources grow between sections: '+JSON.stringify({baseline,s}));
+  }
+  await evaluate('window.__districtStage(23,true)');
+  if(!await evaluate('queenStreet.city.scenery.windowLighting.night.value===1&&queenStreet.city.scenery.windowLighting.windows.length>0'))throw Error('Dundas windows do not supply nighttime pavement light');
+  const nightShot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'dundas-downtown-night.png'),Buffer.from(nightShot.data,'base64'));
+  await evaluate('window.__districtStage(0);queenStreet.view.update=window.__districtView;queenStreet.restart()');
+  if(routes)await evaluate('(()=>{const a=queenStreet;window.__districtStage(2);const s=a.captureSession(),manifest=document.querySelector("link[rel=manifest]");sessionStorage.setItem("queen-street-update-session:"+new URL("./",manifest.href).href,JSON.stringify(s));sessionStorage.setItem("route-checkpoint-expected",JSON.stringify({offset:a.route.stopOffset,z:a.state.z}));})()');
+  console.log('PASS: Distinct Dundas scenery, hidden Queen facades, stable geometry/textures across every district and night window lighting');
+  await writeFile(join(output,'districts.json'),JSON.stringify(samples,null,2));
  }
  if(atmosphere){
   const report=await evaluate(`(async()=>{
