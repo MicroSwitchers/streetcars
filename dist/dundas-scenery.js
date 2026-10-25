@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {DUNDAS_DISTRICTS,dundasDistrictAt,dundasIndexAtZ} from './dundas-districts.js';
 import {shopLighting} from './night-windows.js';
-import {createDundasRetail} from './dundas-retail.js';
+import {createDundasRetail,dundasShopType} from './dundas-retail.js';
 import {createDundasFacades} from './dundas-facades.js';
 
 // A complete resident 505 streetscape, reusing the same GPU buffers at every
@@ -45,12 +45,14 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
  }
  // Matrix capacities follow the maximum demand across all 37 resident route
  // offsets. Capacity does not increase draw cost: only mesh.count is rendered.
- const capacities={brick:500,buff:220,warmBrick:220,darkBrick:220,greyBrick:220,plaster:380,stone:2800,timber:480,metal:2300,roof:360,glass:1100,window:1500,display:220,red:1100,green:1100,grass:170,blue:1100};
+ const capacities={brick:500,buff:220,warmBrick:220,darkBrick:220,greyBrick:220,plaster:380,stone:3600,timber:480,metal:3200,roof:360,glass:1100,window:2100,display:220,red:1500,green:1500,grass:170,blue:1600};
  for(const [name,capacity] of Object.entries(capacities))pool(name,boxGeometry,materials[name],capacity,!['glass','window','display','grass'].includes(name));
  // More, smaller leaf clumps preserve Queen's leaf scale and branching crown.
  const crownGeometry=foliage.geometry.clone();crownGeometry.setIndex(Array.from(foliage.geometry.index.array).filter((_,i)=>Math.floor(i/6)%2===0));
  pool('leaf',crownGeometry,leaf,260,false);
  pool('branch',new THREE.CylinderGeometry(1,1,1,7),mats.bark||materials.timber,300);
+ pool('cream',boxGeometry,mats.paintedCream,1400);
+ pool('charcoal',boxGeometry,material('Charcoal',0x293635,.64,.1),1200);
  pool('canvas',boxGeometry,material('Canvas',0xe2d5b8,.96),1300,false);
  for(let style=0;style<7;style++){
    pool('roomWall'+style,boxGeometry,style===0?mats.shopInteriorWall:mats['shopWall'+style],150,false);
@@ -73,14 +75,14 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    const reverse=bv.sub(av).cross(cv.sub(av)).dot(new THREE.Vector3(...wanted))<0;
    for(const point of reverse?[a,c,b,a,d,c]:[a,b,c,a,c,d])framePositions.push(...point);
  };
- const outer=[[-.5,-.5],[-.5,.5],[.5,.5],[.5,-.5]],inner=[[-.44,-.44],[-.44,.44],[.44,.44],[.44,-.44]];
+ const outer=[[-.5,-.5],[-.5,.5],[.5,.5],[.5,-.5]],inner=[[-.465,-.465],[-.465,.465],[.465,.465],[.465,-.465]];
  for(let i=0;i<4;i++){
    const next=(i+1)%4,a=outer[i],b=outer[next],c=inner[next],d=inner[i];
    quad([.16,...a],[.16,...b],[-.075,...c],[-.075,...d],[-1,0,0]);
    const inward=[0,-(c[0]+d[0]),-(c[1]+d[1])];
    quad([-.075,...d],[-.075,...c],[.16,...c],[.16,...d],inward);
  }
- frameGeometry.setAttribute('position',new THREE.Float32BufferAttribute(framePositions,3));frameGeometry.computeVertexNormals();pool('frame',frameGeometry,materials.stone,1000);
+ frameGeometry.setAttribute('position',new THREE.Float32BufferAttribute(framePositions,3));frameGeometry.computeVertexNormals();pool('frame',frameGeometry,materials.stone,1500);
  pool('hardware',boxGeometry,mats.steel||materials.metal,150,false);
  // A gently rising turf prism joins adjacent park cells exactly, replacing
  // visibly raised rectangular grass blocks. One geometry serves every slope.
@@ -107,33 +109,54 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
      #endif`);
  };signMaterial.customProgramCacheKey=()=> 'dundas-sign-regions-v1';
  pool('sign',signGeometry,signMaterial,240,false);
- const signEntries=[];
+ const signEntries=[],signPanels=[],signCache=new Map(),signColumns=[0,0];
  const palette={west:['#e6ddc3','#364b44'],portugal:['#fff0d1','#555e76'],bellwoods:['#efe8cf','#3f614e'],chinatown:['#ffe8b9','#943c32'],culture:['#ede7d4','#54483c'],core:['#e0e8e3','#314b58'],garden:['#efe4cd','#546052'],regent:['#eef0df','#4c6573'],don:['#e6e7d0','#3e5e4a'],riverside:['#f1e2bf','#6e483b'],riverdale:['#ece9d1','#4f6952'],terminal:['#f4e8d3','#9b3e37']};
- for(const district of DUNDAS_DISTRICTS){
-   // The first two signs are sufficient to distinguish this frontage; sharing
-   // cells leaves room for legible landmark panels within a single small atlas.
-   for(let j=0;j<2;j++)signEntries.push({district:district.id,text:district.shops[j],sub:j?'INDEPENDENT SHOPS · TORONTO':'DUNDAS / BROADVIEW',colors:palette[district.id]});
- }
+ for(const district of DUNDAS_DISTRICTS)for(let j=0;j<2;j++)signEntries.push({text:district.shops[j],colors:palette[district.id],kind:'shop'});
  const landmarkSigns={ago:24,hospital:25,square:26,spectrum:27,library:28,station:29,regent:30,riverdale:31};
- [['ART GALLERY OF ONTARIO','ART · ARCHITECTURE · TORONTO'],['TORONTO WESTERN','HOSPITAL'],['SANKOFA SQUARE','YONGE & DUNDAS'],['DANIELS SPECTRUM','ARTS & CULTURE'],['RIVERDALE LIBRARY','TORONTO PUBLIC LIBRARY'],['TTC · BROADVIEW','SUBWAY · STREETCARS'],['REGENT PARK','GARDENS & COMMUNITY'],['RIVERDALE PARK','BROADVIEW AVENUE']].forEach(([text,sub])=>signEntries.push({text,sub,colors:['#eee8cf','#3a5352']}));
- signEntries.forEach(({text,sub,colors},i)=>{
-   const x=(i%4)*256,y=Math.floor(i/4)*128;ctx.fillStyle=colors[1];ctx.fillRect(x,y,256,128);
-   ctx.strokeStyle=colors[0]+'77';ctx.lineWidth=2;ctx.strokeRect(x+7,y+8,242,112);
-   ctx.fillStyle=colors[0];ctx.textAlign='center';ctx.textBaseline='middle';let size=23;
-   const font=n=>`600 ${n}px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif`;ctx.font=font(size);
-   while(size>11&&ctx.measureText(text).width>234)ctx.font=font(--size);
-   ctx.fillText(text,x+128,y+55,234);ctx.font='11px Arial, sans-serif';ctx.fillText(sub,x+128,y+88,232);
- });
- // The Don Valley's second shop-sign cell is unused by its open landscape.
- // Reuse it for a blue-and-cream azulejo-inspired painted tile/mural panel.
- const muralCell=17,muralX=(muralCell%4)*256,muralY=Math.floor(muralCell/4)*128;
- ctx.fillStyle='#eee5ce';ctx.fillRect(muralX,muralY,256,128);
- for(let row=0;row<4;row++)for(let col=0;col<8;col++){
-   const x=muralX+col*32,y=muralY+row*32;ctx.fillStyle='#4c6c8b';ctx.fillRect(x+3,y+3,26,26);
-   ctx.fillStyle='#e9dfc6';ctx.fillRect(x+7,y+7,18,18);ctx.fillStyle=(row+col)%2?'#6d8b98':'#42617f';ctx.fillRect(x+11,y+11,10,10);
-   ctx.fillStyle='#b3b5a6';ctx.fillRect(x,y,32,1);ctx.fillRect(x,y,1,32);
+ [['ART GALLERY OF ONTARIO','GALLERIA ITALIA'],['TORONTO WESTERN','HOSPITAL'],['SANKOFA SQUARE','YONGE & DUNDAS'],['DANIELS SPECTRUM','ARTS & CULTURE'],['RIVERDALE LIBRARY','TORONTO PUBLIC LIBRARY'],['TTC BROADVIEW','SUBWAY / STREETCARS'],['REGENT PARK','GARDENS & COMMUNITY'],['RIVERDALE PARK','BROADVIEW AVENUE']].forEach(([text,sub])=>signEntries.push({text,sub,colors:['#eee8cf','#3a5352'],kind:'landmark'}));
+ const muralCell=signEntries.length;signEntries.push({text:'',colors:['#eee5ce','#4c6c8b'],kind:'mural'});
+ const shopLabels=new Map();
+ function shopLabel(district,index,side){
+   const type=dundasShopType(district.id,index,side),variant=index%2;
+   const names={bookshelf:['PAPER & INK','DUNDAS BOOKS'],recordbin:['VINYL EXCHANGE','DUNDAS RECORDS'],coffeecounter:[district.id==='portugal'?'CAF\u00c9 PORTUGAL':'CORNER COFFEE','THE COFFEE ROOM'],bakerycase:[district.id==='portugal'?'PADARIA':'DUNDAS BAKERY','BREAD & BUTTER'],grocerstand:['NEIGHBOURHOOD MARKET',district.id==='chinatown'?'\u6c34\u679c\u852c\u83dc / PRODUCE':'FRESH MARKET'],floriststand:['CITY FLOWERS','FLORES & GARDEN'],bicycle:['DUNDAS CYCLE','CYCLE WORKSHOP'],hardware:['DUNDAS HARDWARE','THE WORKSHOP']};
+   const text=names[type][variant],key=district.id+'|'+text;
+   if(!shopLabels.has(key)){shopLabels.set(key,signEntries.length);signEntries.push({text,colors:palette[district.id],kind:'shop',serif:['bookshelf','bakerycase'].includes(type)});}
+   return shopLabels.get(key);
  }
- signTexture.needsUpdate=true;
+ // Rasterise each label at the aspect of its physical plaque. A shared canvas
+ // and fixed instance buffers are repainted, never reallocated, between sections.
+ function signArt(cell,width,height){
+   const key=cell+'|'+(width/height).toFixed(5);if(signCache.has(key))return signCache.get(key);
+   const entry=signEntries[cell],pixelWidth=508,pixelHeight=pixelWidth*height/width;
+   const col=signColumns[0]<=signColumns[1]?0:1,allocation=Math.ceil(pixelHeight)+4;
+   if(!entry||signColumns[col]+allocation>1024){stats.overflow++;stats.overflows.signAtlas=(stats.overflows.signAtlas||0)+1;return null;}
+   const x=col*512+2,y=signColumns[col]+2;signColumns[col]+=allocation;
+   ctx.save();ctx.translate(x,y);ctx.fillStyle=entry.colors[1];ctx.fillRect(-2,-2,pixelWidth+4,pixelHeight+4);ctx.beginPath();ctx.rect(0,0,pixelWidth,pixelHeight);ctx.clip();
+   let fontSize=0,fontWidth=0,fontPixelHeight=0;
+   if(entry.kind==='mural'){
+     ctx.fillStyle='#eee5ce';ctx.fillRect(0,0,pixelWidth,pixelHeight);
+     const tile=pixelWidth/7;for(let row=0;row<Math.ceil(pixelHeight/tile);row++)for(let c=0;c<7;c++){
+       const xx=c*tile,yy=row*tile;ctx.fillStyle='#55778c';ctx.fillRect(xx+3,yy+3,tile-6,tile-6);
+       ctx.fillStyle='#e7dfc8';ctx.fillRect(xx+tile*.2,yy+tile*.2,tile*.6,tile*.6);
+       ctx.fillStyle=(row+c)%2?'#739198':'#47647a';ctx.fillRect(xx+tile*.35,yy+tile*.35,tile*.3,tile*.3);
+     }
+   }else{
+     const inset=Math.max(3,pixelHeight*.12);ctx.strokeStyle=entry.colors[0]+'99';ctx.lineWidth=Math.max(.8,pixelHeight*.022);
+     ctx.strokeRect(inset,inset,pixelWidth-inset*2,pixelHeight-inset*2);
+     const subtitle=entry.sub&&pixelHeight>70;
+     fontSize=pixelHeight*(subtitle ? .37 : .53);
+     const font=n=>`600 ${n}px ${entry.serif?'Georgia,serif':'"Microsoft YaHei","Noto Sans CJK SC",Arial,sans-serif'}`;
+     ctx.font=font(fontSize);
+     while(ctx.measureText(entry.text).width>pixelWidth-inset*3){fontSize*=.96;ctx.font=font(fontSize);}
+     const metrics=ctx.measureText(entry.text);fontWidth=metrics.width;fontPixelHeight=metrics.actualBoundingBoxAscent+metrics.actualBoundingBoxDescent;
+     ctx.fillStyle=entry.colors[0];ctx.textAlign='center';ctx.textBaseline='alphabetic';
+     const center=pixelHeight*(subtitle ? .40 : .5);ctx.fillText(entry.text,pixelWidth/2,center+(metrics.actualBoundingBoxAscent-metrics.actualBoundingBoxDescent)/2);
+     if(subtitle){ctx.font=`${pixelHeight*.13}px Arial,sans-serif`;ctx.textBaseline='middle';ctx.fillText(entry.sub,pixelWidth/2,pixelHeight*.76);}
+   }
+   ctx.restore();
+   const art={entry,pixelWidth,pixelHeight,fontSize,fontWidth,fontPixelHeight,region:[x/1024,1-(y+pixelHeight)/1024,pixelWidth/1024,pixelHeight/1024]};
+   signCache.set(key,art);return art;
+ }
 
  function put(name,x,y,z,sx,sy,sz,ry=0,rz=0){
    const p=pools.get(name);if(p.count>=p.capacity){stats.overflow++;stats.overflows[name]=(stats.overflows[name]||0)+1;return -1;}
@@ -141,9 +164,18 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
  }
  function box(name,side,front,y,z,depth,height,width,ry=0){return put(name,side*(front+depth/2),y,z,depth,height,width,ry);}
  function panel(side,z,y,width,height,cell,front=11.52,projecting=false){
+   const art=signArt(cell,width,height);if(!art)return;
    const i=put('sign',side*front,y,z,width,height,1,projecting?0:-side*Math.PI/2);if(i<0)return;
-   const col=cell%4,row=Math.floor(cell/4);signRegions.setXYZW(i,(col*256+1)/1024,1-((row+1)*128-1)/1024,254/1024,126/1024);
+   signRegions.setXYZW(i,...art.region);
+   signPanels.push({index:i,text:art.entry.text,width,height,region:art.region,pixelWidth:art.pixelWidth,pixelHeight:art.pixelHeight,fontSize:art.fontSize,fontWidth:art.fontWidth,fontPixelHeight:art.fontPixelHeight,kind:art.entry.kind});
  }
+ function shopSign(side,z,y,width,cell,front,paint='charcoal'){
+   box(paint,side,front+.02,y,z,.13,.72,width);
+   box('cream',side,front-.015,y+.37,z,.18,.065,width+.06);
+   box('charcoal',side,front-.015,y-.37,z,.18,.065,width+.06);
+   panel(side,z,y,Math.min(5.8,width-.24),.54,cell,front-.04);
+ }
+
  function source(side,z,width,index,style=0,windowX=side*11.6,lighting=null){
    const colors=[0xffca8b,0xf8dec0,0xd8e7dd,0xffb988,0xaec9d3,0xffd697];
    displays.push({side,z,width,windowX,backX:windowX+side*2.5,index:sourceSerial++,lighting:lighting||{style,color:colors[style%6],power:.72+(index%4)*.12}});
@@ -160,7 +192,7 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    dummy.quaternion.setFromUnitVectors(branchAxis,branchVector.normalize());dummy.scale.set(r,length,r);dummy.updateMatrix();p.mesh.setMatrixAt(p.count++,dummy.matrix);
  }
  function register(kind,side,z,width,height,front,depth,index,district,openings=[],room=null){
-   const frontage={kind,side,z,width,height,front,depth,index,district:district.id,windows:openings,room,lighting:shopLighting(index)};
+   const frontage={kind,side,z,width,height,front,depth,index,district:district.id,shopStyle:index%4,windowStyle:index%4,windows:openings,room,lighting:shopLighting(index)};
    frontages.push(frontage);return frontage;
  }
  function roomShell(side,z,width,front,lighting){
@@ -170,7 +202,12 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    box('roomCeiling'+style,side,front,3.12,z,2.3,.10,width+.08);
    for(const edge of [-1,1])box('roomWall'+style,side,front,1.74,z+edge*(width/2-.04),2.3,2.62,.08);
    box('roomStrip'+style,side,front+.03,3.02,z,.035,.025,width*.90);
-   box('display',side,back-.13,1.75,z,.025,1.35,width*.64);
+   box('timber',side,back-.14,.51,z,.14,.25,width-.14);
+   if(style===3)for(const offset of [-.26,.26]){
+     box('timber',side,back-.15,2.08,z+offset*width,.055,.78,.64);
+     box('canvas',side,back-.185,2.08,z+offset*width,.018,.66,.52);
+     box('blue',side,back-.20,2.14,z+offset*width,.014,.23,.30);
+   }
    put('glazing',side*(front-.085),1.72,z,width,2.45,1,-side*Math.PI/2);
    return {z,width,front,back,lighting};
  }
@@ -198,70 +235,79 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    }
    stats.trees++;
  }
- function windows(side,z,width,height,kind='window',front=11.56,floors=2,columns=2){
-   const openings=[];
-   const pitch=(width-.9)/columns;
-   for(let level=0;level<floors;level++){
-     const y=4.7+level*3.0;if(y+1.15>height-.15)break;
-     for(let col=0;col<columns;col++){
-       const zz=z+(col-(columns-1)/2)*pitch;
-       const paneWidth=Math.min(2.7,pitch-.6);box(kind,side,front,y,zz,.045,1.85,paneWidth);
-       openings.push({y,z:zz,width:paneWidth,height:1.85});
-       if(level===0)box('stone',side,front-.08,y+1.05,zz,.2,.16,Math.min(3.05,pitch-.3));
+ function windows(side,z,width,height,kind='window',front=11.56,floors=2,columns=2,style=0){
+   const openings=[],count=Math.max(columns,Math.floor((width-.8)/2.65)),pitch=(width-.9)/count;
+   const levels=Math.min(floors,Math.max(1,Math.round((height-3.7)/2.9))),rise=(height-3.7)/levels;
+   const paneWidth=Math.min([1.22,1.42,1.58,1.30][style%4],pitch-.55),paneHeight=Math.min([1.90,1.78,2.02,1.88][style%4],rise-.40);
+   for(let level=0;level<levels;level++){
+     const y=3.7+rise*(level+.5);
+     for(let col=0;col<count;col++){
+       const zz=z+(col-(count-1)/2)*pitch;
+       box(kind,side,front,y,zz,.045,paneHeight,paneWidth);
+       openings.push({y,z:zz,width:paneWidth,height:paneHeight});
        if(closeDetail(z)){
-         frame(side,front+.02,y,zz,paneWidth+.2,2.03);
-         if((col+level)%2===0)box('metal',side,front-.06,y,zz,.08,1.82,.055);
-         box('stone',side,front-.16,y-1.02,zz,.38,.13,paneWidth+.28);
+         frame(side,front+.02,y,zz,paneWidth+.14,paneHeight+.14);
+         box(style===2?'metal':'cream',side,front-.07,y,zz,.08,paneHeight,.045);
+         box(style===2?'metal':'cream',side,front-.07,y+(style===1?.35:0),zz,.08,.045,paneWidth);
+         box(style===3?'timber':'stone',side,front-.15,y-paneHeight/2-.09,zz,.30,.12,paneWidth+.23);
+         // Straight soldier-course/stone lintels vary by frontage; all follow
+         // the actual aperture instead of floating decorative arch segments.
+         if(style!==2)box(style===0?'buff':'stone',side,front-.09,y+paneHeight/2+.13,zz,.20,.14,paneWidth+.28);
        }
      }
+     if(closeDetail(z)&&style===1)box('stone',side,front-.02,y-paneHeight/2-.23,z,.16,.08,width-.28);
    }
    return openings;
  }
+
  function roof(side,z,width,height,depth,gabled=false){
    if(gabled)put('gable',side*(11.75+depth/2),height+.86,z,depth+1,1.8,width+.4);
    else box('roof',side,11.55,height+.14,z,depth+.35,.25,width+.22);
  }
  function shop(side,z,width,height,district,index,serial,front=11.75){
    const pick=hash(serial*7+index),brickName=district.id==='portugal'?(pick<.25?'plaster':pick<.5?'warmBrick':pick<.75?'brick':'buff'):['brick','warmBrick','buff','darkBrick','greyBrick'][serial%5];
-   const depth=8+hash(serial)*4,lighting=shopLighting(serial),detailed=closeDetail(z),hasRoom=detailed&&serial%2===0;
-   const displayZ=z-width*.12,displayWidth=width*.57,doorZ=z+width*.34;
+   const depth=8+hash(serial)*4,lighting=shopLighting(serial),detailed=closeDetail(z),hasRoom=detailed&&serial%2===0,shopStyle=serial%4,trim=['green','cream','charcoal','blue'][shopStyle];
+   const displayZ=z-width*.12,displayWidth=Math.min(4.9,width*.57),doorZ=z+width*.34,doorWidth=1.08;
    let room=null;
    if(hasRoom){
      box(brickName,side,front,(height+3.25)/2,z,depth,height-3.25,width-.14);
      box(brickName,side,front+2.3,1.62,z,depth-2.3,3.25,width-.14);
      for(const edge of [-1,1])box(brickName,side,front,1.62,z+edge*(width/2-.18),2.3,3.25,.22);
      room=roomShell(side,displayZ,displayWidth,front,lighting);
-     groundInfill(brickName,side,z,width,front,[{z:displayZ,width:displayWidth},{z:doorZ,width:width*.19}]);
+     groundInfill(brickName,side,z,width,front,[{z:displayZ,width:displayWidth},{z:doorZ,width:doorWidth}]);
    }else{
      box(brickName,side,front,height/2+.18,z,depth,height,width-.14);
      box('metal',side,front-.17,1.65,z,.18,2.82,width-.55);
-     box('display',side,front-.24,1.63,displayZ,.045,2.34,displayWidth);
+     box('glass',side,front-.24,1.63,displayZ,.045,2.34,displayWidth);
    }
    roof(side,z,width-.12,height,depth,false);
    box('stone',side,front-.30,height-.04,z,.52,.19,width+.08);
    box('stone',side,front-.16,height-.40,z,.30,.12,width-.15);
-   const creamTrim=district.id==='portugal'||district.id==='garden';
-   box('glass',side,front-.27,1.54,doorZ,.045,2.52,width*.19);
-   for(const edge of [-1,1])box(creamTrim?'stone':'metal',side,front-.33,1.6,z+edge*(width/2-.2),.18,2.9,.17);
-   box(creamTrim?'stone':'metal',side,front-.28,3.08,z,.24,.22,width-.25);
+
+   box('glass',side,front-.27,1.54,doorZ,.045,2.52,doorWidth);
+   for(const edge of [-1,1])box(trim,side,front-.33,1.6,z+edge*(width/2-.2),.18,2.9,.17);
+   box(trim,side,front-.28,3.08,z,.24,.22,width-.25);
    const mural=district.id==='portugal'&&serial%5===0;
-   const openings=windows(side,z,width,height,serial%3?'window':'glass',front-.17,3,width>9.4?2:1);
+   const openings=windows(side,z,width,height,serial%3?'window':'glass',front-.17,3,2,serial%4);
    if(detailed){
-     frame(side,front-.27,1.54,doorZ,width*.19+.18,2.70);
-     box('stone',side,front-.43,.20,doorZ,.55,.14,width*.22);
-     box('metal',side,front-.11,1.72,displayZ,.10,2.48,.065);
-     for(const edge of [-1,1])box('metal',side,front-.11,1.72,displayZ+edge*(displayWidth/2-.04),.10,2.48,.065);
+     frame(side,front-.27,1.54,doorZ,doorWidth+.18,2.70);
+     box('stone',side,front-.43,.20,doorZ,.55,.14,doorWidth+.24);
+     box(trim,side,front-.13,1.72,displayZ,.10,2.48,.065);
+     for(const edge of [-1,1])box(trim,side,front-.13,1.72,displayZ+edge*(displayWidth/2-.04),.10,2.48,.065);
      box('stone',side,front-.18,.43,displayZ,.28,.18,displayWidth+.16);
-     box('metal',side,front-.11,2.57,displayZ,.11,.075,displayWidth);
-     put('hardware',side*(front-.38),1.42,doorZ-width*.055,.045,.28,.045);stats.facadeDetails+=8;
+     box(trim,side,front-.13,2.57,displayZ,.11,.075,displayWidth);
+     box(trim,side,front-.16,.57,displayZ,.13,.20,displayWidth-.08);
+     box(trim,side,front-.13,2.96,displayZ,.12,.12,displayWidth+.10);
+     put('hardware',side*(front-.38),1.42,doorZ-doorWidth*.30,.045,.28,.045);stats.facadeDetails+=8;
    }
-   const districtNumber=DUNDAS_DISTRICTS.indexOf(district),signCell=districtNumber*2+serial%2;
-   panel(side,z,3.46,width-.55,.46,signCell,front-.35);
+   const signCell=shopLabel(district,serial,side);
+   shopSign(side,z,3.50,width-.55,signCell,front-.35,trim);
    const shade=district.id==='chinatown'?'red':district.id==='portugal'?(serial%2?'blue':'green'):serial%3?'green':'red';
-   if(pick<.82){
-     const awningWidth=width-.6,stripes=Math.ceil(awningWidth/1.1);
+   if(shopStyle!==2&&pick<.88){
+     const awningWidth=shopStyle===3?displayWidth+.28:width-.6,stripes=shopStyle===0?1:Math.ceil(awningWidth/.85);
+     const awningCenter=shopStyle===3?displayZ:z;
      for(let stripe=0;stripe<stripes;stripe++){
-       const zz=z-awningWidth/2+(stripe+.5)*awningWidth/stripes,cloth=stripe%2?'canvas':shade;
+       const zz=awningCenter-awningWidth/2+(stripe+.5)*awningWidth/stripes,cloth=stripe%2?'canvas':shade;
        put(cloth,side*(front-.66),3.15,zz,1.12,.09,awningWidth/stripes-.018,0,side*.24);
        box(cloth,side,front-1.20,2.99,zz,.08,.20,awningWidth/stripes-.018);
      }
@@ -272,12 +318,12 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
      if(mural&&detailed)panel(side,z-width*.29,5.15,2.25,2.5,muralCell,front-.22);
    }
    register('shop',side,z,width,height,front,depth,serial,district,openings,room);
-   source(side,hasRoom?displayZ:z,hasRoom?displayWidth:width,serial,lighting.style,side*(hasRoom?front-.085:front-.25),lighting);stats.frontages++;
+   source(side,hasRoom?displayZ:z,hasRoom?displayWidth:width,serial,lighting.style,side*(hasRoom?front-.085:front-.25),hasRoom?lighting:{...lighting,style:6,power:.02});stats.frontages++;
  }
  function house(side,z,width,height,district,index,serial){
    const depth=9.5,front=14.0;box(serial%3?'brick':'buff',side,front,height/2+.16,z,depth,height,width-.3);
    put('gable',side*(front+depth/2),height+1.15,z,depth+1,2.3,width-.1);
-   const openings=windows(side,z,width,height,'window',front-.07,2,2);
+   const openings=windows(side,z,width,height,'window',front-.07,2,2,(serial+2)%4);
    box('stone',side,front-.6,.4,z,1.25,.55,width-.6);
    box('glass',side,front-.08,1.5,z-width*.27,.04,2.45,1.1);
    // Small bay windows and porches give the adapted houses a different depth.
@@ -298,21 +344,29 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
  }
  function loft(side,z,width,district,index,serial){
    const h=11+Math.floor(hash(serial+index)*3)*3,depth=12,front=11.75,lighting=shopLighting(serial);
-   const hasRoom=closeDetail(z)&&serial%2===0,displayWidth=width*.66,displayZ=z-width*.10;
+   const hasRoom=closeDetail(z)&&serial%2===0,displayWidth=Math.min(5.4,width*.66),displayZ=z-width*.10;
    let room=null;const openings=[];
    if(hasRoom){
      box(serial%3?'brick':'darkBrick',side,front,(h+3.25)/2,z,depth,h-3.25,width-.2);
      box('brick',side,front+2.3,1.62,z,depth-2.3,3.25,width-.2);
      for(const off of [-.48,.48])box('brick',side,front,1.62,z+width*off,2.3,3.25,.26);
      room=roomShell(side,displayZ,displayWidth,front,lighting);
-     groundInfill('brick',side,z,width,front,[{z:displayZ,width:displayWidth},{z:z+width*.36,width:width*.17}]);
+     groundInfill('brick',side,z,width,front,[{z:displayZ,width:displayWidth},{z:z+width*.36,width:1.08}]);
    }else box(serial%3?'brick':'buff',side,front,h/2,z,depth,h,width-.2);
    roof(side,z,width,h,depth);
    for(let floor=0;floor<5&&3+floor*3<h;floor++){
      const y=2+floor*3;
-     if(floor===0&&hasRoom){box('glass',side,front-.13,1.65,z+width*.36,.055,2.55,width*.17);continue;}
-     for(const q of [-.32,0,.32]){
-       const zz=z+width*q,pane=width*.27;
+     if(floor===0&&hasRoom){
+       const doorZ=z+width*.36;box('glass',side,front-.13,1.65,doorZ,.055,2.55,1.08);frame(side,front-.11,1.65,doorZ,1.22,2.69);
+       for(const zz of [z-width*.39,z+width*.18]){
+         box('window',side,front-.13,1.75,zz,.055,2.20,1.65);frame(side,front-.11,1.75,zz,1.79,2.34);
+         box('metal',side,front-.21,1.75,zz,.09,2.2,.055);
+       }
+       continue;
+     }
+     const columns=Math.max(4,Math.round(width/2.6)),pitch=(width-1.2)/columns;
+     for(let col=0;col<columns;col++){
+       const zz=z+(col-(columns-1)/2)*pitch,pane=Math.min(1.65,pitch-.42);
        box(floor%2?'glass':'window',side,front-.13,y,zz,.055,1.9,pane);
        if(floor>0)openings.push({y,z:zz,width:pane,height:1.9});
        if(closeDetail(z)){
@@ -323,9 +377,9 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
      }
    }
    box('stone',side,11.49,h-.3,z,.40,.38,width+.1);
-   panel(side,z,3.68,width-.8,.55,serial%2,front-.24);
+   shopSign(side,displayZ,3.60,Math.min(width-.8,7.4),shopLabel(district,serial,side),front-.24);
    register('loft',side,z,width,h,front,depth,serial,district,openings,room);
-   source(side,z,width,serial,lighting.style,side*(front-.1),lighting);stats.frontages++;
+   source(side,z,width,serial,lighting.style,side*(front-.1),hasRoom?lighting:{...lighting,style:6,power:.02});stats.frontages++;
  }
  function modern(side,z,width,district,index,serial){
    const regent=district.id==='regent',h=regent?23+hash(serial)*17:28+hash(serial)*26,depth=14;
@@ -350,9 +404,9 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    }else if(serial%3===0){
      panel(side,z,7.6,width*.70,3.0,10+serial%2,front-.22);
    }
-   panel(side,z,4.65,width*.65,.72,DUNDAS_DISTRICTS.indexOf(district)*2+serial%2,front-.23);
+   shopSign(side,z,4.65,Math.min(width*.65,8.5),shopLabel(district,serial,side),front-.23);
    register('modern',side,z,width,h,front,depth,serial,district,[],room);
-   source(side,z,room?room.width:width,serial,lighting.style,side*(front-.09),lighting);stats.frontages++;
+   source(side,z,room?room.width:width,serial,lighting.style,side*(front-.09),hasRoom?lighting:{...lighting,style:6,power:.02});stats.frontages++;
  }
  function civic(side,z,width,index,serial){
    const h=18+hash(serial)*8;box('stone',side,12,h/2,z,19,h,width-.4);
@@ -491,7 +545,7 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    for(const p of pools.values())p.count=0;
    displays.length=zones.length=landmarks.length=frontages.length=0;sourceSerial=0;
    stats.overflow=stats.frontages=stats.trees=stats.windowFrames=stats.facadeDetails=stats.parkSlopes=stats.skylineTowers=0;
-   stats.overflows={};
+   stats.overflows={};signPanels.length=0;signCache.clear();signColumns.fill(0);ctx.clearRect(0,0,1024,1024);
    const activeFeatures=special.map(f=>({...f,z:localZ(f.index)})).filter(f=>clear(f.z,f.width));
    let serial=0;
    for(const side of [-1,1])for(let slot=0;slot<33;slot++){
@@ -528,10 +582,10 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
      p.mesh.count=p.count;p.mesh.instanceMatrix.needsUpdate=true;
      stats.instances+=p.count;stats.triangles+=p.count*p.triangles;
    }
-   signRegions.needsUpdate=true;stats.meshes=pools.size;stats.sources=displays.length;
+   signRegions.needsUpdate=true;signTexture.needsUpdate=true;stats.meshes=pools.size;stats.sources=displays.length;
    stats.activeZones=[...new Set(zones.map(z=>z.id))];stats.landmarks=landmarks.map(f=>f.id);
  }
  function setNight(amount){const value=THREE.MathUtils.clamp(amount,0,1);for(const {material,power} of nightMaterials)material.emissiveIntensity=power*value;retail.setNight(value);facades.setNight(value);}
  setNight(0);setRoute();
- return {group,setRoute,setNight,stats,displays,retail,facades,get frontages(){return frontages;},get zones(){return zones;},get landmarks(){return landmarks;}};
+ return {group,setRoute,setNight,stats,displays,retail,facades,get signPanels(){return signPanels;},get frontages(){return frontages;},get zones(){return zones;},get landmarks(){return landmarks;}};
 }

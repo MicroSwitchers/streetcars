@@ -1,17 +1,35 @@
 import * as THREE from 'three';
 import {retailMaterial,shopLighting} from './night-windows.js';
 
+ const shopTypes={
+   west:['coffeecounter','bicycle','hardware','bookshelf','recordbin'],
+   portugal:['bakerycase','coffeecounter','grocerstand','floriststand'],
+   bellwoods:['floriststand','coffeecounter','bookshelf','bicycle'],
+   chinatown:['grocerstand','bakerycase','grocerstand','coffeecounter'],
+   culture:['bookshelf','recordbin','coffeecounter','bookshelf'],
+   core:['recordbin','coffeecounter','hardware','bookshelf'],
+   garden:['floriststand','bookshelf','grocerstand','coffeecounter'],
+   regent:['coffeecounter','bookshelf','floriststand','grocerstand'],
+   riverside:['grocerstand','bakerycase','coffeecounter','hardware'],
+   riverdale:['bookshelf','floriststand','coffeecounter','bicycle'],
+   terminal:['coffeecounter','bakerycase','grocerstand','hardware'],
+ };
+
+export function dundasShopType(district,index,side){
+ const choices=shopTypes[district]||shopTypes.west;return choices[Math.abs(Math.floor(index*.61803398875)+(side>0?1:0))%choices.length];
+}
+
 // The same Blender-built merchandise and street furniture as Queen West.
 // Every model part has one resident instance buffer. Changing route sections
 // changes only its matrices, illumination and active count, never GPU resources.
 export function createDundasRetail({group,mats,assets,foliageGeometry}){
  const dummy=new THREE.Object3D(),footprint=new THREE.Box3(),pools=new Map(),materials=new Map();
- const placements=[],rooms=[],reserved=[],maxTriangles=145000,maxRooms=32,maxFurniture=32;
- const stats={objects:0,meshes:0,instances:0,triangles:0,capacityTriangles:0,overflow:0,budgetSkipped:0,rooms:0,furniture:0,plants:0,rebuilds:0,types:{},roomIndices:[]};
+ const placements=[],rooms=[],fixtures=[],reserved=[],maxTriangles=190000,maxRooms=48,maxFurniture=32;
+ const stats={objects:0,meshes:0,instances:0,triangles:0,capacityTriangles:0,overflow:0,budgetSkipped:0,rooms:0,furniture:0,plants:0,fixtureInstances:0,fixtureTriangles:0,fixtureRooms:0,rebuilds:0,types:{},roomIndices:[]};
  let night=0,triangleLimit=maxTriangles;
  // The tiny matrix buffers accommodate even a section containing only one
  // merchandise type. The rendered count and triangle ceiling remain capped.
- const capacities={bookshelf:64,recordbin:40,bakerycase:40,grocerstand:40,floriststand:40,coffeecounter:40,hardware:40,bicycle:48,pendant:36,bench:32,bins:32,planter:32,hydrant:32,meter:32,table:4,chair:8};
+ const capacities={bookshelf:64,recordbin:40,bakerycase:64,grocerstand:64,floriststand:64,coffeecounter:64,hardware:40,bicycle:48,pendant:56,bench:32,bins:32,planter:32,hydrant:32,meter:32,table:4,chair:8};
  function makePool(name,geometry,material,capacity,shadow=true){
    const mesh=new THREE.InstancedMesh(geometry,material,capacity);mesh.name='Dundas_Retail_'+name;mesh.count=0;
    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.castShadow=shadow;mesh.receiveShadow=true;
@@ -48,6 +66,37 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
  const leafGeometry=foliageGeometry,flowerGeometry=new THREE.IcosahedronGeometry(1,0);
  const leafPool=makePool('PlanterFoliage',leafGeometry,mats.leaf2||mats.leaf,96,false);
  const flowerPool=makePool('PlanterFlowers',flowerGeometry,mats.gardenFlower||mats.terracotta,96,false);
+ // Small physical wall dressings use three shared primitive buffers. They are
+ // independent of the original Blender counters and keep deep shop recesses
+ // from reading as empty white rooms. Instance colours retain varied products.
+ const fixtureMaterial=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.77,metalness:.035});
+ fixtureMaterial.name='DundasRetail_BackFixtures';fixtureMaterial.emissive.setHex(0xffffff);fixtureMaterial.emissiveIntensity=0;
+ retailMaterial(fixtureMaterial);mats.dundasRetailBackFixtures=fixtureMaterial;
+ const fixturePools={};
+ for(const [kind,geometry,capacity] of [
+   ['shelf',new THREE.BoxGeometry(1,1,1),1800],
+   ['vessel',new THREE.CylinderGeometry(1,1,1,10,1,false),420],
+   ['loaf',new THREE.IcosahedronGeometry(1,0),380],
+ ]){
+   geometry.computeBoundingBox();
+   const illumination=new THREE.InstancedBufferAttribute(new Float32Array(capacity*3),3);illumination.setUsage(THREE.DynamicDrawUsage);
+   geometry.setAttribute('instanceIllumination',illumination);
+   const p=makePool('BackFixture_'+kind,geometry,fixtureMaterial,capacity,false);
+   p.mesh.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(capacity*3).fill(1),3);p.mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+   fixturePools[kind]=p;
+ }
+ const fixtureColour=new THREE.Color(),fixtureGlow=new THREE.Color();
+ function fixture(kind,room,x,y,z,sx,sy,sz,colour,rotation=0){
+   const p=fixturePools[kind];
+   if(p.count===p.capacity||stats.fixtureTriangles+p.triangles>12000||stats.triangles+p.triangles>triangleLimit)return false;
+   dummy.position.set(x,y,z);dummy.rotation.set(0,0,rotation);dummy.scale.set(sx,sy,sz);dummy.updateMatrix();
+   p.mesh.setMatrixAt(p.count,dummy.matrix);fixtureColour.setHex(colour);p.mesh.setColorAt(p.count,fixtureColour);
+   fixtureGlow.setHex(room.lighting.color).multiply(fixtureColour).multiplyScalar(room.lighting.power);
+   p.illumination.setXYZ(p.count,fixtureGlow.r,fixtureGlow.g,fixtureGlow.b);p.count++;
+   footprint.copy(p.mesh.geometry.boundingBox).applyMatrix4(dummy.matrix);
+   fixtures.push({kind,type:room.type,roomIndex:room.index,side:room.side,x,y,z,minX:footprint.min.x,maxX:footprint.max.x,minY:footprint.min.y,maxY:footprint.max.y,minZ:footprint.min.z,maxZ:footprint.max.z});
+   stats.fixtureInstances++;stats.fixtureTriangles+=p.triangles;stats.triangles+=p.triangles;return true;
+ }
  function plantInstance(pool,x,y,z,sx,sy,sz){
    if(pool.count===pool.capacity||stats.triangles+pool.triangles>maxTriangles)return;
    dummy.position.set(x,y,z);dummy.rotation.set(0,z*.37,0);dummy.scale.set(sx,sy,sz);dummy.updateMatrix();
@@ -73,23 +122,10 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
    return true;
  }
  const lightColour=new THREE.Color();
- const shopTypes={
-   west:['coffeecounter','bicycle','hardware','bookshelf','recordbin'],
-   portugal:['bakerycase','coffeecounter','grocerstand','floriststand'],
-   bellwoods:['floriststand','coffeecounter','bookshelf','bicycle'],
-   chinatown:['grocerstand','bakerycase','grocerstand','coffeecounter'],
-   culture:['bookshelf','recordbin','coffeecounter','bookshelf'],
-   core:['recordbin','coffeecounter','hardware','bookshelf'],
-   garden:['floriststand','bookshelf','grocerstand','coffeecounter'],
-   regent:['coffeecounter','bookshelf','floriststand','grocerstand'],
-   riverside:['grocerstand','bakerycase','coffeecounter','hardware'],
-   riverdale:['bookshelf','floriststand','coffeecounter','bicycle'],
-   terminal:['coffeecounter','bakerycase','grocerstand','hardware'],
- };
  function interior(frontage){
    const {side,index=0}=frontage,room=frontage.room,z=room.z??frontage.z,width=room.width??frontage.width;
    const district=typeof frontage.district==='string'?frontage.district:frontage.district?.id;
-   const choices=shopTypes[district]||shopTypes.west,type=choices[Math.abs(Math.floor(index*.61803398875)+(side>0?1:0))%choices.length],lighting=frontage.lighting||room.lighting||shopLighting(Math.abs(index));
+   const type=dundasShopType(district,index,side),lighting=frontage.lighting||room.lighting||shopLighting(Math.abs(index));
    const front=Math.abs(room.front??frontage.front),back=Math.abs(room.back??(front+2.3));
    const yaw=-side*Math.PI/2,depth=back-front;
    // The front is an actual open recess with thin glazing, so merchandise is
@@ -103,13 +139,78 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
  }
  function rearDisplay(room){
    const {type,width,front,back,index,side,z,lighting,district}=room;
-   if(width<=4.7||back-front<=1.75||Math.abs(index)%3===1)return;
+   if(room.backFixtures||width<=4.7||back-front<=1.75||Math.abs(index)%3===1)return;
    // Fill a few deeper recesses only after every primary window has its own
    // contents. This reserves a predictable budget for sidewalk furnishings.
-   const complement={coffeecounter:'bookshelf',bakerycase:'coffeecounter',grocerstand:'grocerstand',floriststand:'floriststand',recordbin:'bookshelf',bookshelf:'bookshelf',hardware:'bicycle',bicycle:'hardware'}[type];
+   const complement=type;
    if(stats.triangles+(pools.get(complement)?.model.triangles||0)>triangleLimit)return;
    if(prop(complement,side*(back-.48),.39,z+Math.min(1.28,width*.27),-side*Math.PI/2,complement==='bicycle'?.77:.78,lighting,true)){
      const p=placements.at(-1);p.roomIndex=index;p.district=district;
+   }
+ }
+ function backShelves(room){
+   const {side,back,z,width}=room,span=Math.min(3.5,Math.max(1.25,width*.77)),x=side*(back-.25);
+   room.fixtureSpan=span;
+   // The two shelves and paired vertical brackets have real thickness and meet
+   // the rear wall. Their contents remain above the counter, fully in view.
+   const first=stats.fixtureInstances;
+   for(const y of [1.40,2.08])fixture('shelf',room,x,y,z,.38,.055,span,0x816548);
+   for(const end of [-1,1])fixture('shelf',room,side*(back-.085),1.83,z+end*span*.44,.055,1.12,.055,0x49534e);
+   room.backFixtures=stats.fixtureInstances>first;
+   if(room.backFixtures)stats.fixtureRooms++;
+ }
+ function backContents(room,rowOnly){
+   if(!room.backFixtures)return;
+   const {side,back,z,type,index}=room,span=room.fixtureSpan,x=side*(back-.29),tints=[0xc8b68c,0x648b8a,0xb77958,0xe2d7bb,0x7c5349,0x596b56];
+   const box=(y,zz,w,h,d,colour)=>fixture('shelf',room,x,y,zz,d,h,w,colour);
+   for(let row=0;row<2;row++){
+     if(row!==rowOnly)continue;
+     const floor=1.428+row*.68;
+     if(type==='coffeecounter'){
+       // Ceramic mugs and tall tea/coffee canisters fill the back-bar shelving.
+       for(let j=0;j<2;j++){
+         const zz=z+(j-.5)*span*.42,tint=tints[(j+row+Math.abs(index))%tints.length];
+         fixture('vessel',room,x,floor+.115,zz,.080,.23,.080,tint);
+         // A dark inset top reads as a mug opening without an expensive handle.
+         fixture('loaf',room,x,floor+.234,zz,.062,.004,.062,0x594631);
+       }
+       for(const end of [-1,1])box(floor+.15,z+end*span*.45,.13,.30,.14,0xc5b489);
+     }else if(type==='bakerycase'){
+       for(let j=0;j<3;j++){
+         const zz=z+(j-1)*span*.30;
+         box(floor+.012,zz,.31,.024,.25,0xc0b89d);
+         fixture('loaf',room,x,floor+.095,zz,.12,.080,.14,j%2?0xbb864d:0xd8ac67);
+       }
+     }else if(type==='bookshelf'||type==='recordbin'){
+       const count=type==='bookshelf'?8:3;
+       for(let j=0;j<count;j++){
+         const zz=z+(j-(count-1)/2)*span/(count+.7),height=(type==='bookshelf'?.23:.29)+((j+row)%3)*.045;
+         box(floor+height/2,zz,type==='bookshelf'?.065:.21,height,type==='bookshelf'?.20:.075,tints[(j+row+Math.abs(index))%tints.length]);
+         if(type==='recordbin')fixture('vessel',room,side*(back-.338),floor+height*.55,zz,.075,.018,.075,0x252c29,Math.PI/2);
+       }
+     }else if(type==='grocerstand'){
+       for(let j=0;j<3;j++){
+         const zz=z+(j-1)*span*.30;box(floor+.045,zz,.35,.09,.26,0x8e7351);
+         fixture('loaf',room,x,floor+.125,zz,.10,.07,.13,(j+row)%2?0x919d51:0xc78547);
+       }
+     }else if(type==='floriststand'){
+       for(let j=0;j<2;j++){
+         const zz=z+(j-.5)*span*.44;fixture('vessel',room,x,floor+.10,zz,.095,.20,.095,j%2?0xad8262:0x728c88);
+         fixture('loaf',room,x,floor+.26,zz,.16,.18,.14,0x788c56);
+         fixture('loaf',room,side*(back-.39),floor+.34,zz+.04,.075,.075,.07,j%2?0xc39980:0xb4ad8c);
+       }
+     }else{
+       // Hardware and bicycle workshops have small parts boxes and hung tools,
+       // rather than an unrelated bookshelf copied across every shop type.
+       for(let j=0;j<5;j++){
+         const zz=z+(j-2)*span*.18;
+         if(row===0)box(floor+.085,zz,.25,.17,.24,tints[(j+Math.abs(index))%tints.length]);
+         else{
+           box(floor+.15,zz,.025,.30,.045,0x6e7974);
+           box(floor+.285,zz,.12,.04,.065,j%2?0xaa7960:0x9ba39b);
+         }
+       }
+     }
    }
  }
  function clear(route,z,radius){
@@ -130,11 +231,11 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
    }
    return true;
  }
- function finishPool(p){p.mesh.count=p.count;p.mesh.instanceMatrix.needsUpdate=true;if(p.illumination)p.illumination.needsUpdate=true;}
+ function finishPool(p){p.mesh.count=p.count;p.mesh.instanceMatrix.needsUpdate=true;if(p.mesh.instanceColor)p.mesh.instanceColor.needsUpdate=true;if(p.illumination)p.illumination.needsUpdate=true;}
  function setRoute(route,frontages=[]){
    for(const p of pools.values()){p.count=0;for(const part of p.parts)part.count=0;}
-   leafPool.count=flowerPool.count=0;placements.length=rooms.length=reserved.length=0;
-   for(const key of ['instances','triangles','overflow','budgetSkipped','rooms','furniture','plants'])stats[key]=0;stats.types={};stats.roomIndices.length=0;stats.rebuilds++;
+   leafPool.count=flowerPool.count=0;for(const p of Object.values(fixturePools))p.count=0;placements.length=rooms.length=fixtures.length=reserved.length=0;
+   for(const key of ['instances','triangles','overflow','budgetSkipped','rooms','furniture','plants','fixtureInstances','fixtureTriangles','fixtureRooms'])stats[key]=0;stats.types={};stats.roomIndices.length=0;stats.rebuilds++;
    if(route.id==='dundas'){
      const active=frontages.filter(f=>f.z>=-230&&f.z<=380);
      for(const f of active.filter(f=>f.kind==='tree')){
@@ -144,8 +245,12 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
      // Central shops receive the detailed original assets; far facade silhouettes
      // retain the cheaper pooled geometry. The cap is independent of route size.
      const eligible=active.filter(f=>f.room).sort((a,b)=>Math.abs(a.z-60)-Math.abs(b.z-60)).slice(0,maxRooms);
-     triangleLimit=105000;
+     triangleLimit=150000;
      for(const f of eligible)interior(f);
+     for(const room of rooms)backShelves(room);
+     // Fill one shelf in every room before spending the remaining budget on
+     // upper shelves, so later stops retain dressed windows as well.
+     for(let row=0;row<2;row++)for(const room of rooms)backContents(room,row);
      for(const room of rooms)rearDisplay(room);
      triangleLimit=maxTriangles;
      const kinds=['bench','planter','bins','hydrant','bench','meter','planter','bicycle'];
@@ -162,12 +267,13 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
        for(const dz of [0,-3.2,3.2])if(furniture(route,kind,f.side,f.z+dz))break;
      }
    }
-   for(const p of pools.values())for(const part of p.parts)finishPool(part);finishPool(leafPool);finishPool(flowerPool);
+   for(const p of pools.values())for(const part of p.parts)finishPool(part);finishPool(leafPool);finishPool(flowerPool);for(const p of Object.values(fixturePools))finishPool(p);
    setNight(night);
  }
  function setNight(value){
    night=THREE.MathUtils.clamp(value,0,1);
    for(const [source,material] of materials)material.emissiveIntensity=night*(source.name==='Prop_ShopLamp'?3.0:.22);
+   fixtureMaterial.emissiveIntensity=night*.19;
  }
- return {setRoute,setNight,stats,placements,rooms,pools};
+ return {setRoute,setNight,stats,placements,rooms,pools,fixtures,fixturePools};
 }

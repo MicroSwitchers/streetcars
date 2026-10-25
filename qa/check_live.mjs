@@ -176,14 +176,25 @@ try{
    const glazing=d.group.getObjectByName('Dundas_glazing'),mappedGlazing=!!glazing&&glazing.material===m.dundasStoreGlass&&glazing.material.map===m.storeGlass.map&&!!glazing.material.map&&glazing.material.transparent&&glazing.material.opacity<=.25&&!glazing.material.depthWrite;
    const roomMaterials=Array.from({length:7},(_,i)=>d.group.getObjectByName('Dundas_roomWall'+i)?.material===(i?m['shopWall'+i]:m.shopInteriorWall)&&d.group.getObjectByName('Dundas_roomCeiling'+i)?.material===(i?m['shopCeiling'+i]:m.shopInteriorCeiling)&&d.group.getObjectByName('Dundas_roomStrip'+i)?.material===m['shopStrip'+i]).every(Boolean);
    const masonryMaterials=new Set(d.group.children.filter(o=>o.isMesh&&[m.brick0,m.brick1,m.brick2,m.brick3,m.brick4].includes(o.material)&&o.material.map&&o.material.bumpMap&&o.material.roughnessMap).map(o=>o.material)).size;
-   return {offset,hash,resources,objects,geometries:a.renderer.info.memory.geometries,textures:a.renderer.info.memory.textures,stats:JSON.parse(JSON.stringify(d.stats)),retail:JSON.parse(JSON.stringify(d.retail.stats)),facades:JSON.parse(JSON.stringify(d.facades.stats)),rooms,mappedGlazing,roomMaterials,masonryMaterials,glazingCount:glazing.count,zones:d.zones,landmarks:d.landmarks,windowSources:a.city.scenery.windowLighting.windows.length};
+   const facadePlacementKinds=d.facades.placements.reduce((counts,p)=>(counts[p.kind]=(counts[p.kind]||0)+1,counts),{});
+   const signAtlas=d.group.getObjectByName('Dundas_sign').material.map.image;
+   const signPanels=d.signPanels.map(p=>({...p,region:[...p.region]})),frontageStyles=d.frontages.map(f=>({kind:f.kind,index:f.index,district:f.district,shopStyle:f.shopStyle,windowStyle:f.windowStyle}));
+   return {offset,hash,resources,objects,geometries:a.renderer.info.memory.geometries,textures:a.renderer.info.memory.textures,stats:JSON.parse(JSON.stringify(d.stats)),retail:JSON.parse(JSON.stringify(d.retail.stats)),facades:JSON.parse(JSON.stringify(d.facades.stats)),facadePlacementKinds,frontageStyles,signPanels,signAtlasSize:[signAtlas.width,signAtlas.height],rooms,mappedGlazing,roomMaterials,masonryMaterials,glazingCount:glazing.count,zones:d.zones,landmarks:d.landmarks,windowSources:a.city.scenery.windowLighting.windows.length};
+  };window.__districtClose=(offset,night=false)=>{
+   window.__districtStage(offset,night);
+   const d=a.city.districts,candidates=d.frontages.filter(f=>f.room&&f.side===-1).sort((x,y)=>Math.abs(x.z+124)-Math.abs(y.z+124));
+   const f=candidates[0];if(!f)throw Error('No detailed shop available for close facade capture at '+offset);
+   a.camera.fov=62;a.camera.position.set(f.side*(f.front-6.2),2.3,f.z-7.5);a.camera.lookAt(f.side*f.front,3.2,f.z+.6);a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);
+   return {offset,night,kind:f.kind,district:f.district,index:f.index,z:f.z,width:f.width,front:f.front,camera:a.camera.position.toArray()};
   };})()`);
   // Diagnose every fixed-pool capacity in one run before the first staged
   // screenshot can stop at an early failure and conceal later sections.
-  const poolDiagnostics=await evaluate(`(()=>{const result=[];for(let offset=0;offset<=36;offset++){const s=window.__districtStage(offset);result.push({offset,base:{overflow:s.stats.overflow,overflows:s.stats.overflows||{},triangles:s.stats.triangles},retail:{overflow:s.retail.overflow,overflows:s.retail.overflows||{},triangles:s.retail.triangles},facades:{overflow:s.facades.overflow,overflows:s.facades.overflows||{},triangles:s.facades.triangles}});}return result;})()`);
+  const poolDiagnostics=await evaluate(`(()=>{const result=[];for(let offset=0;offset<=36;offset++){const s=window.__districtStage(offset);result.push({offset,base:{overflow:s.stats.overflow,overflows:s.stats.overflows||{},triangles:s.stats.triangles},retail:{overflow:s.retail.overflow,overflows:s.retail.overflows||{},triangles:s.retail.triangles},facades:{overflow:s.facades.overflow,overflows:s.facades.overflows||{},triangles:s.facades.triangles,archedhood:s.facadePlacementKinds.archedhood||0}});}return result;})()`);
   await writeFile(join(output,'dundas-pool-diagnostics.json'),JSON.stringify(poolDiagnostics,null,2));
   const overflowingSections=poolDiagnostics.filter(s=>s.base.overflow||s.retail.overflow||s.facades.overflow);
   if(overflowingSections.length)throw Error('Dundas pool capacity failures across all 37 offsets: '+JSON.stringify(overflowingSections));
+  const archedSections=poolDiagnostics.filter(s=>s.facades.archedhood);
+  if(archedSections.length)throw Error('Generic arch overlays remain on Dundas facades: '+JSON.stringify(archedSections));
   const photo=async name=>{const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,name+'.png'),Buffer.from(shot.data,'base64'));};
   const changeComparisonRoute=async id=>{
    await evaluate('queenStreet.selectRoute('+JSON.stringify(id)+')');
@@ -195,21 +206,35 @@ try{
   await photo('queen-comparison-day');
   await changeComparisonRoute('dundas');
   const assertBudget=sample=>{
-   if(sample.stats.overflow||sample.stats.meshes>55||sample.stats.triangles>110000)throw Error('Dundas exceeds its fixed base scenery budget: '+JSON.stringify(sample.stats));
-   for(const name of ['retail','facades'])if(!sample[name]||sample[name].overflow||sample[name].triangles>145000)throw Error('Dundas '+name+' exceeds its authored asset budget: '+JSON.stringify(sample[name]));
+   if(sample.stats.overflow||sample.stats.meshes>55||sample.stats.triangles>135000)throw Error('Dundas exceeds its fixed base scenery budget: '+JSON.stringify(sample.stats));
+   for(const [name,limit] of [['retail',190000],['facades',145000]])if(!sample[name]||sample[name].overflow||sample[name].triangles>limit)throw Error('Dundas '+name+' exceeds its authored asset budget: '+JSON.stringify(sample[name]));
+   if(sample.stats.triangles+sample.retail.triangles+sample.facades.triangles>380000)throw Error('Dundas combined scenery exceeds the shared asset budget: '+JSON.stringify({offset:sample.offset,base:sample.stats.triangles,retail:sample.retail.triangles,facades:sample.facades.triangles}));
+   if(sample.facadePlacementKinds.archedhood||sample.facades.counts.archedhood)throw Error('Dundas restores generic arches over its district windows: '+JSON.stringify({offset:sample.offset,kinds:sample.facadePlacementKinds}));
+   if(!sample.signPanels.length)throw Error('Dundas sign layout metadata is empty at '+sample.offset);
+   for(const p of sample.signPanels){
+    const [u,v,uw,vh]=p.region,[atlasWidth,atlasHeight]=sample.signAtlasSize;
+    const values=[p.width,p.height,p.pixelWidth,p.pixelHeight,uw,vh,atlasWidth,atlasHeight];
+    const physicalAspect=p.width/p.height,sampledAspect=uw*atlasWidth/(vh*atlasHeight),nativeAspect=p.pixelWidth/p.pixelHeight;
+    if(values.some(n=>!Number.isFinite(n)||n<=0)||!Number.isFinite(u)||!Number.isFinite(v)||u<0||v<0||u+uw>1.000001||v+vh>1.000001||Math.abs(sampledAspect/physicalAspect-1)>.03||Math.abs(nativeAspect/physicalAspect-1)>.03)throw Error('Dundas sign artwork stretches or samples outside its atlas: '+JSON.stringify({offset:sample.offset,p,physicalAspect,sampledAspect,nativeAspect}));
+    if(p.kind!=='mural'&&(!(p.fontSize>0)||!Number.isFinite(p.fontWidth)||p.fontWidth<=0||p.fontWidth>p.pixelWidth+.5||!(p.fontPixelHeight>0)||p.fontPixelHeight>p.pixelHeight+.5))throw Error('Dundas sign lettering clips its native artwork: '+JSON.stringify({offset:sample.offset,p}));
+   }
    if(!sample.mappedGlazing||!sample.roomMaterials||sample.masonryMaterials<3)throw Error('Dundas lost Queen glazing, interior lighting materials or mapped masonry: '+JSON.stringify({offset:sample.offset,mappedGlazing:sample.mappedGlazing,roomMaterials:sample.roomMaterials,masonryMaterials:sample.masonryMaterials}));
    if(sample.rooms.some(r=>Math.abs(r.back-r.front-2.3)>.00001||r.width<=0)||sample.glazingCount!==sample.rooms.length)throw Error('Shopfronts do not have matching glazed 2.3-metre room recesses: '+JSON.stringify({offset:sample.offset,rooms:sample.rooms,glazingCount:sample.glazingCount}));
   };
   const stages=[0,6,13,15,16,18,20,23,26,29,30,33,34,36];
-  const samples=[];
+  const samples=[],closeUps=[];
   for(const offset of stages){
    const sample=await evaluate(`window.__districtStage(${offset})`);samples.push(sample);
    assertBudget(sample);
-   if([0,6,13,15,16,26,33].includes(offset)&&(!sample.rooms.length||!sample.retail.rooms||!sample.retail.instances||!sample.facades.instances||!sample.facades.counts.cornice||!sample.facades.counts.archedhood))throw Error('Commerce section lacks actual Blender shop contents or architectural detail: '+JSON.stringify({offset,retail:sample.retail,facades:sample.facades}));
-   if(offset===36&&(!sample.retail.furniture||!sample.facades.counts.cornice||!sample.facades.counts.archedhood))throw Error('Residential approach lacks furnished sidewalks and heritage house details');
+   if([0,6,13,15,16,26,33].includes(offset)&&(!sample.rooms.length||!sample.retail.rooms||!sample.retail.instances||!sample.facades.instances||!sample.facades.counts.cornice))throw Error('Commerce section lacks actual Blender shop contents or architectural detail: '+JSON.stringify({offset,retail:sample.retail,facades:sample.facades}));
+   if(offset===36&&(!sample.retail.furniture||!sample.facades.counts.cornice))throw Error('Residential approach lacks furnished sidewalks and heritage house details');
    await photo('dundas-'+offset);
+   if([0,6,16].includes(offset)){closeUps.push(await evaluate('window.__districtClose('+offset+')'));await photo('dundas-close-'+offset);}
   }
   if(new Set(samples.map(s=>s.hash)).size<10)throw Error('Neighbourhood geometry does not change along Dundas');
+  const shopStyles=new Set(samples.flatMap(s=>s.frontageStyles.filter(f=>f.kind==='shop').map(f=>f.shopStyle)).filter(Number.isInteger));
+  const windowStyles=new Set(samples.flatMap(s=>s.frontageStyles.map(f=>f.windowStyle)).filter(Number.isInteger));
+  if(shopStyles.size<3||windowStyles.size<3)throw Error('Dundas facades lack distinct shopfront and window compositions: '+JSON.stringify({shopStyles:[...shopStyles],windowStyles:[...windowStyles]}));
   const landmarks=samples.flatMap(s=>s.landmarks);
   for(const [id,side] of [['ago',-1],['hospital',1],['square',-1],['spectrum',-1],['regent-park',1],['library',1],['station',-1]])if(!landmarks.some(f=>f.id===id&&f.side===side))throw Error('Missing or misplaced '+id);
   if(!landmarks.some(f=>f.id==='library'&&f.index>33.12)||!landmarks.some(f=>f.id==='spectrum'&&f.index<29.12))throw Error('Landmark occupies the wrong intersection corner');
@@ -226,13 +251,15 @@ try{
   await evaluate('window.__districtStage(6,true)');
   if(!await evaluate('queenStreet.city.districts.retail.stats.rooms>0&&new Set(queenStreet.city.districts.displays.map(w=>w.lighting.style)).size>=3&&queenStreet.city.materials.shopStrip0.emissiveIntensity>0'))throw Error('Dundas shops lost their varied interior night lighting');
   await photo('dundas-shops-night');
+  closeUps.push(await evaluate('window.__districtClose(6,true)'));await photo('dundas-close-6-night');
   await evaluate('window.__districtStage(23,true)');
   if(!await evaluate('queenStreet.city.scenery.windowLighting.night.value===1&&queenStreet.city.scenery.windowLighting.windows.length>0'))throw Error('Dundas windows do not supply nighttime pavement light');
   const nightShot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'dundas-downtown-night.png'),Buffer.from(nightShot.data,'base64'));
   await evaluate('window.__districtStage(0);queenStreet.view.update=window.__districtView;queenStreet.restart()');
   if(routes)await evaluate('(()=>{const a=queenStreet;window.__districtStage(2);const s=a.captureSession(),manifest=document.querySelector("link[rel=manifest]");sessionStorage.setItem("queen-street-update-session:"+new URL("./",manifest.href).href,JSON.stringify(s));sessionStorage.setItem("route-checkpoint-expected",JSON.stringify({offset:a.route.stopOffset,z:a.state.z}));})()');
-  console.log('PASS: Distinct Dundas scenery with Queen-quality authored assets, recessed shops and mapped materials; 37 offsets retain bounded resources and night window lighting');
+  console.log('PASS: Dundas signs retain native proportions; varied storefronts, recessed shops and all 37 offsets retain bounded resources and night lighting');
   await writeFile(join(output,'districts.json'),JSON.stringify(samples,null,2));
+  await writeFile(join(output,'dundas-close-ups.json'),JSON.stringify(closeUps,null,2));
  }
  if(atmosphere){
   const report=await evaluate(`(async()=>{

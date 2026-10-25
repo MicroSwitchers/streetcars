@@ -3,7 +3,7 @@ import * as THREE from 'three';
 // The same authored architectural kit used on Queen, with a bounded resident
 // pool. Section changes only replace instance matrices; they never make new
 // meshes, geometries, materials, textures, lights, or shader programs.
-const CAPACITIES=Object.freeze({cornice:168,archedhood:64,pediment:12,firelanding:12,escapeladder:8,rooflantern:12,chimneypots:16,cupola:4});
+const CAPACITIES=Object.freeze({cornice:168,firelanding:12,escapeladder:8,rooflantern:12,chimneypots:16});
 const HERITAGE=new Set(['west','portugal','bellwoods','chinatown','garden','riverside','riverdale','terminal']);
 const MAX_TRIANGLES=145000;
 const round=n=>Math.round(n*1000)/1000;
@@ -75,7 +75,7 @@ export function createDundasFacades({group,mats,assets}){
      // Keep most modelling detail around the useful sidewalk/ride view. Distal
      // blocks retain the district builder's cheaper roof and window profiles.
      const detailed=eligible.slice(0,30),corniceFrontages=new Set();let corniceModules=0;
-     for(const b of detailed.slice(0,14)){
+     for(const b of detailed.filter(b=>b.kind!=='loft'&&Math.abs(b.index)%3===0).slice(0,8)){
        const modules=Math.ceil(b.width);
        if(corniceModules+modules<=CAPACITIES.cornice){corniceFrontages.add(b);corniceModules+=modules;}
      }
@@ -86,15 +86,10 @@ export function createDundasFacades({group,mats,assets}){
          for(let i=0;i<modules;i++)place('cornice',b,b.height+.22,b.z-b.width/2+(i+.5)*b.width/modules,{sx:span});
        }
        const ordinal=Math.abs(Math.floor(b.index??order)),windows=upperWindows(b);
-       // Individual sculpted stone hoods, rather than a second opaque pane,
-       // preserve the original lit window, sill, mullions and recessed frame.
-       const fire=b.kind!=='house'&&ordinal%7===2&&order<22;
-       if(!fire&&(ordinal%3!==1||b.kind==='house')){
-         for(const w of windows.slice(0,4)){
-           const sx=Math.max(.72,Math.min(1.58,(w.width+.38)/1.8));
-           place('archedhood',b,w.y,w.z,{x:b.front-.025,sx});
-         }
-       }
+       // Rectangular street windows use the builder's straight lintels and
+       // sills. Decorative arches belong to specific buildings, never a kit
+       // detail repeated across unrelated shops, houses and factory windows.
+       const fire=b.kind==='loft'&&ordinal%11===2&&order<22;
        if(fire){
          const featureZ=windows.length?windows[Math.floor((windows.length-1)/2)].z:b.z;
          const floors=[];
@@ -102,12 +97,13 @@ export function createDundasFacades({group,mats,assets}){
          for(const y of floors)place('firelanding',b,y,featureZ,{x:b.front-.035});
          for(let j=0;j<floors.length-1;j++)place('escapeladder',b,floors[j],featureZ,{x:b.front-.035});
        }
-       if(b.kind!=='house'&&order<22&&ordinal%4===0)place('pediment',b,b.height+.28,b.z,{sx:Math.min(1.65,b.width*.18)});
+       // Most main-street roofs have plain coping; selected frontages keep
+       // a finely modelled cornice rather than identical classical pediments.
        // Features sit within the roof footprint, clear of shop entrances,
        // sidewalks, catenary, the track and the district's awnings.
        if(order<24&&(b.kind==='house'||ordinal%3===0))place('chimneypots',b,b.height+.28,b.z-b.width*.30,{x:b.front+b.depth*.70,roof:true});
-       if(b.kind!=='house'&&order<22&&ordinal%4===1)place('rooflantern',b,b.height+.29,b.z+b.width*.23,{x:b.front+b.depth*.65,roof:true});
-       if(b.kind!=='house'&&order<22&&ordinal%11===5)place('cupola',b,b.height+.30,b.z-b.width*.24,{x:b.front+b.depth*.40,roof:true});
+       if(b.kind==='loft'&&order<22&&ordinal%7===1)place('rooflantern',b,b.height+.29,b.z+b.width*.23,{x:b.front+b.depth*.65,roof:true});
+
      }
    }
    for(const p of pools.values())for(const part of p.parts){
