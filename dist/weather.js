@@ -112,7 +112,7 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
      for(const n of [0,1]){
        for(const [name,value] of Object.entries({cloudCover:p.cloud,night:n,golden:p.gold,storm:p.storm,weatherTime:0}))probeMaterial.uniforms[name].value=value;
        probeMaterial.uniforms.sunDirection.value.set(...p.sun).normalize();
-       const cube=new THREE.WebGLCubeRenderTarget(graphics.compatibility?64:128,{type:THREE.HalfFloatType});new THREE.CubeCamera(.5,1000,cube).update(renderer,probeScene);
+       const cube=new THREE.WebGLCubeRenderTarget(graphics.compatibility?graphics.profile.probe:128,{type:THREE.HalfFloatType});new THREE.CubeCamera(.5,1000,cube).update(renderer,probeScene);
        pair.push(pmrem.fromCubemap(cube.texture));cube.dispose();
      }environments.set(key,pair);
    }

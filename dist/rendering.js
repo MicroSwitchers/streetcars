@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {WET_PATCH_GLSL} from './weather.js';
-import {QUALITY} from './performance.js';
+import {QUALITY,COMPATIBILITY_QUALITY} from './performance.js';
 
 // Record smooth geometry normals with the colour in the same draw. Inferring
 // a normal from adjacent depth pixels amplifies depth steps into visible bands,
@@ -357,6 +357,7 @@ export function createSceneRenderer(renderer,{compatibility=false}={}){
 // screen-space ray marching, multisampling or double-rendered camera fades.
 // PBR materials, sun shadows, rain, emissive windows and real lamps remain.
 function createCompatibilityRenderer(renderer){
+ let quality=COMPATIBILITY_QUALITY;
  const stats={frames:0,drawCalls:0,triangles:0,quality:'compatibility',texturePixelsSaved:0},position=new THREE.Vector3(),textures=new WeakSet();
  const lamps=Array.from({length:3},()=>new THREE.Vector4()),directions=lamps.map(()=>new THREE.Vector4()),colors=lamps.map(()=>new THREE.Color());
  let preparedScene=null,spots=[],points=[];
@@ -372,12 +373,19 @@ function createCompatibilityRenderer(renderer){
     stats.texturePixelsSaved+=width*height-canvas.width*canvas.height;
    }
   });}
-  for(const [lights,limit] of [[spots,4],[points,2]]){
+  for(const [lights,limit] of [[spots,quality.spots],[points,quality.points]]){
    lights.sort((a,b)=>a.getWorldPosition(position).distanceToSquared(view?.position??scene.position)-b.getWorldPosition(position).distanceToSquared(view?.position??scene.position));
    lights.forEach((light,i)=>light.visible=i<limit);
   }
+  // Rain already samples these uniforms; use the selected real lamps so drops
+  // pick up nearby headlights and street lighting without another render pass.
+  for(let i=0;i<3;i++){
+   const light=spots[i];if(!light){lamps[i].set(0,0,0,0);continue;}
+   const p=light.getWorldPosition(new THREE.Vector3()),d=light.target.getWorldPosition(new THREE.Vector3()).sub(p).normalize();
+   lamps[i].set(p.x,p.y,p.z,light.intensity);directions[i].set(d.x,d.y,d.z,Math.cos(light.angle));colors[i].copy(light.color);
+  }
  }
- return {compatibility:true,target:null,stats,prepare,invalidate(){preparedScene=null;},setQuality(){},bindAtmosphere(){},setNight(){},setWeather(){},
+ return {compatibility:true,target:null,stats,get profile(){return quality;},prepare,invalidate(){preparedScene=null;},setQuality(profile){quality=profile;stats.quality=profile.label;},bindAtmosphere(){},setNight(){},setWeather(){},
   atmosphere:{uniforms:{lamps:{value:lamps},lampDirections:{value:directions},lampColors:{value:colors}}},
   render(scene,view,transition){
    prepare(scene,view);renderer.info.reset();renderer.setRenderTarget(null);

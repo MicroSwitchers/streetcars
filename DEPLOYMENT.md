@@ -117,7 +117,7 @@ Run `node qa/check_live.mjs` on Windows with Chrome installed to verify the publ
 
 ## iPad graphics and context recovery
 
-Apple mobile devices (including iPad Safari desktop mode) start on a separate forward renderer with a 400,000-pixel drawing budget, 512-pixel sun shadow map and a 30 fps cap. It keeps the game models, PBR materials, weather sky/rain and night lights, while omitting the desktop MRT/AO, volumetric and screen-space reflection passes. At most four local spot lights and two cabin point lights shade the scene. Large livery and sign textures are reduced to at most 2048 pixels per side before GPU upload. Automatic quality cannot promote these devices back to the heavy renderer.
+Apple mobile devices (including iPad Safari desktop mode) use a separate forward renderer with a 30 fps cap. iPads normally use the 800,000-pixel / 1024-shadow Balanced profile; Low and recovery use 400,000 pixels and a 512-pixel shadow map. It keeps the game models, PBR materials, weather sky/rain and night lights, while omitting the desktop MRT/AO, volumetric and screen-space reflection passes. Balanced allows six local spot lights and three cabin point lights; Low allows four and two. Large livery and sign textures are reduced to at most 2048 pixels per side before GPU upload. Automatic quality stays within the forward renderer and its Low/Balanced budgets.
 
 Context-loss listeners install before renderer creation. A failure pauses rendering, preserves the ride when available and persists the safe renderer for subsequent loads. Context restoration rebuilds reflection probes and leaves the player paused at the same position. A GPU startup failure can still trigger PWA update checking. Normal desktop rendering remains available on devices without a recorded GPU failure.
 
@@ -126,3 +126,7 @@ Checks: `node qa/check_graphics_budget.mjs`; `node qa/check_live.mjs <PWA URL> -
 ## Sensory controls validation
 
 `node qa/check_sensory_logic.mjs` checks the complete weather-button loop, stable shuffled weather and smooth boundaries. `node qa/check_live.mjs <PWA URL> --sensory --phone` and `--sensory --ipad` check defaults, bright/dim readiness, the compact route, early hold cancellation, full touch and keyboard holds, Random progression and all preferences after a complete offline reload. The iPad case also retains its bounded graphics profile.
+
+## Sharper iPad profile
+
+Auto now starts iPads in the forward Balanced profile: 800,000 drawing pixels, a 1024-pixel sun shadow map, six nearby spot lights, three cabin point lights and 128-pixel reflection probes. It retains the 30 fps cap, bounded probe cache and 2048-pixel texture limit. It still avoids desktop MRT, volumetric and screen-space reflection passes. Settings enables Auto, Low and Balanced on these devices; High is capped at Balanced. Low and a recorded graphics-failure startup retain the previous 400,000-pixel / 512-shadow profile. Auto adapts using thresholds appropriate to a 30 fps target rather than treating the intentional frame cap as a performance problem.

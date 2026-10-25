@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {loadStreetcar,yieldToBrowser} from './loading.js';
-import {AdaptiveQuality,QUALITY,initialQuality,qualityProfile,renderRatio,QUALITY_MODES} from './performance.js';
+import {AdaptiveQuality,QUALITY,initialQuality,qualityProfile,renderRatio,QUALITY_MODES,GRAPHICS_RECOVERY_KEY} from './performance.js';
 import {StreetcarController} from 'streetcar-controller';
 import {Ride} from './ride.js';
 import {StreetcarCamera,CAMERA_MODES,CAMERA_NAMES} from './cameras.js';
@@ -26,7 +26,7 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
  const streetcars=createStreetcarTraffic(scene,trafficTemplate,route,lighting,city.actors);
  const weather=createWeather(scene,city.materials,lighting,graphics,renderer);
  const compatibility=!!graphics.compatibility;
- const performanceBudget=new AdaptiveQuality(initialQuality(renderer.userData?.device??{coarse:matchMedia('(pointer: coarse)').matches,memory:navigator.deviceMemory}),compatibility?'low':'high');
+ const performanceBudget=new AdaptiveQuality(initialQuality(renderer.userData?.device??{coarse:matchMedia('(pointer: coarse)').matches,memory:navigator.deviceMemory}),compatibility?(renderer.userData?.device?.recovering?'low':'balanced'):'high',compatibility?30:60);
  performanceBudget.select(settings.quality);let needsRender=true,lastCityNight=-1;
  const roadStreetcars=[{id:'player',type:'streetcar',direction:1,length:15.6,active:true},{id:'oncoming',type:'streetcar',direction:-1,length:15.6}];
  city.actors.setStreetcars(()=>{
@@ -61,7 +61,8 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
    $('free-camera-help').hidden=settings.camera!=='free';
    $('lights').textContent=state.lights?'Night lights on':'Night lights off';$('lights').setAttribute('aria-pressed',state.lights);
    $('volume-value').textContent=settings.volume===0?'Off':Math.round(settings.volume*100)+'%';$('camera-name').textContent=CAMERA_NAMES[settings.camera];$('camera').setAttribute('aria-label','Change camera. Current view: '+CAMERA_NAMES[settings.camera]);
-   $('setting-quality').disabled=compatibility;$('setting-quality').title=compatibility?'Lighter graphics are active to keep this device stable.':'';if(compatibility)$('setting-quality').previousElementSibling.querySelector('small').textContent='Lighter graphics are active to keep this device stable.';
+   $('setting-quality').disabled=false;$('setting-quality').querySelector('[value="high"]').disabled=compatibility;
+   if(compatibility)$('setting-quality').previousElementSibling.querySelector('small').textContent='Auto uses sharper tablet graphics when possible. Low uses less power. Balanced adds sharper shadows and richer lighting.';
    $('setting-weather').value=settings.weather;$('setting-weather-mode').value=settings.weatherMode;
    $('weather-profile-setting').hidden=settings.weatherMode!=='fixed';$('setting-weather').disabled=settings.weatherMode!=='fixed';
    const weatherLabel=settings.weatherMode==='random'?'Random':settings.weatherMode==='cycle'?'Changing skies':settings.weatherMode==='off'?'Weather off':WEATHER[settings.weather].label;
@@ -70,7 +71,7 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
    $('day-night-label').textContent=settings.night?'Day':'Night';$('day-night-toggle').setAttribute('aria-label','Switch to '+(settings.night?'day':'night'));$('day-night-toggle').title='Switch to '+(settings.night?'day':'night');
    updateHUD();
  }
- function updateSettings(changes){needsRender=true;const previousQuality=settings.quality,previousMode=settings.mode,previousCamera=settings.camera;Object.assign(settings,sanitize({...settings,...changes}));if(changes.camera==='free'&&previousCamera!=='free')settings.swipe=true;if(settings.mode!==previousMode){keys.clear();ride.setMode(settings.mode);$('power').value=0;if(settings.mode==='watch'){wasPaused=false;state.paused=false;}else if(dialog.open){wasPaused=false;state.paused=true;}}if(changes.dayNightCycle===false){cycleTime=0;settings.night=false;}else if(changes.night!==undefined)cycleTime=settings.night?DAY_NIGHT.nightStart:0;ride.cruise=settings.cruise/3.6;ride.setDwellSeconds(settings.doorDwell);ride.setStopEvery(settings.stopEvery);ride.setAlwaysGreen(settings.alwaysGreen);ride.setStopAtLights(settings.stopAtLights);city.updateSignals(state.time,settings.alwaysGreen);updateDayNight();if(settings.quality!==previousQuality){performanceBudget.select(settings.quality);applyQuality();}if(previousCamera!==settings.camera||changes.swipe!==undefined||changes.reduceMotion!==undefined)view.reset();if(settings.volume===0)sound.stop();save();applyUI();updateHUD();return settings;}
+ function updateSettings(changes){needsRender=true;const previousQuality=settings.quality,previousMode=settings.mode,previousCamera=settings.camera;Object.assign(settings,sanitize({...settings,...changes}));if(changes.camera==='free'&&previousCamera!=='free')settings.swipe=true;if(settings.mode!==previousMode){keys.clear();ride.setMode(settings.mode);$('power').value=0;if(settings.mode==='watch'){wasPaused=false;state.paused=false;}else if(dialog.open){wasPaused=false;state.paused=true;}}if(changes.dayNightCycle===false){cycleTime=0;settings.night=false;}else if(changes.night!==undefined)cycleTime=settings.night?DAY_NIGHT.nightStart:0;ride.cruise=settings.cruise/3.6;ride.setDwellSeconds(settings.doorDwell);ride.setStopEvery(settings.stopEvery);ride.setAlwaysGreen(settings.alwaysGreen);ride.setStopAtLights(settings.stopAtLights);city.updateSignals(state.time,settings.alwaysGreen);updateDayNight();if(settings.quality!==previousQuality){if(compatibility){performanceBudget.ceiling='balanced';renderer.userData.device.recovering=false;performanceBudget.initial=initialQuality(renderer.userData.device);try{localStorage.removeItem(GRAPHICS_RECOVERY_KEY);}catch{}}performanceBudget.select(settings.quality);applyQuality();}if(previousCamera!==settings.camera||changes.swipe!==undefined||changes.reduceMotion!==undefined)view.reset();if(settings.volume===0)sound.stop();save();applyUI();updateHUD();return settings;}
  function toggleDayNight(){if(!settings.dayNightCycle)return false;cycleTime=settings.night?0:DAY_NIGHT.nightStart;updateDayNight();save();applyUI();updateHUD();speak(settings.night?'Night scene selected.':'Day scene selected.');return true;}
  function tripSeconds(distance,speed,accelerating=.7,braking=1.05,initialSpeed=0){
    const top=Math.max(.1,speed),start=Math.min(top,Math.max(0,initialSpeed)),accelTime=(top-start)/accelerating;
@@ -163,7 +164,7 @@ export async function startGame({scene,renderer,graphics,camera,sky,sun,lighting
    $('speed').textContent=Math.round(state.speed*3.6);$('power-label').textContent=state.doors?'Doors open':state.assist?'Signal hold':state.command>0?'Power':state.command<0?'Brake':'Coast';
    marker.visible=manual&&!!next;marker.position.set(route.trackX,.055,next?.z??0);
  }
- function applyQuality(){const profile=qualityProfile(performanceBudget.level,compatibility);graphics.setQuality(profile);lighting?.setQuality(profile);resize();}
+ function applyQuality(){const profile=qualityProfile(performanceBudget.level,compatibility);graphics.setQuality(profile);lighting?.setQuality(profile);resize();if(compatibility&&weather.environments.size)weather.rebuildEnvironments();}
  function resize(){needsRender=true;const profile=qualityProfile(performanceBudget.level,compatibility);renderer.setPixelRatio(renderRatio(profile,innerWidth,innerHeight,devicePixelRatio));renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();view.instant=true;}
  function captureSession(){return {version:1,ride:ride.snapshot(),cycleTime,weather:weather.snapshotClock()};}
  function restoreSession(snapshot){if(snapshot?.version!==1||!ride.restore(snapshot.ride))return false;if(typeof snapshot.ride.state.lights==='boolean'){state.lights=snapshot.ride.state.lights;settings.lights=state.lights;rig.setLights({headlights:state.lights,tail:state.lights,markers:state.lights,interior:state.lights});$('lights').textContent=state.lights?'Night lights on':'Night lights off';$('lights').setAttribute('aria-pressed',state.lights);}if(Number.isFinite(snapshot.cycleTime))cycleTime=((snapshot.cycleTime%DAY_NIGHT.duration)+DAY_NIGHT.duration)%DAY_NIGHT.duration;weather.restoreClock(snapshot.weather);updateDayNight();city.actors.reset();streetcars.reset(state.z);updateWorld(0);view.reset();needsRender=true;return true;}

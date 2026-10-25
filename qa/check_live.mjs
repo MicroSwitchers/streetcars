@@ -96,10 +96,12 @@ try{
  }
  if(ipad){
   const budget=await evaluate('({simple:queenStreet.graphics.compatibility,pixels:queenStreet.renderer.domElement.width*queenStreet.renderer.domElement.height,shadow:queenStreet.lighting.sun.shadow.mapSize.x,level:queenStreet.performance.level,savedPixels:queenStreet.graphics.stats.texturePixelsSaved})');
-  if(!budget.simple||budget.pixels>400000||budget.shadow>512||budget.level!=='low'||budget.savedPixels<6000000)throw Error('iPad budget: '+JSON.stringify(budget));
+  if(!budget.simple||budget.pixels>800000||budget.pixels<=400000||budget.shadow!==1024||budget.level!=='balanced'||budget.savedPixels<6000000)throw Error('iPad budget: '+JSON.stringify(budget));
+  await evaluate('queenStreet.updateSettings({quality:"low"})');
+  if(!await evaluate('queenStreet.renderer.domElement.width*queenStreet.renderer.domElement.height<=400000&&queenStreet.lighting.sun.shadow.mapSize.x===512'))throw Error('Low fallback is not available');
   await evaluate('queenStreet.updateSettings({quality:"high",weather:"rain",weatherMode:"fixed",night:true});queenStreet.setPaused(false);queenStreet.primary()');
   await wait(1500);
-  if(await evaluate('queenStreet.performance.level')!=='low')throw Error('Saved High bypassed the iPad safety ceiling');
+  if(await evaluate('queenStreet.performance.level')!=='balanced')throw Error('Saved High bypassed the iPad safety ceiling');
   console.log('PASS: iPad desktop-mode detection, bounded textures/pixels/shadows, night rain and High safety ceiling');
  }
  if(loss){
