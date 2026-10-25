@@ -239,6 +239,15 @@ try{
   for(const [id,side] of [['ago',-1],['hospital',1],['square',-1],['spectrum',-1],['regent-park',1],['library',1],['station',-1]])if(!landmarks.some(f=>f.id===id&&f.side===side))throw Error('Missing or misplaced '+id);
   if(!landmarks.some(f=>f.id==='library'&&f.index>33.12)||!landmarks.some(f=>f.id==='spectrum'&&f.index<29.12))throw Error('Landmark occupies the wrong intersection corner');
   if(!await evaluate('queenStreet.city.districts.group.visible&&!queenStreet.city.queenScenery.visible'))throw Error('Queen scenery shows through Dundas');
+  for(const offset of [20,23,29]){
+   await evaluate('window.__districtStage('+offset+')');
+   const office=await evaluate(`(()=>{const a=queenStreet,d=a.city.districts,f=d.frontages.filter(f=>f.kind==='modern'&&f.side===-1).sort((x,y)=>Math.abs(x.z+124)-Math.abs(y.z+124))[0];if(!f)throw Error('No office/podium frontage at this section');a.camera.fov=70;a.camera.position.set(f.side*4.5,6,f.z-40);a.camera.lookAt(f.side*(f.front+5),19,f.z);a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);return {panels:d.group.getObjectByName('Dundas_office').count,roomWidth:f.room?.width};})()`);
+   if(office.panels<4||office.roomWidth>6)throw Error('Office facade coverage or human-scale shop frontage is missing');
+   await photo('office-'+offset);
+   await evaluate('queenStreet.updateSettings({night:true});queenStreet.graphics.render(queenStreet.scene,queenStreet.camera)');
+   if(!await evaluate('queenStreet.city.materials.officeFacade.emissiveIntensity>0'))throw Error('Office room lighting is missing');
+   await photo('office-'+offset+'-night');
+  }
   // Warm every possible resident offset, including the intermediate ones that
   // a two-stop section advance normally skips. Compare after all lazy uploads.
   for(let offset=0;offset<=36;offset++)assertBudget(await evaluate('window.__districtStage('+offset+')'));

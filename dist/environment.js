@@ -2,7 +2,7 @@ import {buildNeighbourhood} from './neighbourhood.js';
 import {buildStreetLife} from './street-life.js';
 import * as THREE from 'three';
 import {mergeGeometries} from 'geometry-utils';
-import {createFoliage} from './surfaces.js';
+import {createFoliage,createOfficeMaterial} from './surfaces.js';
 import {createStreetscape} from './streetscape.js';
 import {createArchitecture} from './architecture.js';
 import {createDundasScenery} from './dundas-scenery.js';
@@ -20,6 +20,7 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
  const mat=(name,color,roughness=.85,metalness=0)=>mats[name]=new THREE.MeshStandardMaterial({color,roughness,metalness});
  mat('road',0x515550);mat('trackbed',0x484c48);mat('concrete',0xaaa69a);mat('curb',0xb9b8aa);mat('roof',0x454940);mat('trim',0xafa28a);mat('dark',0x273d38);mat('glass',0x304c4f,.25,.3);mat('warmglass',0x8d8870,.4,.1);mat('white',0xe7dfbf);mat('yellow',0xd3ad55);mat('steel',0x9baba6,.25,.8);mat('groove',0x202925);mat('pole',0x4e5b50,.6,.4);mat('red',0xa92e30);mat('wood',0x77563a);mat('leaf',0x526d42);mat('leaf2',0x78884c);mat('bark',0x665843);mat('stone',0x9d9885);mat('blue',0x43646c);mat('maroon',0x5f3131);mat('creamcar',0xb2ac91);mat('rubber',0x252b28);mat('signalCase',0x31342b);mat('signalRed',0xb24e3c);mat('signalGreen',0x789466);mat('signalAmber',0xd9ad54);mat('skyline',0x9aa6a0);mat('skin',0xa77a56);mat('coat',0x435c65);mat('trousers',0x3b403e);
  mat('awningRed',0x9e4a3d);mat('awningGreen',0x536b58);mat('awningBlue',0x4e6970);mat('awningOchre',0xb38a50);mat('awningCream',0xe7d7b6);
+ mats.officeFacade=createOfficeMaterial();
  mats.storeGlass=new THREE.MeshStandardMaterial({color:0xd7e4e6,roughness:.16,metalness:.12,transparent:true,opacity:.14,depthWrite:false,side:THREE.DoubleSide});
  const storeGlazingGeometries=[];let storeGlazingCount=0;
  function add(geometry,material,x,y,z,sx,sy,sz,ry=0,rx=0,rz=0){const cell=Math.floor(z/96),key=String(sceneryLayer)+cell+geometry.uuid+material.uuid;if(!batches.has(key))batches.set(key,{geometry,material,cell,sceneryLayer,matrices:[]});dummy.position.set(x,y,z);dummy.rotation.set(rx,ry,rz);dummy.scale.set(sx,sy,sz);dummy.updateMatrix();batches.get(key).matrices.push(dummy.matrix.clone());}
@@ -285,7 +286,7 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
  }
  setSceneryLayer(true);
  // Distant skyline and a restrained CN Tower silhouette south-east of the corridor.
- for(const side of [-1,1])for(let z=-510;z<730;z+=34){const h=16+rnd()*35;const x=side*(65+rnd()*50),w=12+rnd()*14;box('skyline',x,h/2,z,w,h,15+rnd()*16);for(let y=5;y<h-2;y+=3.8)box('glass',x-side*(w/2+.015),y,z,.025,.85,11); }
+  for(const side of [-1,1])for(let z=-510;z<730;z+=34){const h=16+rnd()*35;const x=side*(65+rnd()*50),w=12+rnd()*14,d=15+rnd()*16;box('officeFacade',x,h/2,z,w,h,d);box('roof',x,h+.13,z,w+.3,.26,d+.3); }
  cylinder('skyline',78,48,190,1.4,96);cylinder('skyline',78,78,190,5.8,4);cylinder('dark',78,80,190,4.5,1.5);cylinder('skyline',78,96,190,.38,31);cylinder('skyline',78,112,190,.12,9);
  const scenery=streetscape.finish();
  const architecturalDetails=architecture.finish();
@@ -326,5 +327,5 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
    routeTexture.needsUpdate=true;
  }
  setRoute();
- return {setRoute,queenScenery,districts,routeSigns,routeTexture,signals,materials:mats,actors,neighbourhood,scenery,architecture:architecturalDetails,buildingCount:shop,awningCount,upperWindowCount,facadeDetailCount,rooflineDetailCount,shopfrontCount,shopfrontFeatureCount,storeGlazingCount,storeGlazing,signCount:signIndex,update(time,dt,alwaysGreen=false){actors.update(time,dt,alwaysGreen);},setNight(amount){const night=THREE.MathUtils.clamp(amount,0,1);cityNight=night;actors.setNight(night);streetscape.setNight(night);districts.setNight(night);mats.glass.emissive.setHex(0xffffff);mats.glass.emissiveIntensity=.42*night;signMat.emissive.copy(windowGlow);signMat.emissiveIntensity=.10*night;routeSignMat.emissive.copy(windowGlow);routeSignMat.emissiveIntensity=.10*night;for(let i=0;i<4;i++){mats['display'+i].emissive.copy(windowGlow);mats['display'+i].emissiveIntensity=.18*night;}},updateSignals(time,alwaysGreen=false){const phase=time%42,state=alwaysGreen||phase<23?'green':phase<27?'amber':'red';signals.forEach(({group})=>group.children.forEach((lamp,i)=>lamp.material.color.setHex(i===(state==='red'?0:state==='amber'?1:2)?[0xff6c46,0xffc76c,0x9edb89][i]:0x29352c)));return state;}};
+ return {setRoute,queenScenery,districts,routeSigns,routeTexture,signals,materials:mats,actors,neighbourhood,scenery,architecture:architecturalDetails,buildingCount:shop,awningCount,upperWindowCount,facadeDetailCount,rooflineDetailCount,shopfrontCount,shopfrontFeatureCount,storeGlazingCount,storeGlazing,signCount:signIndex,update(time,dt,alwaysGreen=false){actors.update(time,dt,alwaysGreen);},setNight(amount){const night=THREE.MathUtils.clamp(amount,0,1);cityNight=night;actors.setNight(night);streetscape.setNight(night);districts.setNight(night);mats.glass.emissive.setHex(0xffffff);mats.glass.emissiveIntensity=.42*night;mats.officeFacade.emissiveIntensity=.22*night;signMat.emissive.copy(windowGlow);signMat.emissiveIntensity=.10*night;routeSignMat.emissive.copy(windowGlow);routeSignMat.emissiveIntensity=.10*night;for(let i=0;i<4;i++){mats['display'+i].emissive.copy(windowGlow);mats['display'+i].emissiveIntensity=.18*night;}},updateSignals(time,alwaysGreen=false){const phase=time%42,state=alwaysGreen||phase<23?'green':phase<27?'amber':'red';signals.forEach(({group})=>group.children.forEach((lamp,i)=>lamp.material.color.setHex(i===(state==='red'?0:state==='amber'?1:2)?[0xff6c46,0xffc76c,0x9edb89][i]:0x29352c)));return state;}};
 }

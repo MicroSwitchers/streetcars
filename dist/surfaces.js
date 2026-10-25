@@ -1,6 +1,47 @@
 import * as THREE from 'three';
 import {mergeGeometries} from 'geometry-utils';
 
+// An antialiased curtain wall needs no per-window geometry or image atlas.
+// Physical floor/bay modules work on every face of merged or instanced towers.
+export function createOfficeMaterial(){
+ const m=new THREE.MeshStandardMaterial({color:0x738d95,roughness:.25,metalness:.18,emissive:0xffffff,emissiveIntensity:0});
+ m.name='Office_Curtain_Wall';m.envMapIntensity=1.05;
+ m.onBeforeCompile=shader=>{
+   shader.vertexShader='varying vec2 vOfficeCoord;varying float vOfficeWall;\n'+shader.vertexShader;
+   shader.vertexShader=shader.vertexShader.replace('#include <project_vertex>',`
+     vec4 officeP=vec4(transformed,1.);vec3 officeN=normal;
+     #ifdef USE_INSTANCING
+       officeP=instanceMatrix*officeP;officeN=mat3(instanceMatrix)*officeN;
+     #endif
+     officeP=modelMatrix*officeP;officeN=normalize(mat3(modelMatrix)*officeN);
+     vOfficeCoord=vec2(abs(officeN.x)>abs(officeN.z)?officeP.z:officeP.x,officeP.y);
+     vOfficeWall=1.-step(.6,abs(officeN.y));
+     #include <project_vertex>`);
+   shader.fragmentShader='varying vec2 vOfficeCoord;varying float vOfficeWall;\n'+shader.fragmentShader;
+   shader.fragmentShader=shader.fragmentShader.replace('vec3 totalEmissiveRadiance = emissive;',`
+     vec2 officeGrid=vOfficeCoord/vec2(1.45,3.30),officeCell=floor(officeGrid),officeF=fract(officeGrid);
+     vec2 officeAA=max(fwidth(officeGrid),vec2(.0001));
+     float officePane=smoothstep(.025-officeAA.x,.025+officeAA.x,officeF.x)*(1.-smoothstep(.975-officeAA.x,.975+officeAA.x,officeF.x));
+     officePane*=smoothstep(.23-officeAA.y,.23+officeAA.y,officeF.y)*(1.-smoothstep(.96-officeAA.y,.96+officeAA.y,officeF.y));
+     // Fade subpixel glazing detail to its average coverage at a distance.
+     officePane=mix(officePane,.66,smoothstep(.22,.65,max(officeAA.x,officeAA.y)))*vOfficeWall;
+     vec2 officeRoom=floor(officeCell/vec2(3.,1.));
+     float officeSeed=fract(sin(dot(officeRoom,vec2(37.719,78.233)))*43758.5453);
+     float officeFar=smoothstep(.22,.65,max(officeAA.x,officeAA.y));
+     float officeOccupied=mix(smoothstep(.51,.56,officeSeed)*(.30+fract(officeSeed*19.)*.65),.27,officeFar);
+     vec3 officeKelvin=mix(vec3(1.,.67,.36),vec3(.65,.81,1.),step(.85,officeSeed));
+     vec3 totalEmissiveRadiance=emissive*officeKelvin*officeOccupied*officePane;`);
+   shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`
+     #include <map_fragment>
+     float officeTint=.88+.12*fract(sin(dot(officeCell,vec2(12.9898,37.719)))*43758.5453);
+     officeTint=mix(officeTint,.94,officeFar);
+     diffuseColor.rgb*=mix(vec3(.42,.46,.47),vec3(officeTint),officePane);
+   `);
+   shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=mix(.76,roughnessFactor,officePane);');
+ };
+ m.customProgramCacheKey=()=> 'office-curtain-wall-v1';return m;
+}
+
 // All surface detail is generated locally, including the alpha-cutout foliage.
 // A fixed seed keeps the same street on every visit and in the portable build.
 function random(seed=501){return ()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};}
