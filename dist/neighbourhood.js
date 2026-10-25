@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 // Static additions share the main street's material batches and do not enter the rail corridor.
 export function buildNeighbourhood(c){
- const {scene,route,mats,mat,box,cylinder,rod,add,sign,rnd,leafGeo,canvasMap,setSceneryLayer=()=>{}}=c;
+ const {scene,route,mats,mat,box,cylinder,rod,add,sign,rnd,leafGeo,canvasMap,setSceneryLayer=()=>{},insetWindow,facadePanel,facadeRectangles,windowDepth}=c;
  mat('parkGrass',0x6c7c50);mat('fence',0x3d4b40,.68,.3);mat('roofTile',0x73564a);mat('path',0xb7ad94);mat('warmStone',0xb6a58a);mat('rust',0x8c5e46);
  const pitchedRoof=new THREE.BufferGeometry();pitchedRoof.setAttribute('position',new THREE.Float32BufferAttribute([-.5,0,-.5,.5,0,-.5,-.5,0,.5,.5,0,.5,-.5,1,0,.5,1,0],3));pitchedRoof.setIndex([0,2,4,1,5,3,0,4,5,0,5,1,2,3,5,2,5,4,0,1,3,0,3,2]);pitchedRoof.computeVertexNormals();
  // Side streets continue beyond the crossing instead of ending at empty asphalt.
@@ -53,7 +53,13 @@ export function buildNeighbourhood(c){
          const variation=(j*2+Math.abs(cross.z/100)+end+4)%4;
          const height=8.2+variation*1.55,front=cross.z+end*10.25,centerZ=front+end*depth/2;
          const brickIndex=(j+Math.abs(cross.z/100)+end+8)%5;
-         box('brick'+brickIndex,x,height/2,centerZ,width,height,depth);
+         box('brick'+brickIndex,x,height/2,centerZ+end*windowDepth/2,width,height,depth-windowDepth);
+         const apertures=[{u:0,y:.95,width:1.25,height:1.90}];
+         for(const u of [-2.45,2.45]){
+           apertures.push({u,y:1.72,width:3.55,height:2.55});
+           for(let y=5.35;y<height-1.05;y+=2.65)apertures.push({u,y,width:1.55,height:1.95});
+         }
+         for(const r of facadeRectangles(width,0,height,apertures))facadePanel('brick'+brickIndex,x+(r.left+r.right)/2,(r.bottom+r.top)/2,front,r.right-r.left,r.top-r.bottom,-end*Math.PI/2);
          box('roof',x,height+.16,centerZ,width+.2,.24,depth+.24);
          box('warmStone',x,3.62,front-end*.14,width,.23,.30);
          box('warmStone',x,.42,front-end*.14,width,.32,.30);
@@ -67,20 +73,14 @@ export function buildNeighbourhood(c){
          // Individual two-storey shops replace the short, broken row of blank end walls.
          for(const offset of [-2.45,2.45]){
            const windowX=x+offset;
-           box('dark',windowX,1.72,front-end*.22,3.55,2.55,.16);
-           box('display'+((j+variation)%4),windowX,1.72,front-end*.32,3.20,2.30,.04);
-           for(const mullion of [-1.05,0,1.05])box('warmStone',windowX+mullion,1.72,front-end*.37,.10,2.38,.12);
+           insetWindow(windowX,1.72,front,3.55,2.55,-end*Math.PI/2,j);
            box('warmStone',windowX,.42,front-end*.37,3.70,.22,.25);
            box('warmStone',windowX,3.02,front-end*.37,3.70,.16,.25);
            box('trim',windowX,2.54,front-end*.40,3.24,.07,.14);
            for(let y=5.35;y<height-1.05;y+=2.65){
-             box('warmStone',windowX,y,front-end*.22,1.55,1.95,.24);
-             box('glass',windowX,y,front-end*.38,1.25,1.64,.05);
-             box('trim',windowX,y,front-end*.43,.07,1.58,.07);
-             for(const edge of [-1,1])box('trim',windowX+edge*.60,y,front-end*.43,.07,1.58,.07);
-             box('warmStone',windowX,y+.87,front-end*.44,1.63,.15,.14);
-             box('warmStone',windowX,y-.88,front-end*.45,1.75,.15,.18);
-             box('trim',windowX,y,front-end*.45,.06,1.54,.06);
+             insetWindow(windowX,y,front,1.55,1.95,-end*Math.PI/2,j);
+             box('warmStone',windowX,y+1.04,front-end*.06,1.70,.14,.24);
+             box('warmStone',windowX,y-1.05,front-end*.08,1.78,.15,.30);
              sideStreetWindows++;
            }
          }
@@ -105,17 +105,15 @@ export function buildNeighbourhood(c){
          // with returned stone trim and windows rather than exposed brick.
          if(j===0||j===10){
            const faceX=x+side*(width/2+.18);
-           box('warmStone',faceX,(height+.35)/2,centerZ,.28,height-.7,depth+.16);
-           box('brick'+brickIndex,faceX+side*.17,height/2,centerZ,.12,height-.8,depth-.75);
+           const endOpenings=[];
+           for(const u of [-2.5,2.5])for(const y of [2,5.45,8.1])if(y<=height-1)endOpenings.push({u,y,width:1.72,height:2.12});
+           for(const r of facadeRectangles(depth+.16,.35,height-.35,endOpenings))facadePanel('brick'+brickIndex,faceX+side*.24,(r.bottom+r.top)/2,centerZ+(r.left+r.right)/2,r.right-r.left,r.top-r.bottom,side===1?Math.PI:0);
            box('trim',faceX+side*.22,height-.36,centerZ,.20,.18,depth+.1);
            box('warmStone',faceX+side*.22,.43,centerZ,.24,.30,depth+.1);
            for(const zOffset of [-2.5,2.5]){
              for(let y of [2.0,5.45,8.1]){
                if(y>height-1)continue;
-               box('warmStone',faceX+side*.24,y,centerZ+zOffset, .22,2.12,1.72);
-               box('glass',faceX+side*.37,y,centerZ+zOffset,.05,1.76,1.36);
-               box('trim',faceX+side*.42,y,centerZ+zOffset,.06,1.68,.06);
-               box('trim',faceX+side*.42,y,centerZ+zOffset,.06,.06,1.24);
+               insetWindow(faceX+side*.24,y,centerZ+zOffset,1.72,2.12,side===1?Math.PI:0,j);
                box('warmStone',faceX+side*.44,y+.94,centerZ+zOffset,.12,.16,1.92);
                box('warmStone',faceX+side*.44,y-.96,centerZ+zOffset,.14,.18,1.98);
                box('trim',faceX+side*.43,y-.28,centerZ+zOffset,.08,.07,1.28);

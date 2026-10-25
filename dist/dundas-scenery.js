@@ -3,13 +3,14 @@ import {DUNDAS_DISTRICTS,dundasDistrictAt,dundasIndexAtZ} from './dundas-distric
 import {shopLighting} from './night-windows.js';
 import {createDundasRetail,dundasShopType} from './dundas-retail.js';
 import {createDundasFacades} from './dundas-facades.js';
+import {facadeRectangles,windowGeometries,WINDOW_DEPTH} from './facade-windows.js';
 
 // A complete resident 505 streetscape, reusing the same GPU buffers at every
 // section change. Districts change both massing and street-level objects.
 export function createDundasScenery({scene,route,mats,foliage,streetProps,architecturalAssets}){
  const group=new THREE.Group();group.name='505_Dundas_District_Streetscape';scene.add(group);
  const boxGeometry=new THREE.BoxGeometry(1,1,1),dummy=new THREE.Object3D();
- const pools=new Map(),displays=[],zones=[],landmarks=[],frontages=[],nightMaterials=[];let sourceSerial=0,officeFinish=0;
+ const pools=new Map(),displays=[],zones=[],landmarks=[],frontages=[],nightMaterials=[],facadeWindows=[];let sourceSerial=0,officeFinish=0;
  const officeColours=[new THREE.Color(0xd8e7f2),new THREE.Color(0xe1e6d5),new THREE.Color(0xd6c2a3)];
  const stats={meshes:0,instances:0,triangles:0,capacityTriangles:0,atlasPixels:1024*1024,overflow:0,frontages:0,trees:0,sources:0,rebuilds:0,windowFrames:0,facadeDetails:0,parkSlopes:0,skylineTowers:0,activeZones:[],landmarks:[]};
  const material=(name,colour,roughness=.85,metalness=0)=>{
@@ -46,8 +47,10 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
  }
  // Matrix capacities follow the maximum demand across all 37 resident route
  // offsets. Capacity does not increase draw cost: only mesh.count is rendered.
- const capacities={brick:500,buff:220,warmBrick:220,darkBrick:220,greyBrick:220,plaster:380,stone:3600,timber:480,metal:3200,roof:360,glass:1100,window:2100,display:220,red:1500,green:1500,grass:170,blue:1600};
+ const capacities={brick:600,buff:300,warmBrick:300,darkBrick:300,greyBrick:300,plaster:500,stone:3600,timber:480,metal:3200,roof:360,glass:1100,window:2100,display:220,red:1500,green:1500,grass:170,blue:1600};
  for(const [name,capacity] of Object.entries(capacities))pool(name,boxGeometry,materials[name],capacity,!['glass','window','display','grass'].includes(name));
+ const wallGeometry=new THREE.PlaneGeometry(1,1);wallGeometry.rotateY(-Math.PI/2);
+ for(const kind of ['brick','buff','warmBrick','darkBrick','greyBrick','plaster','stone'])pool('wall_'+kind,wallGeometry,materials[kind],kind==='stone'?4800:kind==='brick'?3400:2400);
  // More, smaller leaf clumps preserve Queen's leaf scale and branching crown.
  const crownGeometry=foliage.geometry.clone();crownGeometry.setIndex(Array.from(foliage.geometry.index.array).filter((_,i)=>Math.floor(i/6)%2===0));
  pool('leaf',crownGeometry,leaf,260,false);
@@ -69,22 +72,11 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
  const roofIndices=[0,2,1,3,4,5,0,3,5,0,5,2,1,2,5,1,5,4,0,1,4,0,4,3];
  gableGeometry.setAttribute('position',new THREE.Float32BufferAttribute(roofVertices.flat(),3));gableGeometry.setIndex(roofIndices);gableGeometry.computeVertexNormals();pool('gable',gableGeometry,materials.roof,140);
  // A single reusable chamfered reveal is substantially cheaper than separate
- // jamb/lintel boxes. Its outer edge meets masonry; the inner edge projects
- // forward around the inset glazing, without invisible back/side polygons.
- const frameGeometry=new THREE.BufferGeometry(),framePositions=[];
- const quad=(a,b,c,d,wanted)=>{
-   const av=new THREE.Vector3(...a),bv=new THREE.Vector3(...b),cv=new THREE.Vector3(...c);
-   const reverse=bv.sub(av).cross(cv.sub(av)).dot(new THREE.Vector3(...wanted))<0;
-   for(const point of reverse?[a,c,b,a,d,c]:[a,b,c,a,c,d])framePositions.push(...point);
- };
- const outer=[[-.5,-.5],[-.5,.5],[.5,.5],[.5,-.5]],inner=[[-.465,-.465],[-.465,.465],[.465,.465],[.465,-.465]];
- for(let i=0;i<4;i++){
-   const next=(i+1)%4,a=outer[i],b=outer[next],c=inner[next],d=inner[i];
-   quad([.16,...a],[.16,...b],[-.075,...c],[-.075,...d],[-1,0,0]);
-   const inward=[0,-(c[0]+d[0]),-(c[1]+d[1])];
-   quad([-.075,...d],[-.075,...c],[.16,...c],[.16,...d],inward);
- }
- frameGeometry.setAttribute('position',new THREE.Float32BufferAttribute(framePositions,3));frameGeometry.computeVertexNormals();pool('frame',frameGeometry,materials.stone,1500);
+ // jamb/lintel boxes. The outer edge meets masonry; the jambs return inward
+ // to glazing 24 cm behind the wall, without invisible back polygons.
+ const windowKit=windowGeometries();pool('frame',windowKit.reveal,materials.stone,3200);
+ pool('recessPane',windowKit.pane,sharedGlass,3200,false);
+ pool('recessSash',windowKit.sash,materials.metal,3200);
  pool('hardware',boxGeometry,mats.steel||materials.metal,150,false);
  // A gently rising turf prism joins adjacent park cells exactly, replacing
  // visibly raised rectangular grass blocks. One geometry serves every slope.
@@ -225,6 +217,27 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    if(end-edge>.01)box(name,side,front,1.72,(edge+end)/2,2.3,3.06,end-edge);
  }
  function frame(side,front,y,z,width,height){put('frame',side*front,y,z,1,height,width,side===1?0:Math.PI);stats.windowFrames++;}
+ function recessedWindow(side,front,y,z,width,height){
+   insetPane(side*front,y,z,width,height,side===1?0:Math.PI);
+   return {y,z,width,height};
+ }
+ function insetPane(x,y,z,width,height,rotation){
+   for(const kind of ['frame','recessPane','recessSash'])put(kind,x,y,z,1,height,width,rotation);
+   stats.windowFrames++;facadeWindows.push({x,y,z,width,height,rotation,depth:WINDOW_DEPTH});
+ }
+ function masonryFace(kind,side,front,z,width,bottom,top,openings){
+   for(const r of facadeRectangles(width,bottom,top,openings.map(w=>({...w,u:w.z-z}))))put('wall_'+kind,side*front,(r.bottom+r.top)/2,z+(r.left+r.right)/2,1,r.top-r.bottom,r.right-r.left,side===1?0:Math.PI);
+   for(const edge of [-1,1])box(kind,side,front+.001,(bottom+top)/2,z+edge*(width/2-.02),WINDOW_DEPTH,top-bottom,.04);
+ }
+ function masonryEnds(kind,side,front,z,width,depth,bottom,top,layout=null){
+   const holes=layout||[];
+   if(!layout)for(let y=5.2;y+1.1<top;y+=2.9)holes.push({u:0,y,width:1.35,height:1.95});
+   for(const edge of [-1,1]){
+     const endZ=z+edge*width/2,rotation=edge*Math.PI/2;
+     for(const r of facadeRectangles(depth,bottom,top,holes))put('wall_'+kind,side*(front+depth/2+(r.left+r.right)/2),(r.bottom+r.top)/2,endZ,1,r.top-r.bottom,r.right-r.left,rotation);
+     for(const w of holes)insetPane(side*(front+depth/2+w.u),w.y,endZ,w.width,w.height,rotation);
+   }
+ }
  function tree(side,z,front=15,size=1){
    if(!clear(z,6*size)||stats.trees>=40)return;
    const x=side*front;
@@ -245,12 +258,8 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
      const y=3.7+rise*(level+.5);
      for(let col=0;col<count;col++){
        const zz=z+(col-(count-1)/2)*pitch;
-       box(kind,side,front,y,zz,.045,paneHeight,paneWidth);
-       openings.push({y,z:zz,width:paneWidth,height:paneHeight});
+       openings.push(recessedWindow(side,front,y,zz,paneWidth+.14,paneHeight+.14));
        if(closeDetail(z)){
-         frame(side,front+.02,y,zz,paneWidth+.14,paneHeight+.14);
-         box(style===2?'metal':'cream',side,front-.07,y,zz,.08,paneHeight,.045);
-         box(style===2?'metal':'cream',side,front-.07,y+(style===1?.35:0),zz,.08,.045,paneWidth);
          box(style===3?'timber':'stone',side,front-.15,y-paneHeight/2-.09,zz,.30,.12,paneWidth+.23);
          // Straight soldier-course/stone lintels vary by frontage; all follow
          // the actual aperture instead of floating decorative arch segments.
@@ -272,15 +281,14 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    const displayZ=z-width*.12,displayWidth=Math.min(4.9,width*.57),doorZ=z+width*.34,doorWidth=1.08;
    let room=null;
    if(hasRoom){
-     box(brickName,side,front,(height+3.25)/2,z,depth,height-3.25,width-.14);
-     box(brickName,side,front+2.3,1.62,z,depth-2.3,3.25,width-.14);
+     box(brickName,side,front+WINDOW_DEPTH,(height+3.25)/2,z,depth-WINDOW_DEPTH,height-3.25,width-.14-WINDOW_DEPTH*2);
+     box(brickName,side,front+2.3,1.62,z,depth-2.3,3.25,width-.14-WINDOW_DEPTH*2);
      for(const edge of [-1,1])box(brickName,side,front,1.62,z+edge*(width/2-.18),2.3,3.25,.22);
      room=roomShell(side,displayZ,displayWidth,front,lighting);
      groundInfill(brickName,side,z,width,front,[{z:displayZ,width:displayWidth},{z:doorZ,width:doorWidth}]);
    }else{
-     box(brickName,side,front,height/2+.18,z,depth,height,width-.14);
-     box('metal',side,front-.17,1.65,z,.18,2.82,width-.55);
-     box('glass',side,front-.24,1.63,displayZ,.045,2.34,displayWidth);
+     box(brickName,side,front+WINDOW_DEPTH,height/2+.18,z,depth-WINDOW_DEPTH,height,width-.14-WINDOW_DEPTH*2);
+     recessedWindow(side,front,1.63,displayZ,displayWidth+.14,2.48);
    }
    roof(side,z,width-.12,height,depth,false);
    box('stone',side,front-.30,height-.04,z,.52,.19,width+.08);
@@ -290,7 +298,9 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    for(const edge of [-1,1])box(trim,side,front-.33,1.6,z+edge*(width/2-.2),.18,2.9,.17);
    box(trim,side,front-.28,3.08,z,.24,.22,width-.25);
    const mural=district.id==='portugal'&&serial%5===0;
-   const openings=windows(side,z,width,height,serial%3?'window':'glass',front-.17,3,2,serial%4);
+   const openings=windows(side,z,width,height,serial%3?'window':'glass',front,3,2,serial%4);
+   masonryFace(brickName,side,front,z,width-.14,hasRoom?3.25:.18,hasRoom?height:height+.18,[...openings,...(hasRoom?[]:[{z:displayZ,y:1.63,width:displayWidth+.14,height:2.48},{z:doorZ,y:1.54,width:doorWidth,height:2.52}])]);
+   masonryEnds(brickName,side,front,z,width-.14,depth,.18,height);
    if(detailed){
      frame(side,front-.27,1.54,doorZ,doorWidth+.18,2.70);
      box('stone',side,front-.43,.20,doorZ,.55,.14,doorWidth+.24);
@@ -323,14 +333,17 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    source(side,hasRoom?displayZ:z,hasRoom?displayWidth:width,serial,lighting.style,side*(hasRoom?front-.085:front-.25),hasRoom?lighting:{...lighting,style:6,power:.02});stats.frontages++;
  }
  function house(side,z,width,height,district,index,serial){
-   const depth=9.5,front=14.0;box(serial%3?'brick':'buff',side,front,height/2+.16,z,depth,height,width-.3);
+   const depth=9.5,front=14.0,wall=serial%3?'brick':'buff';box(wall,side,front+WINDOW_DEPTH,height/2+.16,z,depth-WINDOW_DEPTH,height,width-.3-WINDOW_DEPTH*2);
    put('gable',side*(front+depth/2),height+1.15,z,depth+1,2.3,width-.1);
-   const openings=windows(side,z,width,height,'window',front-.07,2,2,(serial+2)%4);
+   const openings=windows(side,z,width,height,'window',front,2,2,(serial+2)%4);
+   masonryFace(wall,side,front,z,width-.3,.16,height+.16,[...openings,{y:1.5,z:z-width*.27,width:1.1,height:2.45}]);
+   masonryEnds(wall,side,front,z,width-.3,depth,.16,height+.16);
    box('stone',side,front-.6,.4,z,1.25,.55,width-.6);
    box('glass',side,front-.08,1.5,z-width*.27,.04,2.45,1.1);
    // Small bay windows and porches give the adapted houses a different depth.
-   box('plaster',side,front-.75,1.6,z+width*.21,.85,2.25,width*.34);
-   box('glass',side,front-.81,1.72,z+width*.21,.045,1.65,width*.27);
+   box('plaster',side,front-.75+WINDOW_DEPTH,1.6,z+width*.21,.85-WINDOW_DEPTH,2.25,width*.34);
+   const bay=recessedWindow(side,front-.75,1.72,z+width*.21,width*.27+.14,1.79);
+   masonryFace('plaster',side,front-.75,z+width*.21,width*.34,.475,2.725,[bay]);
    box('roof',side,front-1.0,2.8,z+width*.21,1.15,.18,width*.39);
    if(closeDetail(z)){
      const doorZ=z-width*.27;frame(side,front-.08,1.5,doorZ,1.30,2.64);
@@ -347,37 +360,34 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
  function loft(side,z,width,district,index,serial){
    const h=11+Math.floor(hash(serial+index)*3)*3,depth=12,front=11.75,lighting=shopLighting(serial);
    const hasRoom=closeDetail(z)&&serial%2===0,displayWidth=Math.min(5.4,width*.66),displayZ=z-width*.10;
-   let room=null;const openings=[];
+   let room=null;const openings=[],wall=serial%3?'brick':hasRoom?'darkBrick':'buff';
    if(hasRoom){
-     box(serial%3?'brick':'darkBrick',side,front,(h+3.25)/2,z,depth,h-3.25,width-.2);
-     box('brick',side,front+2.3,1.62,z,depth-2.3,3.25,width-.2);
+     box(wall,side,front+WINDOW_DEPTH,(h+3.25)/2,z,depth-WINDOW_DEPTH,h-3.25,width-.2-WINDOW_DEPTH*2);
+     box('brick',side,front+2.3,1.62,z,depth-2.3,3.25,width-.2-WINDOW_DEPTH*2);
      for(const off of [-.48,.48])box('brick',side,front,1.62,z+width*off,2.3,3.25,.26);
      room=roomShell(side,displayZ,displayWidth,front,lighting);
-     groundInfill('brick',side,z,width,front,[{z:displayZ,width:displayWidth},{z:z+width*.36,width:1.08}]);
-   }else box(serial%3?'brick':'buff',side,front,h/2,z,depth,h,width-.2);
+   }else box(wall,side,front+WINDOW_DEPTH,h/2,z,depth-WINDOW_DEPTH,h,width-.2-WINDOW_DEPTH*2);
    roof(side,z,width,h,depth);
    for(let floor=0;floor<5&&3+floor*3<h;floor++){
      const y=2+floor*3;
      if(floor===0&&hasRoom){
        const doorZ=z+width*.36;box('glass',side,front-.13,1.65,doorZ,.055,2.55,1.08);frame(side,front-.11,1.65,doorZ,1.22,2.69);
        for(const zz of [z-width*.39,z+width*.18]){
-         box('window',side,front-.13,1.75,zz,.055,2.20,1.65);frame(side,front-.11,1.75,zz,1.79,2.34);
-         box('metal',side,front-.21,1.75,zz,.09,2.2,.055);
+         openings.push(recessedWindow(side,front,1.75,zz,1.79,2.34));
        }
        continue;
      }
      const columns=Math.max(4,Math.round(width/2.6)),pitch=(width-1.2)/columns;
      for(let col=0;col<columns;col++){
        const zz=z+(col-(columns-1)/2)*pitch,pane=Math.min(1.65,pitch-.42);
-       box(floor%2?'glass':'window',side,front-.13,y,zz,.055,1.9,pane);
-       if(floor>0)openings.push({y,z:zz,width:pane,height:1.9});
+       openings.push(recessedWindow(side,front,y,zz,pane+.14,2.04));
        if(closeDetail(z)){
-         frame(side,front-.11,y,zz,pane+.14,2.08);
-         box('metal',side,front-.21,y,zz,.09,1.94,.065);
-         box('metal',side,front-.21,y+.40,zz,.09,.055,pane);
+         box('stone',side,front-.15,y-1.09,zz,.30,.12,pane+.28);
        }
      }
    }
+   masonryFace(wall,side,front,z,width-.2,0,h,[...openings,...(hasRoom?[{y:1.72,z:displayZ,width:displayWidth,height:2.60},{y:1.65,z:z+width*.36,width:1.08,height:2.55}]:[])]);
+   masonryEnds(wall,side,front,z,width-.2,depth,0,h);
    box('stone',side,11.49,h-.3,z,.40,.38,width+.1);
    shopSign(side,displayZ,3.60,Math.min(width-.8,7.4),shopLabel(district,serial,side),front-.24);
    register('loft',side,z,width,h,front,depth,serial,district,openings,room);
@@ -401,30 +411,33 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    officeFinish=style;
    const lighting=shopLighting(serial),hasRoom=closeDetail(z)&&serial%2===0,displayZ=z-width*.25,displayWidth=5.2;
    let room=null;
-   box('stone',side,front,6.60,z,depth,6.70,width-.35);
-   box('stone',side,front+2.3,1.62,z,depth-2.3,3.25,width-.35);
+   box('stone',side,front+WINDOW_DEPTH,6.60,z,depth-WINDOW_DEPTH,6.70,width-.35-WINDOW_DEPTH*2);
+   box('stone',side,front+2.3,1.62,z,depth-2.3,3.25,width-.35-WINDOW_DEPTH*2);
    if(hasRoom)room=roomShell(side,displayZ,displayWidth,front,lighting);
    const entryZ=z+width*.24,entryWidth=2.25;
-   groundInfill('stone',side,z,width,front,[...(room?[{z:displayZ,width:displayWidth}]:[]),{z:entryZ,width:entryWidth}]);
+   const podiumOpenings=[...(room?[{z:displayZ,y:1.72,width:displayWidth,height:2.60}]:[]),{z:entryZ,y:1.66,width:entryWidth,height:2.80}];
    // Separate ground-floor bays, recessed lobby doors, canopy and door hardware.
    for(const q of [-.39,-.12,.10,.39]){
      const zz=z+width*q;if(Math.abs(zz-entryZ)<2||room&&Math.abs(zz-displayZ)<displayWidth/2+1.4)continue;
-     box('glass',side,front-.10,1.72,zz,.045,2.65,3.25);frame(side,front-.08,1.72,zz,3.40,2.80);
+     podiumOpenings.push(recessedWindow(side,front,1.72,zz,3.40,2.80));
    }
+   masonryFace('stone',side,front,z,width-.35,0,3.25,podiumOpenings);
    box('glass',side,front+.12,1.66,entryZ,.04,2.80,entryWidth);
    for(const off of [-1,0,1])box('metal',side,front-.06,1.66,entryZ+off*entryWidth/2,.16,2.91,.06);
    for(const off of [-.16,.16])box('hardware',side,front-.10,1.42,entryZ+off,.09,.35,.035);
    box('metal',side,front-1.3,3.32,entryZ,1.55,.13,4.1);
    box('cream',side,front-1.28,3.24,entryZ,1.48,.025,3.85);
    box('stone',side,front-.55,.25,entryZ,.80,.14,2.65);
+   const upperOpenings=[],bayCount=Math.max(3,Math.round((width-.95)/3.3)),bayPitch=(width-.95)/bayCount;
    for(const y of [5.25,8.55]){
-     box('office',side,front-.055,y,z,.035,2.60,width-.95);
+     for(let i=0;i<bayCount;i++)upperOpenings.push(recessedWindow(side,front,y,z+(i-(bayCount-1)/2)*bayPitch,bayPitch-.18,2.74));
      box('stone',side,front-.20,y-1.40,z,.30,.18,width-.40);
-     for(let zz=z-width/2+1;zz<z+width/2;zz+=3.3)box('stone',side,front-.19,y,zz,.27,2.75,.16);
    }
+   masonryFace('stone',side,front,z,width-.35,3.25,9.95,upperOpenings);
    // Return the glazing and floor courses around exposed intersection walls.
+   const sideOpenings=[];for(const y of [1.72,5.25,8.55])for(const u of [-depth*.28,0,depth*.28])sideOpenings.push({u,y,width:2.80,height:2.60});
+   masonryEnds('stone',side,front,z,width-.35,depth,0,9.95,sideOpenings);
    for(const edge of [-1,1]){
-     for(const y of [1.72,5.25,8.55])put('office',side*(front+depth/2),y,z+edge*(width/2-.13),depth-3,2.60,.035);
      for(const y of [3.3,6.6,9.9])put('stone',side*(front+depth/2),y,z+edge*(width/2-.10),depth,.16,.22);
    }
    const towerW=width*(style===1?.60:.72),towerFront=front+(style===2?4:5.5),towerDepth=style===1?14:12;
@@ -447,10 +460,15 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
 
  function civic(side,z,width,index,serial){
    officeFinish=1;
-   const h=18+hash(serial)*8;box('stone',side,12,h/2,z,19,h,width-.4);
-   for(let y=4;y<h-1;y+=3.6){box('office',side,11.90,y,z,.06,2.6,width-1.2);box('stone',side,11.74,y-1.40,z,.22,.16,width-.65);}
-   for(const edge of [-1,1])put('office',side*21.5,h/2,z+edge*(width/2-.08),18.5,h-.7,.04);
-   for(let q=-1;q<=1;q++)box('plaster',side,11.50,h/2,z+q*width*.31,.7,h,.65);
+   const h=18+hash(serial)*8;box('stone',side,12+WINDOW_DEPTH,h/2,z,19-WINDOW_DEPTH,h,width-.4-WINDOW_DEPTH*2);
+   const openings=[],sideOpenings=[],columns=Math.max(3,Math.round((width-1.2)/3.3)),pitch=(width-1.2)/columns;
+   for(let y=4;y+1.35<h;y+=3.6){
+     for(let i=0;i<columns;i++)openings.push(recessedWindow(side,12,y,z+(i-(columns-1)/2)*pitch,pitch-.18,2.60));
+     for(const u of [-5.2,0,5.2])sideOpenings.push({u,y,width:3.0,height:2.60});
+     box('stone',side,11.74,y-1.40,z,.22,.16,width-.65);
+   }
+   masonryFace('stone',side,12,z,width-.4,0,h,openings);masonryEnds('stone',side,12,z,width-.4,19,0,h,sideOpenings);
+   for(const i of [0,Math.round(columns/2),columns])box('plaster',side,11.74,h/2,z+(i-columns/2)*pitch,.32,h,.14);
    box('plaster',side,11.35,h+.15,z,.95,.5,width+.1);
    register('civic',side,z,width,h,12,19,serial,dundasDistrictAt(index));
    source(side,z,width,serial,1);stats.frontages++;
@@ -585,7 +603,7 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    group.visible=route.id==='dundas';stats.rebuilds++;
    if(!group.visible){retail.setRoute(route,[]);facades.setRoute(route,[]);return;}
    for(const p of pools.values())p.count=0;
-   displays.length=zones.length=landmarks.length=frontages.length=0;sourceSerial=0;
+   displays.length=zones.length=landmarks.length=frontages.length=facadeWindows.length=0;sourceSerial=0;
    stats.overflow=stats.frontages=stats.trees=stats.windowFrames=stats.facadeDetails=stats.parkSlopes=stats.skylineTowers=0;
    stats.overflows={};signPanels.length=0;signCache.clear();signColumns.fill(0);ctx.clearRect(0,0,1024,1024);
    const activeFeatures=special.map(f=>({...f,z:localZ(f.index)})).filter(f=>clear(f.z,f.width));
@@ -629,5 +647,5 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
  }
  function setNight(amount){const value=THREE.MathUtils.clamp(amount,0,1);for(const {material,power} of nightMaterials)material.emissiveIntensity=power*value;retail.setNight(value);facades.setNight(value);}
  setNight(0);setRoute();
- return {group,setRoute,setNight,stats,displays,retail,facades,get signPanels(){return signPanels;},get frontages(){return frontages;},get zones(){return zones;},get landmarks(){return landmarks;}};
+ return {group,setRoute,setNight,stats,displays,retail,facades,facadeWindows,get signPanels(){return signPanels;},get frontages(){return frontages;},get zones(){return zones;},get landmarks(){return landmarks;}};
 }

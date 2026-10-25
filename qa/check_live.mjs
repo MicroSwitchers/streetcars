@@ -10,7 +10,8 @@ const auto=process.argv.includes('--auto');
 const routes=process.argv.includes('--routes');
 const districts=process.argv.includes('--districts');
 const sidewalk=process.argv.includes('--sidewalk');
-const routeInput=routes||districts||sidewalk||process.argv.includes('--route-input');
+const facadeDepth=process.argv.includes('--facades');
+const routeInput=routes||districts||sidewalk||facadeDepth||process.argv.includes('--route-input');
 const morning=process.argv.includes('--morning'),dawn=process.argv.includes('--dawn'),atmosphere=process.argv.includes('--atmosphere');
 const output=join(qa,'renders-live-'+Date.now());await mkdir(output);
 const profile=await mkdtemp(join(qa,'headless-live-'));
@@ -139,6 +140,26 @@ try{
   if(!await evaluate('queenStreet.rig.materials.get("Markings_Atlas").map.source!==queenStreet.streetcars.vehicles[0].rig.materials.get("Markings_Atlas").map.source'))throw Error('Opposite destination boards share a texture source');
   const signs=await evaluate('(()=>{const cells=new Map();for(const s of queenStreet.city.routeSigns)cells.set(s.binding.type+":"+s.binding.slot,s.px+","+s.py);return {roles:cells.size,unique:new Set(cells.values()).size,signCount:queenStreet.city.signCount,stops:document.querySelectorAll("#route-stop-list li").length};})()');
   if(signs.roles!==12||signs.unique!==12||signs.stops!==39)throw Error('Roadside sign roles share an atlas cell or full itinerary is missing: '+JSON.stringify(signs));
+  if(facadeDepth){
+   await evaluate(`(async()=>{const THREE=await import(new URL('./vendor/three.module.js',document.querySelector('script[src$="main.js"]').src).href);window.__probeWindows=()=>{
+    const a=queenStreet,windows=a.route.id==='queen'?a.city.facadeWindows:a.city.districts.facadeWindows;
+    const samples=[];for(const rotation of [0,Math.PI,Math.PI/2,-Math.PI/2])samples.push(...windows.filter(w=>w.y>4&&Math.abs(w.x)<45&&Math.abs(w.rotation-rotation)<.01).sort((p,q)=>Math.abs(p.z+124)-Math.abs(q.z+124)).slice(0,12));
+    const walls=new Set(Object.entries(a.city.materials).filter(([name])=>/brick|plaster|painted|stone|trim|dundasStone|dundasPlaster/i.test(name)).map(([,m])=>m));walls.add(a.city.materials.glass);
+    const meshes=[];a.scene.updateMatrixWorld(true);a.scene.traverseVisible(o=>{if(o.isMesh&&walls.has(o.material))meshes.push(o);});
+    const ray=new THREE.Raycaster(),failures=[];
+    for(const w of samples){const origin=new THREE.Vector3(-.08,.12*w.height,.22*w.width).applyAxisAngle(new THREE.Vector3(0,1,0),w.rotation).add(new THREE.Vector3(w.x,w.y,w.z)),direction=new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0),w.rotation);ray.set(origin,direction);ray.far=.4;const hit=ray.intersectObjects(meshes,false)[0];if(hit?.object.material!==a.city.materials.glass||Math.abs(hit.distance-.315)>.012)failures.push({w,hit:hit?{material:hit.object.material.name,distance:hit.distance}:null});}
+    if((windows.length>0&&samples.length===0)||failures.length)throw Error('Window aperture/glazing depth: '+JSON.stringify({count:windows.length,samples:samples.length,failures:failures.slice(0,5)}));
+    return {route:a.route.id,windows:windows.length,samples:samples.length,depth:.235};
+   };})()`);
+   for(const id of ['queen','dundas']){
+    await checkRoute(id);await evaluate('queenStreet.updateSettings({night:false,weatherMode:"off",volume:0});queenStreet.restart();queenStreet.setPaused(true)');
+    console.log('PASS: Physical window openings in the rendered facade: '+JSON.stringify(await evaluate('window.__probeWindows()')));
+    await evaluate(`(()=>{const a=queenStreet,list=a.route.id==='queen'?a.city.facadeWindows:a.city.districts.facadeWindows,w=list.filter(w=>w.x<0&&Math.abs(w.rotation-Math.PI)<.01&&w.y>4&&w.y<8).sort((p,q)=>Math.abs(p.z+124)-Math.abs(q.z+124))[0];window.__facadeView=a.view.update;a.view.update=()=>{};a.view.transition=null;a.camera.clearViewOffset();a.camera.fov=58;a.camera.position.set(w.x+5,w.y+.7,w.z-6);a.camera.lookAt(w.x,w.y,w.z+.6);a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);})()`);
+    for(const night of [false,true]){await evaluate('queenStreet.updateSettings({night:'+night+'});queenStreet.graphics.render(queenStreet.scene,queenStreet.camera)');const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'facade-depth-'+id+(night?'-night':'-day')+'.png'),Buffer.from(shot.data,'base64'));}
+    await evaluate('queenStreet.view.update=window.__facadeView');
+   }
+   await checkRoute('dundas');
+  }
   if(sidewalk){
    for(const id of ['queen','dundas']){
     await checkRoute(id);
@@ -243,7 +264,7 @@ try{
   await photo('queen-comparison-day');
   await changeComparisonRoute('dundas');
   const assertBudget=sample=>{
-   if(sample.stats.overflow||sample.stats.meshes>55||sample.stats.triangles>135000)throw Error('Dundas exceeds its fixed base scenery budget: '+JSON.stringify(sample.stats));
+   if(sample.stats.overflow||sample.stats.meshes>60||sample.stats.triangles>135000)throw Error('Dundas exceeds its fixed base scenery budget: '+JSON.stringify(sample.stats));
    for(const [name,limit] of [['retail',190000],['facades',145000]])if(!sample[name]||sample[name].overflow||sample[name].triangles>limit)throw Error('Dundas '+name+' exceeds its authored asset budget: '+JSON.stringify(sample[name]));
    if(sample.stats.triangles+sample.retail.triangles+sample.facades.triangles>380000)throw Error('Dundas combined scenery exceeds the shared asset budget: '+JSON.stringify({offset:sample.offset,base:sample.stats.triangles,retail:sample.retail.triangles,facades:sample.facades.triangles}));
    if(sample.facadePlacementKinds.archedhood||sample.facades.counts.archedhood)throw Error('Dundas restores generic arches over its district windows: '+JSON.stringify({offset:sample.offset,kinds:sample.facadePlacementKinds}));
@@ -262,7 +283,8 @@ try{
   const samples=[],closeUps=[];
   for(const offset of stages){
    const sample=await evaluate(`window.__districtStage(${offset})`);samples.push(sample);
-   assertBudget(sample);
+    assertBudget(sample);
+    if(facadeDepth)sample.windowDepthProbe=await evaluate('window.__probeWindows()');
    if([0,6,13,15,16,26,33].includes(offset)&&(!sample.rooms.length||!sample.retail.rooms||!sample.retail.instances||!sample.facades.instances||!sample.facades.counts.cornice))throw Error('Commerce section lacks actual Blender shop contents or architectural detail: '+JSON.stringify({offset,retail:sample.retail,facades:sample.facades}));
    if(offset===36&&(!sample.retail.furniture||!sample.facades.counts.cornice))throw Error('Residential approach lacks furnished sidewalks and heritage house details');
    await photo('dundas-'+offset);

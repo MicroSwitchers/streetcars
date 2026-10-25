@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {mergeGeometries} from 'geometry-utils';
+import {addWindowInterior,roomDepthGLSL} from './facade-windows.js';
 
 // An antialiased curtain wall needs no per-window geometry or image atlas.
 // Physical floor/bay modules work on every face of merged or instanced towers.
@@ -7,7 +8,8 @@ export function createOfficeMaterial(){
  const m=new THREE.MeshStandardMaterial({color:0x738d95,roughness:.25,metalness:.18,emissive:0xffffff,emissiveIntensity:0});
  m.name='Office_Curtain_Wall';m.envMapIntensity=1.05;
  m.onBeforeCompile=shader=>{
-   shader.vertexShader='varying vec2 vOfficeCoord;varying float vOfficeWall;\n'+shader.vertexShader;
+   const varying='varying vec2 vOfficeCoord;varying float vOfficeWall;varying vec3 vOfficeWorld;varying vec3 vOfficeNormal;\n';
+   shader.vertexShader=varying+shader.vertexShader;
    shader.vertexShader=shader.vertexShader.replace('#include <project_vertex>',`
      vec4 officeP=vec4(transformed,1.);vec3 officeN=normal;
      #ifdef USE_INSTANCING
@@ -16,8 +18,9 @@ export function createOfficeMaterial(){
      officeP=modelMatrix*officeP;officeN=normalize(mat3(modelMatrix)*officeN);
      vOfficeCoord=vec2(abs(officeN.x)>abs(officeN.z)?officeP.z:officeP.x,officeP.y);
      vOfficeWall=1.-step(.6,abs(officeN.y));
+     vOfficeWorld=officeP.xyz;vOfficeNormal=officeN;
      #include <project_vertex>`);
-   shader.fragmentShader='varying vec2 vOfficeCoord;varying float vOfficeWall;\n'+shader.fragmentShader;
+   shader.fragmentShader=varying+roomDepthGLSL+shader.fragmentShader;
    shader.fragmentShader=shader.fragmentShader.replace('vec3 totalEmissiveRadiance = emissive;',`
      vec2 officeGrid=vOfficeCoord/vec2(1.45,3.30),officeCell=floor(officeGrid),officeF=fract(officeGrid);
      vec2 officeAA=max(fwidth(officeGrid),vec2(.0001));
@@ -28,18 +31,23 @@ export function createOfficeMaterial(){
      vec2 officeRoom=floor(officeCell/vec2(3.,1.));
      float officeSeed=fract(sin(dot(officeRoom,vec2(37.719,78.233)))*43758.5453);
      float officeFar=smoothstep(.22,.65,max(officeAA.x,officeAA.y));
+     vec3 officeView=normalize(cameraPosition-vOfficeWorld),officeN=normalize(vOfficeNormal);
+     vec3 officeT=abs(officeN.y)>.8?vec3(1.,0.,0.):normalize(cross(vec3(0.,1.,0.),officeN));
+     float officeForward=max(.18,abs(dot(officeView,officeN)));
+     float officeShade=qsRoomShade((officeF-vec2(.025,.23))/vec2(.95,.73),vec3(-dot(officeView,officeT)*2.1/officeForward,-officeView.y*1.25/officeForward,-1.));
+     officeShade=mix(officeShade,.8,officeFar);
      float officeOccupied=mix(smoothstep(.51,.56,officeSeed)*(.30+fract(officeSeed*19.)*.65),.27,officeFar);
      vec3 officeKelvin=mix(vec3(1.,.67,.36),vec3(.65,.81,1.),step(.85,officeSeed));
-     vec3 totalEmissiveRadiance=emissive*officeKelvin*officeOccupied*officePane;`);
+     vec3 totalEmissiveRadiance=emissive*officeKelvin*officeOccupied*officePane*officeShade;`);
    shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`
      #include <map_fragment>
      float officeTint=.88+.12*fract(sin(dot(officeCell,vec2(12.9898,37.719)))*43758.5453);
      officeTint=mix(officeTint,.94,officeFar);
-     diffuseColor.rgb*=mix(vec3(.42,.46,.47),vec3(officeTint),officePane);
+     diffuseColor.rgb*=mix(vec3(.42,.46,.47),vec3(officeTint*mix(.72,1.05,officeShade)),officePane);
    `);
    shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=mix(.76,roughnessFactor,officePane);');
  };
- m.customProgramCacheKey=()=> 'office-curtain-wall-v1';return m;
+ m.customProgramCacheKey=()=> 'office-curtain-wall-v2-depth';return m;
 }
 
 // All surface detail is generated locally, including the alpha-cutout foliage.
@@ -308,12 +316,11 @@ export function finishSurfaces(mats,renderer,route){
  }
 
  const windows=canvas(256),wc=windows.getContext('2d'),sky=wc.createLinearGradient(0,0,100,256);
- sky.addColorStop(0,'#88a7b7');sky.addColorStop(.4,'#597a89');sky.addColorStop(.48,'#83969b');sky.addColorStop(.51,'#33464a');sky.addColorStop(1,'#1c2e32');wc.fillStyle=sky;wc.fillRect(0,0,256,256);
- wc.fillStyle='#dfeaf51c';wc.beginPath();wc.moveTo(35,0);wc.lineTo(98,0);wc.lineTo(222,256);wc.lineTo(195,256);wc.fill();
- wc.fillStyle='#151e2538';for(let x=0;x<256;x+=40)wc.fillRect(x,132,24,124);
+ sky.addColorStop(0,'#879fa8');sky.addColorStop(.5,'#627c84');sky.addColorStop(1,'#51656b');wc.fillStyle=sky;wc.fillRect(0,0,256,256);
  mats.glass.map=texture(windows);mats.glass.color.setHex(0xb8cbd0);mats.glass.metalness=.18;mats.glass.roughness=.16;mats.glass.envMapIntensity=1.1;
+ addWindowInterior(mats.glass);
  mats.storeGlass.map=mats.glass.map;mats.storeGlass.color.setHex(0xe1ecee);mats.storeGlass.metalness=.05;mats.storeGlass.roughness=.13;mats.storeGlass.envMapIntensity=.65;
- if(mats.dundasCurtainGlass){const m=mats.dundasCurtainGlass;m.map=mats.glass.map;m.color.setHex(0xadc2c6);m.metalness=.18;m.roughness=.19;m.envMapIntensity=1.1;}
+ if(mats.dundasCurtainGlass){const m=mats.dundasCurtainGlass;m.map=mats.glass.map;m.color.setHex(0xadc2c6);m.metalness=.18;m.roughness=.19;m.envMapIntensity=1.1;addWindowInterior(m);}
  if(mats.dundasStoreGlass){const m=mats.dundasStoreGlass;m.map=mats.storeGlass.map;m.color.copy(mats.storeGlass.color);m.metalness=.05;m.roughness=.13;m.envMapIntensity=.65;}
  // Fine felt texture keeps the roofs from reading as perfectly flat plastic.
  const roofing=canvas(256),rc=roofing.getContext('2d');rc.fillStyle='#898b86';rc.fillRect(0,0,256,256);

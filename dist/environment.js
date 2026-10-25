@@ -6,6 +6,7 @@ import {createFoliage,createOfficeMaterial} from './surfaces.js';
 import {createStreetscape} from './streetscape.js';
 import {createArchitecture} from './architecture.js';
 import {createDundasScenery} from './dundas-scenery.js';
+import {facadeRectangles,windowGeometries,WINDOW_DEPTH} from './facade-windows.js';
 
 import {createRouteSection} from './routes.js';
 export const ROUTE=createRouteSection();
@@ -28,6 +29,19 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
  const cylinder=(m,x,y,z,r,h)=>{add(cylGeo,mats[m],x,y,z,r,h,r);if(m==='pole'&&y-h/2<2)cameraObstacles.push({minX:x-r,maxX:x+r,minZ:z-r,maxZ:z+r,maxY:y+h/2});};
  function rod(m,a,b,r){const av=new THREE.Vector3(...a),bv=new THREE.Vector3(...b),delta=bv.clone().sub(av);dummy.position.copy(av.add(bv).multiplyScalar(.5));dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.clone().normalize());dummy.scale.set(r,delta.length(),r);dummy.updateMatrix();const cell=Math.floor(dummy.position.z/96),key=String(sceneryLayer)+cell+cylGeo.uuid+mats[m].uuid;if(!batches.has(key))batches.set(key,{geometry:cylGeo,material:mats[m],cell,sceneryLayer,matrices:[]});batches.get(key).matrices.push(dummy.matrix.clone());}
  const wire=(a,b)=>linePoints.push(...a,...b);
+ const windowKit=windowGeometries(),facadeWindows=[];
+ const wallPlane=new THREE.PlaneGeometry(1,1);wallPlane.rotateY(-Math.PI/2);
+ const facadePanel=(material,x,y,z,width,height,rotation)=>add(wallPlane,mats[material],x,y,z,1,height,width,rotation);
+ function insetWindow(x,y,z,width,height,rotation=0,style=0){
+   add(windowKit.reveal,mats.warmStone||mats.trim,x,y,z,1,height,width,rotation);
+   add(windowKit.pane,mats.glass,x,y,z,1,height,width,rotation);
+   add(windowKit.sash,mats[['trim','paintedGreen','paintedCream','steel'][style%4]],x,y,z,1,height,width,rotation);
+   facadeWindows.push({x,y,z,width,height,rotation,depth:WINDOW_DEPTH});
+ }
+ function facadeWall(material,side,front,z,width,bottom,top,openings){
+   for(const r of facadeRectangles(width,bottom,top,openings))facadePanel(material,side*front,(r.bottom+r.top)/2,z+(r.left+r.right)/2,r.right-r.left,r.top-r.bottom,side===1?0:Math.PI);
+   for(const edge of [-1,1])box(material,side*(front+WINDOW_DEPTH/2+.001),(bottom+top)/2,z+edge*(width/2-.02),WINDOW_DEPTH,top-bottom,.04);
+ }
  // Small generated surface maps avoid external image requests and repeat seamlessly.
  function brickTexture(base){const c=document.createElement('canvas');c.width=256;c.height=256;const ctx=c.getContext('2d');ctx.fillStyle='#776e61';ctx.fillRect(0,0,256,256);for(let row=0;row<16;row++)for(let col=-1;col<5;col++){const n=.82+rnd()*.26;ctx.fillStyle=`rgb(${base.map(v=>Math.round(v*n)).join(',')})`;ctx.fillRect(col*64+(row%2)*32+1,row*16+1,62,14);}const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(8,5);t.anisotropy=4;return t;}
  [[133,67,47],[155,94,64],[163,133,88],[104,76,64],[116,104,84]].forEach((base,i)=>{mats['brick'+i]=new THREE.MeshStandardMaterial({map:brickTexture(base),roughness:.93});});
@@ -105,12 +119,13 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
 
    }
  }
- const neighbourhood=buildNeighbourhood({scene:queenScenery,route,mats,mat,box,cylinder,rod,add,sign,rnd,leafGeo,canvasMap,setSceneryLayer});
+ const neighbourhood=buildNeighbourhood({scene:queenScenery,route,mats,mat,box,cylinder,rod,add,sign,rnd,leafGeo,canvasMap,setSceneryLayer,insetWindow,facadePanel,facadeRectangles,windowDepth:WINDOW_DEPTH});
  const streetscape=createStreetscape({scene,route,mats,mat,box,cylinder,rod,add,sign,leafGeo},streetProps);
  const architecture=createArchitecture({scene,route,mats},architecturalAssets);
  const shopNames=['PAPER & INK','QUEEN RECORDS','THE CORNER CAFE','WEST END BOOKS','BELLWOODS CYCLE','STUDIO 501','GOLDEN PHO','THREAD & NEEDLE','CITY FLOWERS','NIGHT OWL','VINYL EXCHANGE','QUEEN HARDWARE','PARKDALE MARKET','SILVER SCREEN','GOOD NEIGHBOUR','THE LITTLE BAKERY'];
  const signColours=['#283e37','#883e31','#303f52','#d1bc83','#344548','#6c513d'];
  let shop=0,awningCount=0,upperWindowCount=0,facadeDetailCount=0,rooflineDetailCount=0,shopfrontCount=0,shopfrontFeatureCount=0;
+ const mainFrontages=[];
  setSceneryLayer(true);
  for(const side of [-1,1]){
    for(let z=-518;z<675;){const width=7.5+rnd()*4.4,mid=z+width/2;z+=width+.12;if(route.crossings.some(c=>Math.abs(mid-c.z)<width/2+11)||(side===-1&&mid+width/2>-179&&mid-width/2<-142))continue;
@@ -118,12 +133,16 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
      const entry=mid+(width-.9)/3,paneWidth=(width-.9)/3-.13;
      const detailed=mid>route.start-45&&mid<route.end+60;
      const building={side,mid,width,height,depth,index:shop,detailed},architecturePlan=architecture.plan(building);
+     mainFrontages.push({...building,material});
+     const upperOpenings=[];
+     for(let y=5.3;y<height-(detailed?1.65:1.0);y+=2.7)for(const zz of architecturePlan.windows)upperOpenings.push({u:zz-mid,y,width:1.25,height:1.97});
      if(detailed){
        // A real 2.2 m display recess replaces the solid ground-floor facade.
-       box(material,side*(11.4+depth/2),(height+.15+3.25)/2,mid,depth,height+.15-3.25,width);
-       box(material,side*(13.22+(depth-1.82)/2),1.70,mid,depth-1.82,3.10,width);
+       box(material,side*(11.4+WINDOW_DEPTH+(depth-WINDOW_DEPTH)/2),(height+.15+3.25)/2,mid,depth-WINDOW_DEPTH,height+.15-3.25,width-WINDOW_DEPTH*2);
+       box(material,side*(13.22+(depth-1.82)/2),1.70,mid,depth-1.82,3.10,width-WINDOW_DEPTH*2);
        for(const edge of [-1,1])box(material,side*12.0,1.70,mid+edge*(width/2-.10),2.20,3.10,.20);
-     }else box(material,side*(11.4+depth/2),height/2+.15,mid,depth,height,width);
+     }else box(material,side*(11.4+WINDOW_DEPTH+(depth-WINDOW_DEPTH)/2),height/2+.15,mid,depth-WINDOW_DEPTH,height,width-WINDOW_DEPTH*2);
+     facadeWall(material,side,11.4,mid,width,detailed?3.25:.15,height+.15,upperOpenings);
      box('roof',side*(11.4+depth/2),height+.18,mid,depth+.25,.22,width+.2);
      if(!detailed)box('trim',side*11.22,height-.1,mid,.34,.28,width+.2);
      box('trim',side*11.25,4.15,mid,.24,.16,width);
@@ -193,12 +212,9 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
        for(let zz=mid-width/2+1.35;zz<mid+width/2-.7;zz+=2.35){
          upperWindowCount++;
          if(architecture.window({side,y,z:zz,index:shop,height,detailed,plan:architecturePlan}))continue;
-         box('trim',side*11.22,y,zz,.24,1.97,1.25);box('glass',side*11.08,y,zz,.035,1.70,1.05);
-         box('trim',side*11.045,y,zz,.035,.06,1.05);box('trim',side*11.045,y,zz,.035,1.7,.05);
-         box('warmStone',side*11.015,y+.88,zz,.27,.14,1.38);
-         box('warmStone',side*11.025,y-.93,zz,.30,.12,1.42);
-         box('trim',side*11.025,y,zz,.035,1.62,.045);
-         for(const offset of [-.48,.48])box('warmStone',side*11.015,y+.99,zz+offset,.22,.18,.18);
+         insetWindow(side*11.4,y,zz,1.25,1.97,side===1?0:Math.PI,shop);
+         box('warmStone',side*11.32,y+1.06,zz,.28,.14,1.44);
+         box('warmStone',side*11.30,y-1.05,zz,.34,.13,1.48);
          facadeDetailCount+=6;
        }
      }
@@ -208,7 +224,12 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
        facadeDetailCount++;
      }
      // Roof forms and projecting bays break up the long repeated facade silhouette.
-     if(shop%8===3){add(neighbourhood.pitchedRoof,mats.roofTile,side*(11.4+depth/2),height+.29,mid,depth+.30,1.45,width+.2);box('warmStone',side*11.19,height+.68,mid,.14,.82,.8);box('glass',side*11.10,height+.70,mid,.025,.56,.50);}
+     if(shop%8===3){
+       add(neighbourhood.pitchedRoof,mats.roofTile,side*(11.4+depth/2),height+.29,mid,depth+.30,1.45,width+.2);
+       box('warmStone',side*11.17,height+.70,mid,.03,.75,.80);
+       insetWindow(side*10.90,height+.70,mid,.64,.68,side===1?0:Math.PI,shop);
+       box('roof',side*11.02,height+1.10,mid,.38,.10,.88);
+     }
      if(shop%9===0)for(let zz=mid-width/2+.2;zz<mid+width/2;zz+=.42){box('warmStone',side*10.78,3.127,zz,1.10,.012,.10);box('warmStone',side*10.195,2.92,zz,.012,.28,.10);}
      // Cornice courses, masonry quoins, downpipes and a recessed shop entry.
      if(!detailed){box('trim',side*11.13,height-.43,mid,.20,.10,width+.13);box('roof',side*11.21,height-.25,mid,.23,.09,width+.10);}
@@ -244,6 +265,24 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
      // Retain the layout seed sequence when replacing the old rooftop box.
      if(shop%4===0)rnd();
      shop++;
+   }
+ }
+ // Finish the exposed returns at intersections and beside the garden. Party
+ // walls remain plain; daylight-facing end elevations get real inset windows.
+ for(const side of [-1,1]){
+   const row=mainFrontages.filter(b=>b.side===side);
+   for(const [index,b] of row.entries())for(const edge of [-1,1]){
+     const neighbour=row[index+edge],endZ=b.mid+edge*b.width/2;
+     const exposed=!neighbour||Math.abs(neighbour.mid-b.mid)-(neighbour.width+b.width)/2>2;
+     const holes=[];
+     if(exposed)for(let y=5.3;y<b.height-1.0;y+=2.7)for(const u of [-b.depth*.23,b.depth*.23])holes.push({u,y,width:1.40,height:1.97});
+     for(const r of facadeRectangles(b.depth,.15,b.height+.15,holes))facadePanel(b.material,side*(11.4+b.depth/2+(r.left+r.right)/2),(r.bottom+r.top)/2,endZ,r.right-r.left,r.top-r.bottom,edge*Math.PI/2);
+     for(const w of holes){
+       const x=side*(11.4+b.depth/2+w.u);insetWindow(x,w.y,endZ,w.width,w.height,edge*Math.PI/2,b.index);
+       box('warmStone',x,w.y-1.05,endZ+edge*.06,w.width+.18,.14,.30);
+       box('warmStone',x,w.y+1.06,endZ+edge*.04,w.width+.14,.14,.24);
+     }
+     if(exposed)box('trim',side*(11.4+b.depth/2),4.15,endZ+edge*.04,b.depth,.16,.18);
    }
  }
  setSceneryLayer(false);
@@ -329,5 +368,5 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
    const props=route.id==='dundas'?districts.retail.placements:scenery.placements;
    return cameraObstacles.concat(props.filter(p=>!p.interior&&p.y<2).map(p=>p.bounds?{minX:p.bounds.min.x,maxX:p.bounds.max.x,minZ:p.bounds.min.z,maxZ:p.bounds.max.z,maxY:p.bounds.max.y}:{...p,maxY:p.y+streetProps.models.get(p.kind).bounds.max.y*(p.scale??1)}));
  }
- return {setRoute,sidewalkObstacles,queenScenery,districts,routeSigns,routeTexture,signals,materials:mats,actors,neighbourhood,scenery,architecture:architecturalDetails,buildingCount:shop,awningCount,upperWindowCount,facadeDetailCount,rooflineDetailCount,shopfrontCount,shopfrontFeatureCount,storeGlazingCount,storeGlazing,signCount:signIndex,update(time,dt,alwaysGreen=false){actors.update(time,dt,alwaysGreen);},setNight(amount){const night=THREE.MathUtils.clamp(amount,0,1);cityNight=night;actors.setNight(night);streetscape.setNight(night);districts.setNight(night);mats.glass.emissive.setHex(0xffffff);mats.glass.emissiveIntensity=.42*night;mats.officeFacade.emissiveIntensity=.22*night;signMat.emissive.copy(windowGlow);signMat.emissiveIntensity=.10*night;routeSignMat.emissive.copy(windowGlow);routeSignMat.emissiveIntensity=.10*night;for(let i=0;i<4;i++){mats['display'+i].emissive.copy(windowGlow);mats['display'+i].emissiveIntensity=.18*night;}},updateSignals(time,alwaysGreen=false){const phase=time%42,state=alwaysGreen||phase<23?'green':phase<27?'amber':'red';signals.forEach(({group})=>group.children.forEach((lamp,i)=>lamp.material.color.setHex(i===(state==='red'?0:state==='amber'?1:2)?[0xff6c46,0xffc76c,0x9edb89][i]:0x29352c)));return state;}};
+ return {setRoute,sidewalkObstacles,facadeWindows,queenScenery,districts,routeSigns,routeTexture,signals,materials:mats,actors,neighbourhood,scenery,architecture:architecturalDetails,buildingCount:shop,awningCount,upperWindowCount,facadeDetailCount,rooflineDetailCount,shopfrontCount,shopfrontFeatureCount,storeGlazingCount,storeGlazing,signCount:signIndex,update(time,dt,alwaysGreen=false){actors.update(time,dt,alwaysGreen);},setNight(amount){const night=THREE.MathUtils.clamp(amount,0,1);cityNight=night;actors.setNight(night);streetscape.setNight(night);districts.setNight(night);mats.glass.emissive.setHex(0xffffff);mats.glass.emissiveIntensity=.42*night;mats.officeFacade.emissiveIntensity=.22*night;signMat.emissive.copy(windowGlow);signMat.emissiveIntensity=.10*night;routeSignMat.emissive.copy(windowGlow);routeSignMat.emissiveIntensity=.10*night;for(let i=0;i<4;i++){mats['display'+i].emissive.copy(windowGlow);mats['display'+i].emissiveIntensity=.18*night;}},updateSignals(time,alwaysGreen=false){const phase=time%42,state=alwaysGreen||phase<23?'green':phase<27?'amber':'red';signals.forEach(({group})=>group.children.forEach((lamp,i)=>lamp.material.color.setHex(i===(state==='red'?0:state==='amber'?1:2)?[0xff6c46,0xffc76c,0x9edb89][i]:0x29352c)));return state;}};
 }
