@@ -25,18 +25,18 @@ export function dundasShopType(district,index,side){
 export function createDundasRetail({group,mats,assets,foliageGeometry}){
  const dummy=new THREE.Object3D(),footprint=new THREE.Box3(),pools=new Map(),materials=new Map();
  const placements=[],rooms=[],fixtures=[],reserved=[],maxTriangles=190000,maxRooms=48,maxFurniture=32;
- const stats={objects:0,meshes:0,instances:0,triangles:0,capacityTriangles:0,overflow:0,budgetSkipped:0,rooms:0,furniture:0,plants:0,fixtureInstances:0,fixtureTriangles:0,fixtureRooms:0,rebuilds:0,types:{},roomIndices:[]};
+ const stats={objects:0,meshes:0,instances:0,triangles:0,capacityTriangles:0,overflow:0,budgetSkipped:0,rooms:0,furniture:0,plants:0,fixtureInstances:0,fixtureTriangles:0,fixtureRooms:0,windowGardens:0,roofDetails:0,shopfrontDetails:0,dressingTriangles:0,rebuilds:0,types:{},roomIndices:[]};
  let night=0,triangleLimit=maxTriangles;
  // The tiny matrix buffers accommodate even a section containing only one
  // merchandise type. The rendered count and triangle ceiling remain capped.
- const capacities={bookshelf:64,recordbin:40,bakerycase:64,grocerstand:64,floriststand:64,coffeecounter:64,hardware:40,bicycle:48,pendant:56,bench:32,bins:32,planter:32,hydrant:32,meter:32,table:4,chair:8,utilitycabinet:8,newsbox:8,bikestand:16,treegrate:24,stormdrain:64};
+ const capacities={bookshelf:64,recordbin:40,bakerycase:64,grocerstand:64,floriststand:64,coffeecounter:64,hardware:40,bicycle:48,pendant:56,bench:32,bins:32,planter:32,hydrant:32,meter:32,table:4,chair:8,aboard:8,crate:8,hvac:6,aircon:8,utilitycabinet:8,newsbox:8,bikestand:16,treegrate:24,stormdrain:64};
  function makePool(name,geometry,material,capacity,shadow=true){
    const mesh=new THREE.InstancedMesh(geometry,material,capacity);mesh.name='Dundas_Retail_'+name;mesh.count=0;
    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.castShadow=shadow;mesh.receiveShadow=true;
    // Fixed resident bounds also avoid stale bounds after a later section has
    // different placements. Props exist only beside the occupied central blocks.
-   mesh.boundingBox=new THREE.Box3(new THREE.Vector3(-125,0,-235),new THREE.Vector3(125,4,385));
-   mesh.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,2,75),335);
+   mesh.boundingBox=new THREE.Box3(new THREE.Vector3(-125,0,-235),new THREE.Vector3(125,85,385));
+   mesh.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,40,75),345);
    group.add(mesh);stats.objects++;stats.meshes++;
    const triangles=geometry.index?geometry.index.count/3:geometry.attributes.position.count/3;
    stats.capacityTriangles+=triangles*capacity;
@@ -88,14 +88,14 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
  const fixtureColour=new THREE.Color(),fixtureGlow=new THREE.Color();
  function fixture(kind,room,x,y,z,sx,sy,sz,colour,rotation=0){
    const p=fixturePools[kind];
-   if(p.count===p.capacity||stats.fixtureTriangles+p.triangles>12000||stats.triangles+p.triangles>triangleLimit)return false;
+   if(p.count===p.capacity||(room.exterior?stats.dressingTriangles+p.triangles>5000:stats.fixtureTriangles+p.triangles>12000)||stats.triangles+p.triangles>triangleLimit)return false;
    dummy.position.set(x,y,z);dummy.rotation.set(0,0,rotation);dummy.scale.set(sx,sy,sz);dummy.updateMatrix();
    p.mesh.setMatrixAt(p.count,dummy.matrix);fixtureColour.setHex(colour);p.mesh.setColorAt(p.count,fixtureColour);
    fixtureGlow.setHex(room.lighting.color).multiply(fixtureColour).multiplyScalar(room.lighting.power);
    p.illumination.setXYZ(p.count,fixtureGlow.r,fixtureGlow.g,fixtureGlow.b);p.count++;
    footprint.copy(p.mesh.geometry.boundingBox).applyMatrix4(dummy.matrix);
-   fixtures.push({kind,type:room.type,roomIndex:room.index,side:room.side,x,y,z,minX:footprint.min.x,maxX:footprint.max.x,minY:footprint.min.y,maxY:footprint.max.y,minZ:footprint.min.z,maxZ:footprint.max.z});
-   stats.fixtureInstances++;stats.fixtureTriangles+=p.triangles;stats.triangles+=p.triangles;return true;
+   fixtures.push({kind,type:room.type,roomIndex:room.index,side:room.side,exterior:!!room.exterior,x,y,z,minX:footprint.min.x,maxX:footprint.max.x,minY:footprint.min.y,maxY:footprint.max.y,minZ:footprint.min.z,maxZ:footprint.max.z});
+   stats.fixtureInstances++;if(room.exterior)stats.dressingTriangles+=p.triangles;else stats.fixtureTriangles+=p.triangles;stats.triangles+=p.triangles;return true;
  }
  function plantInstance(pool,x,y,z,sx,sy,sz){
    if(pool.count===pool.capacity||stats.triangles+pool.triangles>maxTriangles)return;
@@ -132,10 +132,12 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
    // entirely behind the glass and remains separated from the rear wall.
    const x=side*(front+Math.min(.75,depth*.40)),offset=width>4.4?-.70:0;
    const firstPlacement=placements.length;
-   if(!prop(type,x,.39,z+offset,yaw,type==='bicycle'?.88:1,lighting,true))return;
-   prop('pendant',side*(front+depth*.47),2.35,z,yaw,1,lighting,true);
+   const hero=prop(type,x,.39,z+offset,yaw,type==='bicycle'?.88:1,lighting,true);
+   if(hero)prop('pendant',side*(front+depth*.47),2.35,z,yaw,1,lighting,true);
    for(let i=firstPlacement;i<placements.length;i++){placements[i].roomIndex=index;placements[i].district=district;}
-   rooms.push({side,z,width,front,back,index,district,type,lighting});stats.rooms++;stats.roomIndices.push(index);
+   // Every real recess gets stocked shelves, even if its high-detail counter
+   // cannot fit the budget. This avoids blank shop windows late in a section.
+   rooms.push({side,z,width,front,back,index,district,type,lighting,hero});stats.rooms++;stats.roomIndices.push(index);
  }
  function rearDisplay(room){
    const {type,width,front,back,index,side,z,lighting,district}=room;
@@ -232,10 +234,56 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
    return true;
  }
  function finishPool(p){p.mesh.count=p.count;p.mesh.instanceMatrix.needsUpdate=true;if(p.mesh.instanceColor)p.mesh.instanceColor.needsUpdate=true;if(p.illumination)p.illumination.needsUpdate=true;}
+ function storefrontDressing(route,frontages){
+   const ordered=frontages.filter(f=>['shop','house','loft','modern'].includes(f.kind)).sort((a,b)=>Math.abs(a.z+80)-Math.abs(b.z+80));
+   const spent=stats.triangles,ground=(kind,f,z,x=Math.min(f.front-.65,10.35),yaw=-f.side*Math.PI/2)=>{
+     const p=pools.get(kind);if(!p||stats.triangles+p.model.triangles>spent+22000)return false;
+     dummy.position.set(f.side*x,.18,z);dummy.rotation.set(0,yaw,0);dummy.scale.setScalar(1);dummy.updateMatrix();footprint.copy(p.model.bounds).applyMatrix4(dummy.matrix);
+     const b={minX:footprint.min.x-.10,maxX:footprint.max.x+.10,minZ:footprint.min.z-.12,maxZ:footprint.max.z+.12};
+     const radius=(b.maxZ-b.minZ)/2,door=f.z+f.width*(f.kind==='house'?-.27:f.kind==='modern'?.24:f.kind==='loft'?.36:.34);
+     if(!clear(route,z,radius)||Math.abs(z-door)<radius+.65||Math.min(Math.abs(b.minX),Math.abs(b.maxX))<9.7||Math.max(Math.abs(b.minX),Math.abs(b.maxX))>f.front-.25)return false;
+     if(reserved.some(r=>b.minX<r.maxX&&b.maxX>r.minX&&b.minZ<r.maxZ&&b.maxZ>r.minZ))return false;
+     if(!prop(kind,f.side*x,.18,z,yaw))return false;Object.assign(placements.at(-1),{shopfront:true,frontageIndex:f.index,side:f.side});reserved.push(b);stats.shopfrontDetails++;return true;
+   };
+   for(const f of ordered){
+     const ordinal=Math.abs(f.index||0),w=f.windows?.find(w=>w.y>4.2&&w.y<7.5&&!w.feature);
+     if(w&&ordinal%2===0&&stats.windowGardens<24){
+       const room={type:'windowGarden',index:f.index,side:f.side,exterior:true,lighting:{color:0,power:0}},x=f.side*(f.front-.20),y=w.y-w.height/2-.12,z=w.z,span=Math.min(1.32,w.width+.14);
+       if(fixture('shelf',room,x,y,z,.38,.22,span,0x946b50)){
+         fixture('shelf',room,x,y+.115,z,.30,.018,span-.10,0x493f2e);
+         for(const dz of [-.30,.30]){plantInstance(leafPool,x,y+.25,z+dz,.23,.22,.27);plantInstance(flowerPool,x-f.side*.04,y+.43,z+dz,.10,.075,.10);}
+         stats.windowGardens++;
+       }
+     }
+     if(f.kind==='house')continue;
+     const type=dundasShopType(f.district,ordinal,f.side),displayZ=f.room?.z??f.z-f.width*.12;
+     if(stats.shopfrontDetails<10&&ordinal%3===1){
+       const crate=type==='grocerstand'||type==='floriststand';
+       if(ground(crate?'crate':'aboard',f,displayZ)&&crate){
+         const room={type,index:f.index,side:f.side,exterior:true,lighting:{color:0,power:0}},p=placements.at(-1);
+         for(let j=0;j<5;j++)fixture('loaf',room,p.x+(j%2-.5)*.17,.53+(j%2)*.025,p.z+(j-2)*.095,.075,.075,.075,type==='floriststand'?0x9d8baf:j%2?0xa5a257:0xc88a51);
+       }
+     }
+     if(type==='coffeecounter'&&(stats.types.table||0)<3){
+       const z=displayZ-f.width*.12;
+       if(ground('table',f,z,10.35,0)){
+         for(const end of [-1,1])ground('chair',f,z+end*.90,10.35,end===1?Math.PI:0);
+         const room={type,index:f.index,side:f.side,exterior:true,lighting:{color:0,power:0}};
+         fixture('vessel',room,f.side*10.35,1.025,z,.055,.13,.055,0xd2c6a7);
+       }
+     }
+     if(ordinal%7===1&&ordinal%3!==0&&(stats.types.aircon||0)<4&&w&&stats.triangles+1052<spent+22000){
+       if(prop('aircon',f.side*(f.front-.16),w.y-w.height/2-.70,w.z,-f.side*Math.PI/2)){Object.assign(placements.at(-1),{facade:true,frontageIndex:f.index,side:f.side});stats.roofDetails++;}
+     }
+     if(ordinal%8===2&&(stats.types.hvac||0)<3&&stats.triangles+2768<spent+22000){
+       if(prop('hvac',f.side*(f.front+f.depth*.45),f.height+.30,f.z)){Object.assign(placements.at(-1),{roof:true,frontageIndex:f.index,side:f.side});stats.roofDetails++;}
+     }
+   }
+ }
  function setRoute(route,frontages=[],sideStreets=[]){
    for(const p of pools.values()){p.count=0;for(const part of p.parts)part.count=0;}
    leafPool.count=flowerPool.count=0;for(const p of Object.values(fixturePools))p.count=0;placements.length=rooms.length=fixtures.length=reserved.length=0;
-   for(const key of ['instances','triangles','overflow','budgetSkipped','rooms','furniture','plants','fixtureInstances','fixtureTriangles','fixtureRooms'])stats[key]=0;stats.types={};stats.roomIndices.length=0;stats.rebuilds++;
+   for(const key of ['instances','triangles','overflow','budgetSkipped','rooms','furniture','plants','fixtureInstances','fixtureTriangles','fixtureRooms','windowGardens','roofDetails','shopfrontDetails','dressingTriangles'])stats[key]=0;stats.types={};stats.roomIndices.length=0;stats.rebuilds++;
    if(route.id==='dundas'){
      const active=frontages.filter(f=>f.z>=-230&&f.z<=380);
      for(const f of active.filter(f=>f.kind==='tree')){
@@ -245,14 +293,16 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
      // Central shops receive the detailed original assets; far facade silhouettes
      // retain the cheaper pooled geometry. The cap is independent of route size.
      const eligible=active.filter(f=>f.room).sort((a,b)=>Math.abs(a.z-60)-Math.abs(b.z-60)).slice(0,maxRooms);
-     triangleLimit=150000;
+     triangleLimit=118000;
      for(const f of eligible)interior(f);
+     triangleLimit=132000;
      for(const room of rooms)backShelves(room);
      // Fill one shelf in every room before spending the remaining budget on
      // upper shelves, so later stops retain dressed windows as well.
      for(let row=0;row<2;row++)for(const room of rooms)backContents(room,row);
      for(const room of rooms)rearDisplay(room);
      triangleLimit=maxTriangles;
+     storefrontDressing(route,active);
      const sideBudget=stats.triangles+14000;
      for(const [i,arm] of sideStreets.entries()){
        const f=arm.furniture[i%arm.furniture.length],p=pools.get(f?.kind);

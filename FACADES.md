@@ -40,3 +40,26 @@ halving reveal triangles while retaining the full 24 cm recess. Hidden party-wal
 windows are omitted; exposed corner windows and windows above lower neighbours
 remain. This funds the side-street detail inside the same triangle ceilings,
 without changing iPad resolution, shadows, lights or texture downloads.
+
+Dundas also shares Queen's authored bay windows, iron balconies, selected
+pediments, roof equipment, cafe furniture and shop boards. A bay or balcony
+replaces its original glazing instead of being layered over it. Flower boxes,
+produce in crates and cafe cups use the resident primitive/foliage pools.
+Detailed counters have a separate allowance from inexpensive stocked shelving,
+so every active furnished recess receives shelf contents. Architectural dressings
+use whatever remains of the shared 380,000-triangle budget after the base and
+retail batches; no section can silently exceed the limit by adding decoration.
+
+The shared road is already a 3D mesh. Its asphalt uses independent 512-pixel
+colour, aggregate-height and roughness maps at a 1.8-metre world scale. The three
+maps replace the previous three maps and are generated once. Dry aggregate stays
+rough; a damp film darkens it without polishing it. Standing water occupies
+localized patches and gutters, with smoother normals, rain rings and softened
+reflections. Night changes the light, not the surface's physical roughness.
+Desktop reflections use stable world-space grain rather than depth derivatives;
+iPad keeps its single forward pass and uses the same PBR material. No extra road
+geometry, texture downloads, light sources or render targets are required.
+
+`qa/check_live.mjs --pavement` reads the actual rendered roughness across more
+than 2,000 road samples in dry, rainy and night scenes. It checks that most wet
+asphalt remains matte, puddles are localized, and day/night roughness matches.

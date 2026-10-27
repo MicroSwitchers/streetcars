@@ -3,7 +3,7 @@ import * as THREE from 'three';
 // The same authored architectural kit used on Queen, with a bounded resident
 // pool. Section changes only replace instance matrices; they never make new
 // meshes, geometries, materials, textures, lights, or shader programs.
-const CAPACITIES=Object.freeze({cornice:168,firelanding:12,escapeladder:8,rooflantern:12,chimneypots:16});
+const CAPACITIES=Object.freeze({cornice:168,firelanding:12,escapeladder:8,rooflantern:12,chimneypots:16,baywindow:8,balcony:6,pediment:4});
 const HERITAGE=new Set(['west','portugal','bellwoods','chinatown','garden','riverside','riverdale','terminal']);
 const MAX_TRIANGLES=145000;
 const round=n=>Math.round(n*1000)/1000;
@@ -14,7 +14,7 @@ export function createDundasFacades({group,mats,assets}){
  const sashColors=[0xffffff,0xc5cabb,0xaabbb1,0xe4d6bc].map(c=>new THREE.Color(c));
  const white=new THREE.Color(0xffffff),placements=[];
  const stats={meshes:0,instances:0,triangles:0,capacityTriangles:0,geometryBytes:0,frontages:0,overflow:0,budgetOmissions:0,triangleLimit:MAX_TRIANGLES,rebuilds:0,counts:{},night:0};
- const usedGeometry=new Set();
+ const usedGeometry=new Set();let triangleLimit=MAX_TRIANGLES;
  for(const [kind,capacity] of Object.entries(CAPACITIES)){
    const model=assets.models.get(kind);if(!model)throw new Error('Missing Dundas architectural asset: '+kind);
    const parts=[];
@@ -40,7 +40,7 @@ export function createDundasFacades({group,mats,assets}){
 
  function place(kind,b,y,z,{x=b.front,sx=1,sy=1,sz=1,roof=false}={}){
    const p=pools.get(kind),model=models.get(kind);
-   if(p.count>=p.capacity||stats.triangles+model.triangles>MAX_TRIANGLES){stats.budgetOmissions++;return false;}
+   if(p.count>=p.capacity||stats.triangles+model.triangles>triangleLimit){stats.budgetOmissions++;return false;}
    dummy.position.set(b.side*x,y,z);dummy.rotation.set(0,-b.side*Math.PI/2,0);dummy.scale.set(sx,sy,sz);dummy.updateMatrix();
    const shade=Math.abs(Math.floor(b.index??0))%stoneColors.length;
    for(const part of p.parts){
@@ -66,10 +66,14 @@ export function createDundasFacades({group,mats,assets}){
    return windows;
  }
 
- function setRoute(route,frontages=[]){
+ function setRoute(route,frontages=[],budget=MAX_TRIANGLES){
+   triangleLimit=Math.min(MAX_TRIANGLES,Math.max(0,budget));stats.triangleLimit=triangleLimit;
    for(const p of pools.values())p.count=0;
    placements.length=0;stats.instances=stats.triangles=stats.frontages=stats.overflow=stats.budgetOmissions=0;stats.counts={};stats.rebuilds++;
    if(route.id==='dundas'){
+     // The builder cuts these apertures and omits its original pane/sash.
+     // Place the authored replacements first, before optional roof decoration.
+     for(const b of frontages)for(const w of b.windows||[])if(w.feature)place(w.feature,b,w.y,w.z);
      const eligible=frontages.filter(b=>HERITAGE.has(b.district)&&['shop','house','loft'].includes(b.kind)&&b.z>-230&&b.z<380&&b.width>3&&b.height>5)
        .sort((a,b)=>Math.abs(a.z+45)-Math.abs(b.z+45)||a.side-b.side);
      // Keep most modelling detail around the useful sidewalk/ride view. Distal
@@ -86,6 +90,7 @@ export function createDundasFacades({group,mats,assets}){
          for(let i=0;i<modules;i++)place('cornice',b,b.height+.22,b.z-b.width/2+(i+.5)*b.width/modules,{sx:span});
        }
        const ordinal=Math.abs(Math.floor(b.index??order)),windows=upperWindows(b);
+       if(order<20&&b.kind==='shop'&&ordinal%9===2)place('pediment',b,b.height+.28,b.z);
        // Rectangular street windows use the builder's straight lintels and
        // sills. Decorative arches belong to specific buildings, never a kit
        // detail repeated across unrelated shops, houses and factory windows.

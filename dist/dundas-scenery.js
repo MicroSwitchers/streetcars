@@ -10,7 +10,7 @@ import {facadeRectangles,windowGeometries,WINDOW_DEPTH} from './facade-windows.j
 export function createDundasScenery({scene,route,mats,foliage,streetProps,architecturalAssets}){
  const group=new THREE.Group();group.name='505_Dundas_District_Streetscape';scene.add(group);
  const boxGeometry=new THREE.BoxGeometry(1,1,1),dummy=new THREE.Object3D();
- const pools=new Map(),displays=[],zones=[],landmarks=[],frontages=[],nightMaterials=[],facadeWindows=[],endWalls=[],sideStreets=[];let sourceSerial=0,officeFinish=0;
+ const pools=new Map(),displays=[],zones=[],landmarks=[],frontages=[],nightMaterials=[],facadeWindows=[],endWalls=[],sideStreets=[];let sourceSerial=0,officeFinish=0,featuredBays=0,featuredBalconies=0;
  const officeColours=[new THREE.Color(0xd8e7f2),new THREE.Color(0xe1e6d5),new THREE.Color(0xd6c2a3)];
  const stats={meshes:0,instances:0,triangles:0,capacityTriangles:0,atlasPixels:1024*1024,overflow:0,frontages:0,trees:0,sources:0,rebuilds:0,windowFrames:0,facadeDetails:0,parkSlopes:0,skylineTowers:0,activeZones:[],landmarks:[]};
  const material=(name,colour,roughness=.85,metalness=0)=>{
@@ -259,7 +259,7 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    }
    stats.trees++;
  }
- function windows(side,z,width,height,kind='window',front=11.56,floors=2,columns=2,style=0){
+ function windows(side,z,width,height,kind='window',front=11.56,floors=2,columns=2,style=0,serial=-1){
    const openings=[],count=Math.max(columns,Math.floor((width-.8)/2.65)),pitch=(width-.9)/count;
    const levels=Math.min(floors,Math.max(1,Math.round((height-3.7)/2.9))),rise=(height-3.7)/levels;
    const paneWidth=Math.min([1.22,1.42,1.58,1.30][style%4],pitch-.55),paneHeight=Math.min([1.90,1.78,2.02,1.88][style%4],rise-.40);
@@ -267,8 +267,14 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
      const y=3.7+rise*(level+.5);
      for(let col=0;col<count;col++){
        const zz=z+(col-(count-1)/2)*pitch;
-       openings.push(recessedWindow(side,front,y,zz,paneWidth+.14,paneHeight+.14));
-       if(closeDetail(z)){
+       let feature=null;
+       if(serial>=0&&level===0&&col===0&&z>-210&&z<320&&y>4.3&&y+1.4<height){
+         if(serial%7===0&&featuredBays<8&&pitch>2.65){feature='baywindow';featuredBays++;}
+         else if(serial%11===3&&featuredBalconies<6){feature='balcony';featuredBalconies++;}
+       }
+       if(feature)openings.push({y,z:zz,width:feature==='baywindow'?2.04:1.30,height:2.16,feature});
+       else openings.push(recessedWindow(side,front,y,zz,paneWidth+.14,paneHeight+.14));
+       if(closeDetail(z)&&!feature){
          box(style===3?'timber':'stone',side,front-.15,y-paneHeight/2-.09,zz,.30,.12,paneWidth+.23);
          // Straight soldier-course/stone lintels vary by frontage; all follow
          // the actual aperture instead of floating decorative arch segments.
@@ -307,7 +313,7 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    for(const edge of [-1,1])box(trim,side,front-.33,1.6,z+edge*(width/2-.2),.18,2.9,.17);
    box(trim,side,front-.28,3.08,z,.24,.22,width-.25);
    const mural=district.id==='portugal'&&serial%5===0;
-   const openings=windows(side,z,width,height,serial%3?'window':'glass',front,3,2,serial%4);
+   const openings=windows(side,z,width,height,serial%3?'window':'glass',front,3,2,serial%4,serial);
    masonryFace(brickName,side,front,z,width-.14,hasRoom?3.25:.18,hasRoom?height:height+.18,[...openings,...(hasRoom?[]:[{z:displayZ,y:1.63,width:displayWidth+.14,height:2.48},{z:doorZ,y:1.54,width:doorWidth,height:2.52}])]);
    masonryEnds(brickName,side,front,z,width-.14,depth,.18,height);
    if(detailed){
@@ -344,7 +350,7 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
  function house(side,z,width,height,district,index,serial){
    const depth=9.5,front=14.0,wall=serial%3?'brick':'buff';box(wall,side,front+WINDOW_DEPTH,height/2+.16,z,depth-WINDOW_DEPTH,height,width-.3-WINDOW_DEPTH*2);
    put('gable',side*(front+depth/2),height+1.15,z,depth+1,2.3,width-.1);
-   const openings=windows(side,z,width,height,'window',front,2,2,(serial+2)%4);
+   const openings=windows(side,z,width,height,'window',front,2,2,(serial+2)%4,serial);
    masonryFace(wall,side,front,z,width-.3,.16,height+.16,[...openings,{y:1.5,z:z-width*.27,width:1.1,height:2.45}]);
    masonryEnds(wall,side,front,z,width-.3,depth,.16,height+.16);
    box('stone',side,front-.6,.4,z,1.25,.55,width-.6);
@@ -657,7 +663,7 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    group.visible=route.id==='dundas';stats.rebuilds++;
    if(!group.visible){retail.setRoute(route,[]);facades.setRoute(route,[]);return;}
    for(const p of pools.values())p.count=0;
-   displays.length=zones.length=landmarks.length=frontages.length=facadeWindows.length=endWalls.length=sideStreets.length=0;sourceSerial=0;
+   displays.length=zones.length=landmarks.length=frontages.length=facadeWindows.length=endWalls.length=sideStreets.length=0;sourceSerial=featuredBays=featuredBalconies=0;
    stats.overflow=stats.frontages=stats.trees=stats.windowFrames=stats.facadeDetails=stats.parkSlopes=stats.skylineTowers=0;
    stats.overflows={};signPanels.length=0;signCache.clear();signColumns.fill(0);ctx.clearRect(0,0,1024,1024);
    const activeFeatures=special.map(f=>({...f,z:localZ(f.index)})).filter(f=>clear(f.z,f.width));
@@ -691,12 +697,13 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    finishEndWalls();
    background();
    for(let z=-210;z<370;z+=68){const district=dundasDistrictAt(dundasIndexAtZ(route,z));if(['core','culture','don'].includes(district.id))continue;for(const side of [-1,1])if(clear(z,5)){const before=stats.trees;tree(side,z,9.3,.92);if(stats.trees>before)frontages.push({kind:'tree',side,z,width:2,height:4,front:9.3,depth:1,index:Math.round(z+500),district:district.id});}}
-   retail.setRoute(route,frontages,sideStreets);facades.setRoute(route,frontages);
    stats.instances=stats.triangles=0;
    for(const p of pools.values()){
      p.mesh.count=p.count;p.mesh.instanceMatrix.needsUpdate=true;if(p.mesh.instanceColor)p.mesh.instanceColor.needsUpdate=true;
      stats.instances+=p.count;stats.triangles+=p.count*p.triangles;
    }
+   retail.setRoute(route,frontages,sideStreets);
+   facades.setRoute(route,frontages,380000-stats.triangles-retail.stats.triangles);
    signRegions.needsUpdate=true;signTexture.needsUpdate=true;stats.meshes=pools.size;stats.sources=displays.length;
    stats.activeZones=[...new Set(zones.map(z=>z.id))];stats.landmarks=landmarks.map(f=>f.id);
  }

@@ -277,16 +277,21 @@ function roadDetails(material,route){
 }
 
 export function finishSurfaces(mats,renderer,route){
- const rnd=random(127),asphalt=canvas(),ctx=asphalt.getContext('2d');
- ctx.fillStyle='#555958';ctx.fillRect(0,0,512,512);
- for(let i=0;i<65000;i++){const v=45+rnd()*88;ctx.fillStyle=`rgba(${v},${v+2},${v+1},${.15+rnd()*.3})`;const s=rnd()<.93?1:2;ctx.fillRect(rnd()*512,rnd()*512,s,s);}
- // Faint aggregate patches and sealed hairline cracks, with no huge repeating decals.
- for(let i=0;i<24;i++){const x=rnd()*512,y=rnd()*512,r=8+rnd()*44,g=ctx.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,i%2?'#b5b9af0a':'#101d2110');g.addColorStop(1,'#00000000');ctx.fillStyle=g;ctx.fillRect(x-r,y-r,r*2,r*2);}
- ctx.strokeStyle='#222a2b55';ctx.lineWidth=1;
- for(let i=0;i<5;i++){let x=rnd()*512,y=rnd()*512;ctx.beginPath();ctx.moveTo(x,y);for(let j=0;j<6;j++){x+=rnd()*22-11;y+=rnd()*17;ctx.lineTo(x,y);}ctx.stroke();}
- const roadMap=texture(asphalt),roadBump=relief(asphalt);
- const roadRoughness=roughness(asphalt,.72,1.);
- for(const name of ['road','trackbed','patch']){const m=mats[name];m.map=roadMap;m.color.set(name==='trackbed'?0xb3b6b4:name==='patch'?0xd2d6cf:0xe5e7e3);m.bumpMap=roadBump;m.bumpScale=.027;m.roughness=1;m.roughnessMap=roadRoughness;worldSurface(m,4);weathering(m,.12);}
+ const rnd=random(127),asphalt=canvas(),height=canvas(),rough=canvas();
+ const ctx=asphalt.getContext('2d'),hc=height.getContext('2d'),ar=rough.getContext('2d');
+ ctx.fillStyle='#606361';ctx.fillRect(0,0,512,512);hc.fillStyle='#555555';hc.fillRect(0,0,512,512);ar.fillStyle='#efefef';ar.fillRect(0,0,512,512);
+ // Independent aggregate height and roughness: a dark stone is not a hole.
+ // Wrap stones over tile edges, so grazing views never expose a texture seam.
+ for(let i=0;i<32000;i++){
+   const x=rnd()*512,y=rnd()*512,r=.45+rnd()*1.40,tone=61+rnd()*77,relief=100+rnd()*88,matte=216+rnd()*35;
+   const points=Array.from({length:5},(_,j)=>{const a=j*Math.PI*2/5,rr=r*(.70+rnd()*.30);return [Math.cos(a)*rr,Math.sin(a)*rr];});
+   for(const dx of [0,...(x<3?[512]:x>509?[-512]:[])])for(const dy of [0,...(y<3?[512]:y>509?[-512]:[])])for(const [c,value] of [[ctx,`rgb(${tone},${tone+2},${tone-1})`],[hc,`rgb(${relief},${relief},${relief})`],[ar,`rgb(${matte},${matte},${matte})`]]){
+     c.fillStyle=value;c.beginPath();points.forEach(([px,py],j)=>j?c.lineTo(x+dx+px,y+dy+py):c.moveTo(x+dx+px,y+dy+py));c.closePath();c.fill();
+   }
+ }
+ for(let i=0;i<22000;i++){const x=rnd()*512,y=rnd()*512;ctx.fillStyle=i%2?'#c3c6bb25':'#141b2024';ctx.fillRect(x,y,.7,.7);}
+ const roadMap=texture(asphalt),roadBump=texture(height),roadRoughness=texture(rough);roadBump.colorSpace=roadRoughness.colorSpace=THREE.NoColorSpace;
+ for(const name of ['road','trackbed','patch']){const m=mats[name];m.map=roadMap;m.color.set(name==='trackbed'?0xb3b6b4:name==='patch'?0xc6cac3:0xe5e7e3);m.bumpMap=roadBump;m.bumpScale=.009;m.roughness=1;m.metalness=0;m.envMapIntensity=.55;m.roughnessMap=roadRoughness;worldSurface(m,1.8);weathering(m,.17);m.userData.asphaltFinish={tileMetres:1.8,mapSize:512,aggregateMillimetres:[3,13],independentRelief:true,dryRoughness:[.847,.984]};}
  roadDetails(mats.road,route);
  // Remaining surface decals are depth-biased, rather than relying on a few
  // millimetres of separation when viewed along hundreds of metres of street.

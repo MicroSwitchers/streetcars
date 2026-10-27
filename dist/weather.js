@@ -4,7 +4,9 @@ export {WEATHER} from './weather-cycle.js';
 export const WET_PATCH_GLSL=`
  float weatherHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
  float weatherNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(weatherHash(i),weatherHash(i+vec2(1,0)),f.x),mix(weatherHash(i+vec2(0,1)),weatherHash(i+1.),f.x),f.y);}
- float wetPatch(vec3 p){float n=weatherNoise(p.xz*.27)*.7+weatherNoise(p.xz*.71)*.3;float gutter=(1.-smoothstep(.12,.65,abs(abs(p.x)-7.03)))*.85;return max(smoothstep(.35,.72,n),gutter);}
+ float wetPatch(vec3 p){float n=weatherNoise(p.xz*.27)*.7+weatherNoise(p.xz*.71)*.3;float gutter=(1.-smoothstep(.12,.65,abs(abs(p.x)-7.03)))*.85;return max(smoothstep(.55,.76,n),gutter);}
+ float puddleCoverage(vec3 p,float wet){return smoothstep(.36,.90,wet)*smoothstep(.35,.82,wetPatch(p));}
+ float dampFilm(vec3 p,float wet){return wet*(.35+.65*wetPatch(p));}
  vec2 rainRipple(vec2 world,float time){vec2 p=world*1.8,cell=floor(p),centre=vec2(weatherHash(cell),weatherHash(cell+19.))*.66+.17;
    vec2 delta=fract(p)-centre;float distance=length(delta),age=fract(time*.85+weatherHash(cell+4.));float phase=distance-age*.68;
    float ring=exp(-phase*phase*700.)*sin(phase*48.)*(1.-age)*smoothstep(0.,.08,age);
@@ -37,13 +39,22 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
        vWaterFilmPosition=(modelMatrix*weatherPosition).xyz;vWaterFilmNormal=normalize(mat3(modelMatrix)*weatherNormal);`);
      shader.fragmentShader='uniform float wetness;uniform float rainAmount;uniform float weatherTime;uniform float weatherNight;varying vec3 vWaterFilmPosition;varying vec3 vWaterFilmNormal;\n'+WET_PATCH_GLSL+shader.fragmentShader;
      shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
-       float waterFilm=0.;if(wetness>.001)waterFilm=wetness*(.28+.72*wetPatch(vWaterFilmPosition))*smoothstep(.85,.99,vWaterFilmNormal.y);
-       roughnessFactor=mix(roughnessFactor,mix(.34,.20,weatherNight),waterFilm);
-       diffuseColor.rgb*=mix(1.,.63,waterFilm);`);
+       float waterFilm=0.,standingWater=0.;if(wetness>.001){
+         float upwards=smoothstep(.85,.99,vWaterFilmNormal.y);
+         waterFilm=dampFilm(vWaterFilmPosition,wetness)*upwards;standingWater=puddleCoverage(vWaterFilmPosition,wetness)*upwards;
+       }
+       // Damp aggregate remains rough. Only accumulated water is smooth;
+       // night changes illumination, never the physical polish of the asphalt.
+       roughnessFactor=mix(roughnessFactor,max(.56,roughnessFactor*.76),waterFilm);
+       roughnessFactor=mix(roughnessFactor,.24,standingWater*.88);
+       diffuseColor.rgb*=mix(1.,.70,waterFilm);`);
      shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
-       if(rainAmount>.001&&vWaterFilmNormal.y>.95){vec2 ripple=rainRipple(vWaterFilmPosition.xz,weatherTime)*rainAmount*wetPatch(vWaterFilmPosition);
+       if(wetness>.001&&vWaterFilmNormal.y>.95){
+         vec3 upView=normalize(mat3(viewMatrix)*vec3(0.,1.,0.));
+         normal=normalize(mix(normal,upView,standingWater*.78));
+         vec2 ripple=rainRipple(vWaterFilmPosition.xz,weatherTime)*rainAmount*standingWater;
          normal=normalize(normal+mat3(viewMatrix)*vec3(ripple.x,0.,ripple.y));}`);
-   };material.customProgramCacheKey=()=>key+'-rain-water-film-v1';material.needsUpdate=true;
+   };material.customProgramCacheKey=()=>key+'-rain-water-film-v2-aggregate';material.needsUpdate=true;
  }
  const sunDirection=new THREE.Vector3(34,48,38).normalize();
  const skyMaterial=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,depthTest:false,toneMapped:false,

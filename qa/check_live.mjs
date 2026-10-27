@@ -11,6 +11,7 @@ const routes=process.argv.includes('--routes');
 const districts=process.argv.includes('--districts');
 const sidewalk=process.argv.includes('--sidewalk');
 const facadeDepth=process.argv.includes('--facades');
+const pavement=process.argv.includes('--pavement');
 const routeInput=routes||districts||sidewalk||facadeDepth||process.argv.includes('--route-input');
 const morning=process.argv.includes('--morning'),dawn=process.argv.includes('--dawn'),atmosphere=process.argv.includes('--atmosphere');
 const output=join(qa,'renders-live-'+Date.now());await mkdir(output);
@@ -237,6 +238,18 @@ try{
    const facadePlacementKinds=d.facades.placements.reduce((counts,p)=>(counts[p.kind]=(counts[p.kind]||0)+1,counts),{});
    const signAtlas=d.group.getObjectByName('Dundas_sign').material.map.image;
    const signPanels=d.signPanels.map(p=>({...p,region:[...p.region]})),frontageStyles=d.frontages.map(f=>({kind:f.kind,index:f.index,district:f.district,shopStyle:f.shopStyle,windowStyle:f.windowStyle}));
+   const featured=d.frontages.flatMap(f=>(f.windows||[]).filter(w=>w.feature).map(w=>({f,w})));
+   for(const {f,w} of featured){
+    if(!d.facades.placements.some(p=>p.kind===w.feature&&p.side===f.side&&Math.abs(p.z-w.z)<.002&&Math.abs(p.y-w.y)<.002))throw Error('Missing authored replacement window');
+    if(d.facadeWindows.some(p=>Math.abs(p.x-f.side*f.front)<.002&&Math.abs(p.z-w.z)<.002&&Math.abs(p.y-w.y)<.002))throw Error('Old glazing overlaps a bay or balcony');
+   }
+   if(d.retail.stats.rooms!==d.retail.stats.fixtureRooms)throw Error('An interior recess has no stocked rear shelving');
+   const ground=d.retail.placements.filter(p=>p.shopfront);
+   for(const p of ground){
+    const b=d.frontages.find(f=>f.index===p.frontageIndex&&f.side===p.side),door=b.z+b.width*(b.kind==='modern'?.24:b.kind==='loft'?.36:.34);
+    if(Math.min(Math.abs(p.minX),Math.abs(p.maxX))<9.7||p.minZ<door+.6&&p.maxZ>door-.6||a.route.crossings.some(c=>p.minZ<c.z+16&&p.maxZ>c.z-16)||a.route.stops.some(s=>p.minZ<s.z+8&&p.maxZ>s.z-8))throw Error('New shopfront prop blocks a walking line, doorway or boarding zone');
+   }
+   for(let i=0;i<ground.length;i++)for(let j=i+1;j<ground.length;j++)if(ground[i].minX<ground[j].maxX-.025&&ground[i].maxX>ground[j].minX+.025&&ground[i].minZ<ground[j].maxZ-.025&&ground[i].maxZ>ground[j].minZ+.025)throw Error('Shopfront props overlap');
    return {offset,hash,resources,objects,geometries:a.renderer.info.memory.geometries,textures:a.renderer.info.memory.textures,stats:JSON.parse(JSON.stringify(d.stats)),retail:JSON.parse(JSON.stringify(d.retail.stats)),facades:JSON.parse(JSON.stringify(d.facades.stats)),facadePlacementKinds,frontageStyles,signPanels,signAtlasSize:[signAtlas.width,signAtlas.height],rooms,mappedGlazing,roomMaterials,masonryMaterials,glazingCount:glazing.count,zones:d.zones,landmarks:d.landmarks,windowSources:a.city.scenery.windowLighting.windows.length};
   };window.__districtClose=(offset,night=false)=>{
    window.__districtStage(offset,night);
@@ -309,6 +322,17 @@ try{
   const shopStyles=new Set(samples.flatMap(s=>s.frontageStyles.filter(f=>f.kind==='shop').map(f=>f.shopStyle)).filter(Number.isInteger));
   const windowStyles=new Set(samples.flatMap(s=>s.frontageStyles.map(f=>f.windowStyle)).filter(Number.isInteger));
   if(shopStyles.size<3||windowStyles.size<3)throw Error('Dundas facades lack distinct shopfront and window compositions: '+JSON.stringify({shopStyles:[...shopStyles],windowStyles:[...windowStyles]}));
+  for(const offset of [0,6,13,16,26,33,36]){
+   const sample=samples.find(s=>s.offset===offset);
+   if(sample.retail.windowGardens<5||!(sample.facades.counts.baywindow>0))throw Error('Dundas lost its window gardens or authored bay windows at '+offset);
+  }
+  await evaluate('window.__districtStage(6)');
+  for(const kind of ['baywindow','balcony','table','crate']){
+   if(kind==='crate')await evaluate('window.__districtStage(30)');
+   const visible=await evaluate(`(()=>{const a=queenStreet,d=a.city.districts,kind=${JSON.stringify(kind)},architectural=['baywindow','balcony'].includes(kind),p=(architectural?d.facades.placements:d.retail.placements).filter(p=>p.kind===kind).sort((p,q)=>Math.abs(p.z+124)-Math.abs(q.z+124))[0];if(!p)return false;const x=architectural?p.side*d.frontages.find(f=>f.index===p.index&&f.side===p.side).front:p.x,y=architectural?p.y:.7,side=architectural?p.side:Math.sign(p.x);a.camera.fov=56;a.camera.position.set(x-side*4,y+1.3,p.z-5);a.camera.lookAt(x,y,p.z);a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);return true;})()`);
+   if(!visible)throw Error('No new Dundas detail available for review: '+kind);
+   await photo('dundas-detail-'+kind);
+  }
   const landmarks=samples.flatMap(s=>s.landmarks);
   for(const [id,side] of [['ago',-1],['hospital',1],['square',-1],['spectrum',-1],['regent-park',1],['library',1],['station',-1]])if(!landmarks.some(f=>f.id===id&&f.side===side))throw Error('Missing or misplaced '+id);
   if(!landmarks.some(f=>f.id==='library'&&f.index>33.12)||!landmarks.some(f=>f.id==='spectrum'&&f.index<29.12))throw Error('Landmark occupies the wrong intersection corner');
@@ -343,6 +367,29 @@ try{
   console.log('PASS: Dundas signs retain native proportions; varied storefronts, recessed shops and all 37 offsets retain bounded resources and night lighting');
   await writeFile(join(output,'districts.json'),JSON.stringify(samples,null,2));
   await writeFile(join(output,'dundas-close-ups.json'),JSON.stringify(closeUps,null,2));
+ }
+ if(pavement){
+  const report=await evaluate(`(async()=>{
+   const a=queenStreet,THREE=await import(new URL('./vendor/three.module.js',document.querySelector('script[src$="main.js"]').src).href),m=a.city.materials.road;
+   if(!m.userData.asphaltFinish?.independentRelief||m.map.image===m.bumpMap.image||m.bumpMap.image===m.roughnessMap.image||m.map.image.width!==512||m.metalness!==0)throw Error('Asphalt lost independent bounded PBR maps');
+   a.setPaused(true);const update=a.view.update;a.view.update=()=>{};a.view.transition=null;
+   a.camera.clearViewOffset();a.camera.fov=52;a.camera.position.set(0,21,-150);a.camera.lookAt(0,0,-149.99);a.camera.updateProjectionMatrix();
+   const diagnostic=m.clone(),compile=m.onBeforeCompile,key=m.customProgramCacheKey();diagnostic.onBeforeCompile=function(shader,renderer){compile.call(this,shader,renderer);shader.fragmentShader=shader.fragmentShader.replace(/}\\s*$/,'gl_FragColor=vec4(vec3(roughnessFactor),1.);\\n}');};diagnostic.customProgramCacheKey=()=>key+'-roughness-readback';
+   const surfaces=[];a.scene.traverse(o=>{if(o.material===m){surfaces.push(o);o.material=diagnostic;}});
+   // Read the material directly: the desktop finishing pass applies an output
+   // transfer function, so its displayed grey is not a linear roughness value.
+   const sample=()=>{a.renderer.setRenderTarget(null);a.renderer.render(a.scene,a.camera);const gl=a.renderer.getContext(),width=gl.drawingBufferWidth,height=gl.drawingBufferHeight,rgba=new Uint8Array(width*height*4);gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,rgba);const values=[];
+    for(let x=-7.3;x<=7.3;x+=.19)for(let z=-156;z<=-144;z+=.41){if([a.route.trackX,-a.route.trackX].some(t=>Math.abs(Math.abs(x-t)-a.route.gauge/2)<.18))continue;const p=new THREE.Vector3(x,.005,z).project(a.camera),px=Math.round((p.x*.5+.5)*(width-1)),py=Math.round((p.y*.5+.5)*(height-1));if(px<0||py<0||px>=width||py>=height)continue;values.push(rgba[(py*width+px)*4]/255);}return values;};
+   const settle=()=>{for(let i=0;i<100;i++)a.weather.update(.1,a.state.z,a.nightAmount,a.renderer.getPixelRatio(),false);};
+   a.updateSettings({weatherMode:'off',night:false});settle();const dry=sample();
+   a.updateSettings({weatherMode:'fixed',weather:'rain'});settle();a.weather.uniforms.wetness.value=1;if(a.graphics.uniforms)a.graphics.uniforms.wetness.value=0;const wet=sample();
+   a.updateSettings({night:true});a.weather.uniforms.wetness.value=1;if(a.graphics.uniforms)a.graphics.uniforms.wetness.value=0;const dark=sample();
+   const mean=values=>values.reduce((sum,n)=>sum+n,0)/values.length,dryMean=mean(dry),wetMean=mean(wet),matte=wet.filter(n=>n>.55).length/wet.length,puddles=wet.filter(n=>n<.48).length/wet.length,nightDifference=mean(dark.map((n,i)=>Math.abs(n-wet[i])));
+   for(const o of surfaces)o.material=m;diagnostic.dispose();a.updateSettings({weatherMode:'off',night:false});settle();a.view.update=update;a.restart();
+   if(dry.length<1000||dryMean<.80||matte<.55||puddles<.01||puddles>.4||nightDifference>.01)throw Error('Road roughness readback failed: '+JSON.stringify({samples:dry.length,dryMean,wetMean,matte,puddles,nightDifference}));
+   return {samples:dry.length,dryMean,wetMean,matte,puddles,nightDifference,maps:3,mapSize:512};
+  })()`);
+  await writeFile(join(output,'pavement.json'),JSON.stringify(report,null,2));console.log('PASS: Rendered asphalt stays matte between localized puddles; night does not change its physical roughness: '+JSON.stringify(report));
  }
  if(atmosphere){
   const report=await evaluate(`(async()=>{
