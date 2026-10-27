@@ -45,7 +45,7 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
        }
        // Damp aggregate keeps a soft sheen between puddles while retaining
        // its grain. Night changes illumination, never the physical polish.
-       roughnessFactor=mix(roughnessFactor,max(.52,roughnessFactor*.70),waterFilm);
+       roughnessFactor=mix(roughnessFactor,max(.48,roughnessFactor*.62),min(1.,waterFilm*1.45));
        roughnessFactor=mix(roughnessFactor,.24,standingWater*.88);
        diffuseColor.rgb*=mix(1.,.70,waterFilm);`);
      shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
