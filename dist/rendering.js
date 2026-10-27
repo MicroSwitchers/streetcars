@@ -188,7 +188,7 @@ export function createSceneRenderer(renderer,{compatibility=false}={}){
    vec3 p=viewPosition(uv),world=(inverseView*vec4(p,1.)).xyz;
    vec3 n=normalize(mat3(inverseView)*(encodedNormal.rgb*2.-1.));
    if(n.y<.96||world.y>.45||abs(world.x)>11.35||length(p)>110.)return color;
-   float puddle=puddleCoverage(world,wetness),film=dampFilm(world,wetness)*.10+puddle*.78;
+   float puddle=puddleCoverage(world,wetness),film=dampFilm(world,wetness)*(.10+.14*(1.-puddle))+puddle*.78;
    // Stable world-space grain breaks up the smooth normal used by SSR without
    // deriving normals from depth (which previously caused scan-line bands).
    vec2 grain=vec2(weatherNoise(world.xz*13.),weatherNoise(world.xz*13.+37.))-.5;

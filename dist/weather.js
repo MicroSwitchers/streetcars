@@ -43,9 +43,9 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
          float upwards=smoothstep(.85,.99,vWaterFilmNormal.y);
          waterFilm=dampFilm(vWaterFilmPosition,wetness)*upwards;standingWater=puddleCoverage(vWaterFilmPosition,wetness)*upwards;
        }
-       // Damp aggregate remains rough. Only accumulated water is smooth;
-       // night changes illumination, never the physical polish of the asphalt.
-       roughnessFactor=mix(roughnessFactor,max(.56,roughnessFactor*.76),waterFilm);
+       // Damp aggregate keeps a soft sheen between puddles while retaining
+       // its grain. Night changes illumination, never the physical polish.
+       roughnessFactor=mix(roughnessFactor,max(.52,roughnessFactor*.70),waterFilm);
        roughnessFactor=mix(roughnessFactor,.24,standingWater*.88);
        diffuseColor.rgb*=mix(1.,.70,waterFilm);`);
      shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
