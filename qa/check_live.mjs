@@ -290,6 +290,21 @@ try{
    await photo('dundas-'+offset);
    if([0,6,16].includes(offset)){closeUps.push(await evaluate('window.__districtClose('+offset+')'));await photo('dundas-close-'+offset);}
   }
+  const sideStreetReports=[];
+  for(const offset of [0,6,16,23,26,29,34,36]){
+   await evaluate('window.__districtStage('+offset+')');
+   const report=await evaluate(`(()=>{const a=queenStreet,d=a.city.districts,arms=d.sideStreets;if(!arms?.length)throw Error('Missing detailed side streets');
+    for(const arm of arms){if(arm.buildings.length!==6)throw Error('Incomplete side-street block');for(const b of arm.buildings){if(Math.abs(b.x)-b.width/2<24||Math.abs(b.front-arm.z)<10.2)throw Error('Side street enters main frontage or footway');}}
+    const props=d.retail.placements.filter(p=>p.sideStreet);if(!props.length)throw Error('No Blender furnishings on side streets');
+    for(const p of props)if(Math.abs(p.z-arms.find(arm=>Math.abs(arm.z-p.z)<10).z)<6.9)throw Error('Side-street prop enters roadway');
+    const arm=arms.filter(arm=>arm.side===-1&&arm.end===1).sort((p,q)=>Math.abs(p.z+100)-Math.abs(q.z+100))[0]||arms[0];
+    a.camera.fov=64;a.camera.position.set(arm.side*21,2.8,arm.z);a.camera.lookAt(arm.side*100,4,arm.z+arm.end*2);a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);
+    return {offset:${offset},arms:arms.length,buildings:arms.reduce((n,a)=>n+a.buildings.length,0),props:props.length,windows:d.facadeWindows.filter(w=>Math.abs(w.x)>25).length};})()`);
+   sideStreetReports.push(report);await photo('dundas-side-street-'+offset);
+   if(offset===6||offset===23){await evaluate('queenStreet.updateSettings({night:true});queenStreet.graphics.render(queenStreet.scene,queenStreet.camera)');await photo('dundas-side-street-'+offset+'-night');}
+  }
+  await writeFile(join(output,'dundas-side-streets.json'),JSON.stringify(sideStreetReports,null,2));
+  console.log('PASS: District-specific side-street blocks, deep windows and Blender furnishings retain clear footways');
   if(new Set(samples.map(s=>s.hash)).size<10)throw Error('Neighbourhood geometry does not change along Dundas');
   const shopStyles=new Set(samples.flatMap(s=>s.frontageStyles.filter(f=>f.kind==='shop').map(f=>f.shopStyle)).filter(Number.isInteger));
   const windowStyles=new Set(samples.flatMap(s=>s.frontageStyles.map(f=>f.windowStyle)).filter(Number.isInteger));

@@ -12,7 +12,9 @@ for(const holes of [[],[{u:0,y:3,width:2,height:2}],[{u:-.5,y:3,width:2,height:2
   assert.equal(covers,hole?0:1,'Masonry must fill exactly the wall outside the aperture union');
  }
 }
-const kit=windowGeometries();
+for(const bevel of [true,false]){
+const kit=windowGeometries({bevel});
+assert.equal(kit.reveal.attributes.position.count/3,bevel?16:8,'Simplified jambs halve triangles without losing the recess');
 for(const geometry of Object.values(kit))assert.ok(Array.from(geometry.attributes.position.array).every(Number.isFinite));
 const material=new THREE.MeshBasicMaterial({side:THREE.FrontSide});
 let checks=0;
@@ -27,3 +29,4 @@ for(const rotation of [0,Math.PI,Math.PI/2,-Math.PI/2])for(const width of [.7,1.
  assert.ok(Math.abs(hits[0].distance-(.5+WINDOW_DEPTH-.005))<1e-6,'Glazing is physically inset 235 mm');checks++;
 }
 console.log('PASS: Aperture unions, non-overlapping wall coverage, finite shared geometry and '+checks+' inset glazing rays in all facade orientations.');
+}

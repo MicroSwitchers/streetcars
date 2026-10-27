@@ -25,3 +25,18 @@ and keeps the existing iPad pixel, shadow and lighting limits.
 and physical glazing depth. `qa/check_live.mjs --facades --districts` probes actual
 rendered openings on both routes and across the Dundas districts, captures day
 and night views, and checks all 37 resident sections for stable resources.
+
+Dundas cross streets now continue through six individual buildings on each
+occupied arm. Their district determines masonry, height, commercial or residential
+fronts, canopies and trees. The nearer buildings have more individual windows;
+distant buildings use fewer, broader apertures. All retain physical reveals and
+perspective interiors. Native-aspect signs share the existing atlas, and curbside
+hydrants, benches and bins reuse the Blender street-prop buffers. Park and valley
+openings stay clear. Side-street props remain outside the road and leave a clear
+walking line to the doors.
+
+Dundas uses continuous tapered window jambs instead of a separate 25 mm bevel,
+halving reveal triangles while retaining the full 24 cm recess. Hidden party-wall
+windows are omitted; exposed corner windows and windows above lower neighbours
+remain. This funds the side-street detail inside the same triangle ceilings,
+without changing iPad resolution, shadows, lights or texture downloads.

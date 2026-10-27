@@ -35,8 +35,8 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.castShadow=shadow;mesh.receiveShadow=true;
    // Fixed resident bounds also avoid stale bounds after a later section has
    // different placements. Props exist only beside the occupied central blocks.
-   mesh.boundingBox=new THREE.Box3(new THREE.Vector3(-25,0,-235),new THREE.Vector3(25,4,385));
-   mesh.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,2,75),313);
+   mesh.boundingBox=new THREE.Box3(new THREE.Vector3(-125,0,-235),new THREE.Vector3(125,4,385));
+   mesh.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,2,75),335);
    group.add(mesh);stats.objects++;stats.meshes++;
    const triangles=geometry.index?geometry.index.count/3:geometry.attributes.position.count/3;
    stats.capacityTriangles+=triangles*capacity;
@@ -232,7 +232,7 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
    return true;
  }
  function finishPool(p){p.mesh.count=p.count;p.mesh.instanceMatrix.needsUpdate=true;if(p.mesh.instanceColor)p.mesh.instanceColor.needsUpdate=true;if(p.illumination)p.illumination.needsUpdate=true;}
- function setRoute(route,frontages=[]){
+ function setRoute(route,frontages=[],sideStreets=[]){
    for(const p of pools.values()){p.count=0;for(const part of p.parts)part.count=0;}
    leafPool.count=flowerPool.count=0;for(const p of Object.values(fixturePools))p.count=0;placements.length=rooms.length=fixtures.length=reserved.length=0;
    for(const key of ['instances','triangles','overflow','budgetSkipped','rooms','furniture','plants','fixtureInstances','fixtureTriangles','fixtureRooms'])stats[key]=0;stats.types={};stats.roomIndices.length=0;stats.rebuilds++;
@@ -253,6 +253,12 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
      for(let row=0;row<2;row++)for(const room of rooms)backContents(room,row);
      for(const room of rooms)rearDisplay(room);
      triangleLimit=maxTriangles;
+     const sideBudget=stats.triangles+14000;
+     for(const [i,arm] of sideStreets.entries()){
+       const f=arm.furniture[i%arm.furniture.length],p=pools.get(f?.kind);
+       if(!p||stats.triangles+p.model.triangles>sideBudget)continue;
+       if(prop(f.kind,f.x,.18,f.z,f.yaw)){placements.at(-1).sideStreet=true;stats.furniture++;}
+     }
      for(const f of active.filter(f=>f.kind==='tree'))prop('treegrate',f.side*9.3,.18,f.z);
      for(let z=-224;z<380;z+=29)if(clear(route,z,.5))for(const side of [-1,1])prop('stormdrain',side*7.2,.008,z);
      const kinds=['bench','planter','bins','hydrant','newsbox','meter','bikestand','bicycle','utilitycabinet','planter','bench'];

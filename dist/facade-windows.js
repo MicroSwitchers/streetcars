@@ -77,7 +77,7 @@ export function facadeRectangles(width,bottom,top,openings){
 
 // Local +X points into the wall, local Z spans the window. The outer ring
 // meets the actual wall plane; the glazing sits behind the tapered reveals.
-export function windowGeometries(){
+export function windowGeometries({bevel=true}={}){
  const p=[],n=[],uv=[];
  function quad(points,wanted){
   const a=new THREE.Vector3(...points[0]),b=new THREE.Vector3(...points[1]),c=new THREE.Vector3(...points[2]);
@@ -88,8 +88,14 @@ export function windowGeometries(){
  const corners=[[-.5,-.5],[-.5,.5],[.5,.5],[.5,-.5]];
  for(let i=0;i<4;i++){
   const a=corners[i],b=corners[(i+1)%4],c=b.map(v=>v*.92),d=a.map(v=>v*.92);
-  quad([[0,...a],[0,...b],[.025,...c],[.025,...d]],[-1,0,0]);
-  quad([[.025,...d],[.025,...c],[WINDOW_DEPTH,...c],[WINDOW_DEPTH,...d]],[0,-(c[0]+d[0]),-(c[1]+d[1])]);
+  if(bevel){
+   quad([[0,...a],[0,...b],[.025,...c],[.025,...d]],[-1,0,0]);
+   quad([[.025,...d],[.025,...c],[WINDOW_DEPTH,...c],[WINDOW_DEPTH,...d]],[0,-(c[0]+d[0]),-(c[1]+d[1])]);
+  }else{
+   // A continuous tapered jamb preserves the full recess and silhouette with
+   // half the triangles. Useful for the much longer resident Dundas blocks.
+   quad([[0,...a],[0,...b],[WINDOW_DEPTH,...c],[WINDOW_DEPTH,...d]],[0,-(c[0]+d[0]),-(c[1]+d[1])]);
+  }
  }
  const reveal=new THREE.BufferGeometry();reveal.setAttribute('position',new THREE.Float32BufferAttribute(p,3));reveal.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));reveal.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
  const pane=new THREE.PlaneGeometry(.925,.925);pane.rotateY(-Math.PI/2);pane.translate(WINDOW_DEPTH-.005,0,0);
