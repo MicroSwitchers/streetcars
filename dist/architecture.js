@@ -26,19 +26,29 @@ export async function loadArchitecture(){
  return {models,materials,revision:'blender-queen-architecture-v1'};
 }
 
+export function architectureMaterial(part,mats){
+ if(part.material.name==='Architecture_WindowGlass')return mats.glass;
+ if(part.material.name==='Architecture_ShopGlass')return mats.storeGlass;
+ if(part.material.name==='Architecture_BlockBrick'){
+   if(!part.geometry.attributes.uv)part.geometry.setAttribute('uv',new THREE.Float32BufferAttribute(new Float32Array(part.geometry.attributes.position.count*2),2));
+   return mats.brick1;
+ }
+ return part.material;
+}
+
 // Anchors sit on the actual facade plane, with +Z facing the road. Reuse the
 // occupied-window material so these windows share the existing night cycle.
 export function createArchitecture({scene,route,mats},assets){
  const batches=new Map(),dummy=new THREE.Object3D();
- const stats={models:assets.models,buildings:[],surfaces:[],placements:[],meshes:[],counts:{},cellLength:96,people:0};
- function place(kind,side,y,z,{x=11.4,sx=1,sy=1,sz=1,roof=false,index,origin,rotation,relief=false}={}){
+ const stats={models:assets.models,buildings:[],surfaces:[],infill:[],placements:[],meshes:[],counts:{},cellLength:96,people:0};
+ function place(kind,side,y,z,{x=11.4,sx=1,sy=1,sz=1,roof=false,index,origin,rotation,relief=false,shell=false}={}){
    const model=assets.models.get(kind);if(!model)throw new Error('Missing architectural asset: '+kind);
    dummy.position.set(origin?.[0]??side*x,y,origin?.[2]??z);dummy.rotation.set(0,rotation??-side*Math.PI/2,0);dummy.scale.set(sx,sy,sz);dummy.updateMatrix();
    const bounds=model.bounds.clone().applyMatrix4(dummy.matrix);
-   stats.placements.push({kind,side,y,z,index,roof,relief,bounds});stats.counts[kind]=(stats.counts[kind]??0)+1;
+   stats.placements.push({kind,side,y,z,index,roof,relief,shell,bounds});stats.counts[kind]=(stats.counts[kind]??0)+1;
    for(const part of model.parts){
      const key=Math.floor(z/stats.cellLength)+'/'+part.geometry.uuid;
-     if(!batches.has(key))batches.set(key,{part,material:part.material.name==='Architecture_WindowGlass'?mats.glass:part.material,matrices:[],colors:[],kind});
+     if(!batches.has(key))batches.set(key,{part,material:architectureMaterial(part,mats),matrices:[],colors:[],kind});
      const batch=batches.get(key);batch.matrices.push(dummy.matrix.clone());
      const stone=/Limestone|CarvedStone/.test(part.material.name),sash=part.material.name==='Architecture_Sash';
      batch.colors.push(new THREE.Color(stone?[0xffffff,0xdeddd1,0xf3e7cd,0xd6d4ca][index%4]:sash?[0xffffff,0xc0c7b4,0xa7b3aa,0xdad5bd][index%4]:0xffffff));
@@ -94,11 +104,12 @@ export function createArchitecture({scene,route,mats},assets){
      matrices.forEach((m,i)=>{mesh.setMatrixAt(i,m);mesh.setColorAt(i,colors[i]);});mesh.instanceMatrix.needsUpdate=true;
      // Tiny wall reliefs use surface lighting and AO. Keeping them out of the
      // shadow pass avoids thin-edge self-shadow stripes and extra tablet cost.
-     mesh.castShadow=material!==mats.glass&&!FACADE_RELIEFS.includes(kind);mesh.receiveShadow=true;mesh.computeBoundingSphere();scene.add(mesh);stats.meshes.push(mesh);
+     mesh.castShadow=kind==='cornerblock'?/BlockBrick|Slate/.test(part.material.name):material!==mats.glass&&!material.transparent&&!FACADE_RELIEFS.includes(kind);
+     mesh.receiveShadow=!material.transparent&&(kind!=='cornerblock'||!/Limestone|Sash/.test(part.material.name));mesh.computeBoundingSphere();scene.add(mesh);stats.meshes.push(mesh);
    }
    stats.geometryBytes=[...geometrySet].reduce((n,g)=>n+(g.index?.array.byteLength??0)+Object.values(g.attributes).reduce((s,a)=>s+a.array.byteLength,0),0);
    stats.sourceTriangles=[...stats.models.values()].reduce((n,m)=>n+m.triangles,0);
    stats.instances=stats.placements.length;return stats;
  }
- return {plan,window,building,surface,finish,stats};
+ return {plan,window,building,surface,infill(plot){stats.infill.push(plot);place('cornerblock',plot.side,.18,plot.z,{x:11.4,sx:plot.width/6,index:Math.abs(Math.round(plot.z)),shell:true});},finish,stats};
 }

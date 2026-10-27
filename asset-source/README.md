@@ -1,4 +1,22 @@
-The architectural kit now contains 17 Blender prototypes, including seven low-cost
+Intersection infill uses a closed, 636-triangle Blender corner shop with a deep
+stocked display, inset door, recessed upper windows, profiled window hoods,
+returned roof coping and a terracotta medallion. New paneled shutters and separate
+medallions also dress existing buildings. `source/corner_block_models.py` builds
+these three additions. Swept balcony scrolls replace capped cylinder segments,
+reducing the full kit from 10,584 to 10,348 triangles and from 383,804 to 380,664
+bytes, without new image textures or decoders. Rebuild a dedicated preview with
+`source/build_architecture.py -- --corner-review`.
+
+`dist/intersection-blocks.js` subtracts existing frontage, protected park/landmark
+plots and crossing clearances before closing unintended gaps. The same planner
+serves both routes. Queen reserves complete side-street corner footprints first;
+Dundas allocates structural shells before optional facade ornaments, retaining
+its 380,000-triangle combined resident ceiling. Side streets continue to another
+junction and an occupied block; skyline towers no longer stand in Queen's
+side-street corridors. Fixed sign matrices grew by 80 entries (about 6 KB), while
+new plaques reuse the existing atlas and existing sign proportions.
+
+The architectural kit now contains 20 Blender prototypes, including seven low-cost
 masonry reliefs: straight window hoods, terracotta spandrels, recessed parapet
 friezes, louvred vents, collared downpipes, fluted piers and profiled stone belts.
 These additions total 472 source triangles and about 30 KB in the decoder-free

@@ -1,6 +1,6 @@
 // A small architectural grammar shared by Queen, Dundas and their side streets.
 // All coordinates are local: U runs along the wall and +Z faces outside.
-export const FACADE_RELIEFS=Object.freeze(['flathead','spandrel','frieze','wallvent','downpipe','pilaster','stringcourse']);
+export const FACADE_RELIEFS=Object.freeze(['flathead','spandrel','frieze','wallvent','downpipe','pilaster','stringcourse','roundel','shutters']);
 
 export function facadeReliefs({width,height,index=0,kind='shop',windows=[],roofClearance=.68,bottom=3.4}){
  const style=kind==='loft'?0:Math.abs(Math.floor(index))%4,details=[];
@@ -17,6 +17,7 @@ export function facadeReliefs({width,height,index=0,kind='shop',windows=[],roofC
    if(w.feature)continue;
    const head=w.y+w.height/2+.10;
    if(head+.14<top)emit('flathead',w.u,head,w.width+.20);
+   if((kind==='house'&&style===2||kind==='shop'&&index%13===2)&&w.width<2)emit('shutters',w.u,w.y,w.width+.20,w.height/2);
    const lower=upper.filter(a=>Math.abs(a.u-w.u)<.25&&a.y<w.y-.2).sort((a,b)=>b.y-a.y)[0];
    if((style===1||style===2)&&lower){
      const lo=lower.y+lower.height/2+.26,hi=w.y-w.height/2-.04;
@@ -54,6 +55,7 @@ export function facadeReliefs({width,height,index=0,kind='shop',windows=[],roofC
  if(style!==1){
    const y=Math.min(top-.27,Math.max(4.55,height-1.05));
    for(const u of [-width*.32,width*.32])if(y-.26>bottom&&clear(u,y,.56,.52)&&details.every(d=>d.kind!=='frieze'||Math.abs(d.y-y)>.53))emit('wallvent',u,y);
+   if(style===3&&y-.26>bottom&&clear(0,y,.56,.52))emit('roundel',0,y);
  }
  return {style,details};
 }

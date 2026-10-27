@@ -114,8 +114,14 @@ for j in range(13):
     x=-.85+j*1.7/12;tube('Slender iron baluster',[(x,-.97,.84),(x,-.08,.84)],.010,iron,p)
 for x in [-.60,0,.60]:
     for mirror in [-1,1]:
-        pts=[(x+mirror*.125*math.sin(t),-.49+.29*math.cos(t),.85) for t in [k*math.tau/16 for k in range(17)]]
-        tube('Wrought iron oval scroll',pts,.009,iron,p)
+        # A continuous swept strip preserves the scroll silhouette without
+        # hundreds of invisible cylinder end caps at every small joint.
+        verts=[]
+        for k in range(16):
+            t=k*math.tau/16
+            for a in [math.pi/4+j*math.pi/2 for j in range(4)]:verts.append((x+mirror*(.125+.009*math.cos(a))*math.sin(t),-.49+(.29+.009*math.cos(a))*math.cos(t),.85+.009*math.sin(a)))
+        o=mesh('Continuous wrought iron scroll',verts,[(k*4+j,k*4+(j+1)%4,((k+1)%16)*4+(j+1)%4,((k+1)%16)*4+j) for k in range(16) for j in range(4)],iron,p)
+        for face in o.data.polygons:face.use_smooth=True
 
 p=root('pediment')
 box('Stone pediment base',(0,0,.14),(2.15,.14,.34),edge,p)
@@ -178,6 +184,7 @@ cyl('Copper finial',(0,1.42,0),.038,.18,copper,p,vertices=12,r2=.012)
 
 # Low-cost reliefs break up blank masonry without new textures or lights.
 runpy.run_path(str(P/'source/facade_detail_models.py'))['build'](globals())
+runpy.run_path(str(P/'source/corner_block_models.py'))['build'](globals())
 
 # Bake bevels/normals, compact by material, triangulate for a decoder-free GLB.
 report={}
@@ -200,7 +207,7 @@ report['glb_bytes']=(OUT/'architecture.glb').stat().st_size
 (OUT/'validation.json').write_text(json.dumps(report,indent=2))
 asset_objects=list(bpy.data.objects)
 rows=math.ceil(len(roots)/5)
-for i,p in enumerate(roots):p.location=V(((i%5-2)*3.0,1.5,(i//5-(rows-1)/2)*4.4))
+for i,p in enumerate(roots):p.location=V((12,0,6.45) if p.name=='Architecture_cornerblock' else ((i%5-2)*3.0,1.5,(i//5-(rows-1)/2)*4.4))
 scene=bpy.context.scene;scene.render.engine='CYCLES';scene.cycles.samples=24;scene.cycles.use_denoising=True
 scene.world.use_nodes=True;scene.world.node_tree.nodes['Background'].inputs[0].default_value=(.48,.55,.62,1);scene.world.node_tree.nodes['Background'].inputs[1].default_value=.5
 box('Review floor',(0,-.065,0),(60,.1,60),material('Studio',(.09,.11,.12)),None,0)
@@ -208,7 +215,7 @@ for name,pos,power,size in [('Key',(0,12,6),2100,8),('Fill',(-8,7,0),1400,6)]:
     data=bpy.data.lights.new(name,'AREA');data.energy=power;data.shape='DISK';data.size=size
     o=bpy.data.objects.new(name,data);scene.collection.objects.link(o);o.location=V(pos);o.rotation_euler=(V((0,1,0))-o.location).to_track_quat('-Z','Y').to_euler()
 data=bpy.data.cameras.new('Architecture review');o=bpy.data.objects.new('Architecture review',data);scene.collection.objects.link(o);scene.camera=o
-o.location=V((10,13,20));o.rotation_euler=(V((0,1.6,0))-o.location).to_track_quat('-Z','Y').to_euler();data.type='ORTHO';data.ortho_scale=22 if len(roots)>10 else 18
+o.location=V((18,17,27));o.rotation_euler=(V((4,2,0))-o.location).to_track_quat('-Z','Y').to_euler();data.type='ORTHO';data.ortho_scale=28 if len(roots)>17 else 22
 scene.render.resolution_x=1600;scene.render.resolution_y=1000;scene.render.resolution_percentage=100;scene.view_settings.view_transform='AgX'
 scene.render.image_settings.file_format='PNG';scene.render.filepath=str(OUT/'kit.png')
 for label,objects in [('Game assets',asset_objects),('Review studio',[o for o in bpy.data.objects if o not in asset_objects])]:
@@ -217,5 +224,12 @@ for label,objects in [('Game assets',asset_objects),('Review studio',[o for o in
         for previous in list(o.users_collection):previous.objects.unlink(o)
         collection.objects.link(o)
 bpy.ops.wm.save_as_mainfile(filepath=str(P.parent.parent/'building-architecture-game-ready.blend'))
+if '--corner-review' in sys.argv:
+    corner=bpy.data.objects['Architecture_cornerblock'];corner.location=V((0,0,0))
+    for model in roots:
+        if model!=corner:
+            for child in model.children:child.hide_render=True
+    scene.camera.location=V((15,12,18));scene.camera.rotation_euler=(V((0,3.4,-4.7))-scene.camera.location).to_track_quat('-Z','Y').to_euler();scene.camera.data.ortho_scale=20
+    scene.render.filepath=str(OUT/'corner-shop.png')
 if '--skip-render' not in sys.argv:bpy.ops.render.render(write_still=True)
 print('ARCHITECTURE_COMPLETE',json.dumps(report),flush=True)

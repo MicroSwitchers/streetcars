@@ -1,16 +1,24 @@
 import * as THREE from '../dist/vendor/three.module.js';
 
 export function checkArchitecture(api,check,w){
- const a=api.city.architecture,models=['cornice','archedhood','baywindow','balcony','pediment','firelanding','escapeladder','rooflantern','chimneypots','cupola','flathead','spandrel','frieze','wallvent','downpipe','pilaster','stringcourse'];
- check('Seventeen original Blender architectural prototypes are loaded',a.models.size===17&&models.every(n=>a.models.has(n)&&a.counts[n]>0));
+ const a=api.city.architecture,models=['cornice','archedhood','baywindow','balcony','pediment','firelanding','escapeladder','rooflantern','chimneypots','cupola','flathead','spandrel','frieze','wallvent','downpipe','pilaster','stringcourse','cornerblock','roundel','shutters'];
+ check('Twenty original Blender architectural prototypes are loaded',a.models.size===20&&models.every(n=>a.models.has(n)&&a.counts[n]>0));
  check('Architecture stays within its shared geometry budget',a.sourceTriangles<11000&&a.geometryBytes<400000);
- check('Architectural detail covers both sides of the playable street',a.buildings.length>100&&[-1,1].every(side=>a.buildings.some(b=>b.side===side&&b.mid<api.route.start+25)&&a.buildings.some(b=>b.side===side&&b.mid>api.route.end-25)));
- check('New features leave the sidewalk camera and overhead rail corridor clear',a.placements.every(p=>p.bounds.min.y>3.4&&(p.side<0?-p.bounds.max.x:p.bounds.min.x)>10.2));
+ const block=a.models.get('cornerblock'),shellParts=block.parts.filter(p=>!p.material.name.includes('Glass')).map(p=>new THREE.Mesh(p.geometry,new THREE.MeshBasicMaterial()));
+ shellParts.forEach(m=>m.updateMatrixWorld(true));
+ const shellRay=new THREE.Raycaster();
+ for(const [origin,direction] of [[[0,1.6,3],[0,0,-1]],[[6,2,-6.4],[-1,0,0]],[[0,2,-16],[0,0,1]]]){
+   shellRay.set(new THREE.Vector3(...origin),new THREE.Vector3(...direction));
+   check('Corner shop has opaque side, rear and interior geometry at '+origin.join(','),shellRay.intersectObjects(shellParts).length>0);
+ }
+ shellParts.forEach(m=>m.material.dispose());
+ check('Architectural detail covers both sides of the playable street',a.buildings.length+a.infill.length>100&&[-1,1].every(side=>a.buildings.some(b=>b.side===side&&b.mid<api.route.start+25)&&a.buildings.some(b=>b.side===side&&b.mid>api.route.end-25)));
+ check('New features leave the sidewalk camera and overhead rail corridor clear',a.placements.every(p=>(p.shell||p.bounds.min.y>3.4)&&(p.side<0?-p.bounds.max.x:p.bounds.min.x)>10.2));
  check('Architecture introduces no people or additional real-time lights',a.people===0&&a.meshes.every(m=>m.isInstancedMesh&&!m.children.some(c=>c.isLight)));
  const geometries=new Set(a.meshes.map(m=>m.geometry));
- check('Architecture uses spatially culled instances with shared buffers',geometries.size<42&&a.meshes.length<300&&a.meshes.length>geometries.size&&a.meshes.every(m=>m.geometry.index&&m.geometry.boundingSphere));
+ check('Architecture uses spatially culled instances with shared buffers',geometries.size<56&&a.meshes.length<450&&a.meshes.length>geometries.size&&a.meshes.every(m=>m.geometry.index&&m.geometry.boundingSphere));
  check('Masonry relief covers main, corner and side-street elevations',a.surfaces.length>150&&['shop','corner','side-street'].every(kind=>a.surfaces.some(s=>s.kind===kind&&s.details>0))&&new Set(a.surfaces.map(s=>s.style)).size===4);
- check('Fine wall reliefs avoid thin-edge shadow artifacts and extra shadow draws',a.meshes.filter(m=>models.slice(10).some(k=>m.name==='Architecture_'+k)).every(m=>!m.castShadow&&m.receiveShadow));
+ check('Fine wall reliefs avoid thin-edge shadow artifacts and extra shadow draws',a.meshes.filter(m=>models.slice(10).filter(k=>k!=='cornerblock').some(k=>m.name==='Architecture_'+k)).every(m=>!m.castShadow&&m.receiveShadow));
  const roofs=a.placements.filter(p=>p.roof),badRoofs=[];
  for(const p of roofs){
    const b=a.buildings.find(b=>b.index===p.index),bounds=p.bounds;

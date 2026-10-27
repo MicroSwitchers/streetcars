@@ -14,7 +14,8 @@ const facadeDepth=process.argv.includes('--facades');
 const pavement=process.argv.includes('--pavement');
 const greenery=process.argv.includes('--greenery');
 const buildings=process.argv.includes('--buildings');
-const routeInput=routes||districts||sidewalk||facadeDepth||greenery||buildings||process.argv.includes('--route-input');
+const intersections=process.argv.includes('--intersections');
+const routeInput=routes||districts||sidewalk||facadeDepth||greenery||buildings||intersections||process.argv.includes('--route-input');
 const morning=process.argv.includes('--morning'),dawn=process.argv.includes('--dawn'),atmosphere=process.argv.includes('--atmosphere');
 const output=join(qa,'renders-live-'+Date.now());await mkdir(output);
 const profile=await mkdtemp(join(qa,'headless-live-'));
@@ -223,7 +224,7 @@ try{
    for(const id of ['queen','dundas']){
     await checkRoute(id);
     const report=await evaluate(`(()=>{const a=queenStreet;a.updateSettings({quality:'balanced',volume:0,night:false,dayNightCycle:true,weatherMode:'off'});a.restart();a.setPaused(true);const d=a.route.id==='queen'?a.city.architecture:a.city.districts.facades,kinds=['flathead','spandrel','frieze','wallvent','downpipe','pilaster','stringcourse'],counts=d.counts||d.stats.counts;
-     if(a.city.architecture.models.size!==17||!kinds.every(k=>counts[k]>0))throw Error('Missing modeled facade reliefs on '+a.route.id+': '+JSON.stringify(counts));
+     if(a.city.architecture.models.size!==20||!kinds.every(k=>counts[k]>0))throw Error('Missing modeled facade reliefs on '+a.route.id+': '+JSON.stringify(counts));
      const coverage={};for(const s of d.surfaces)if(s.details)coverage[s.kind]=(coverage[s.kind]||0)+1;
      if(!coverage.shop||!coverage.corner||!coverage['side-street'])throw Error('Facade details do not cover every street orientation: '+JSON.stringify(coverage));
      const old=a.view.update;a.view.update=()=>{};a.view.transition=null;a.camera.clearViewOffset();window.__buildingRestore=()=>{a.view.update=old;};window.__buildingCapture=kind=>{const f=d.surfaces.filter(s=>s.kind===kind&&s.details>0&&(s.bottom??3.4)<4).sort((p,q)=>Math.abs(p.origin[2]+124)-Math.abs(q.origin[2]+124))[0];if(!f)throw Error('No visible '+kind+' detail');const n=[Math.sin(f.rotation),Math.cos(f.rotation)],t=[Math.cos(f.rotation),-Math.sin(f.rotation)];a.camera.fov=62;a.camera.position.set(f.origin[0]+n[0]*7-t[0]*5,6.4,f.origin[2]+n[1]*7-t[1]*5);a.camera.lookAt(f.origin[0],Math.min(6,f.height-.8),f.origin[2]);a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);};
@@ -231,6 +232,18 @@ try{
     console.log('PASS: Modeled masonry reliefs cover both routes, corners and side streets: '+JSON.stringify(report));
     for(const kind of ['shop','corner','side-street']){await evaluate('window.__buildingCapture('+JSON.stringify(kind)+')');const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'building-'+id+'-'+kind+'.png'),Buffer.from(shot.data,'base64'));}
     await evaluate('window.__buildingRestore()');
+   }
+  }
+  if(intersections){
+   for(const id of ['queen','dundas']){
+    await checkRoute(id);
+    const report=await evaluate(`(async()=>{const a=queenStreet,THREE=await import(new URL('./vendor/three.module.js',document.querySelector('script[src$="main.js"]').src).href);a.updateSettings({volume:0,night:false,dayNightCycle:true,weatherMode:'off'});a.restart();a.setPaused(true);a.scene.updateMatrixWorld(true);
+     const plots=a.route.id==='queen'?a.city.architecture.infill:a.city.districts.infill,kit=[],offices=[];a.scene.traverseVisible(o=>{if(!o.isMesh)return;if(/cornerblock/.test(o.name)&&!o.material.transparent&&o.material!==a.city.materials.glass)kit.push(o);if(o.material===a.city.materials.officeFacade)offices.push(o);});
+     const ray=new THREE.Raycaster();for(const p of plots){if(a.route.crossings.some(c=>p.minZ<c.z+11.09&&p.maxZ>c.z-11.09))throw Error('Infill obstructs a crossing');ray.set(new THREE.Vector3(p.side*5,1.6,p.z),new THREE.Vector3(p.side,0,0));ray.far=35;if(!ray.intersectObjects(kit,false).length)throw Error('Corner shop has a see-through shell at '+p.z);}
+     let closed=0;for(const c of a.route.crossings)for(const side of [-1,1]){if(a.route.id==='dundas'&&!a.city.districts.sideStreets.some(s=>s.z===c.z&&s.side===side))continue;ray.set(new THREE.Vector3(side*35,4,c.z),new THREE.Vector3(side,0,0));ray.far=160;if(!ray.intersectObjects(offices,false).length)throw Error('Side-street view ends in empty space at '+c.name);closed++;}
+     const old=a.view.update;a.view.update=()=>{};a.view.transition=null;a.camera.clearViewOffset();window.__intersectionRestore=()=>{a.view.update=old;};window.__intersectionCapture=mode=>{const c=[...a.route.crossings].sort((p,q)=>Math.abs(p.z+124)-Math.abs(q.z+124))[0],p=[...plots].sort((p,q)=>Math.abs(p.z+124)-Math.abs(q.z+124))[0];a.camera.fov=66;if(mode==='side'){a.camera.position.set(18,4.8,c.z);a.camera.lookAt(140,5,c.z);}else{a.camera.position.set(p.side*5.5,4.2,p.z-8);a.camera.lookAt(p.side*14,3.2,p.z);}a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);};return {route:a.route.id,closedSideViews:closed,solidInfillShops:plots.length};})()`);
+    console.log('PASS: Real geometry closes intersection lots and side-street sightlines: '+JSON.stringify(report));
+    for(const mode of ['side','shop']){await evaluate('window.__intersectionCapture('+JSON.stringify(mode)+')');const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'intersection-'+id+'-'+mode+'.png'),Buffer.from(shot.data,'base64'));}await evaluate('window.__intersectionRestore()');
    }
   }
   if(routes){
@@ -319,6 +332,7 @@ try{
    if(sample.stats.triangles+sample.retail.triangles+sample.facades.triangles>380000)throw Error('Dundas combined scenery exceeds the shared asset budget: '+JSON.stringify({offset:sample.offset,base:sample.stats.triangles,retail:sample.retail.triangles,facades:sample.facades.triangles}));
    if(sample.facadePlacementKinds.archedhood||sample.facades.counts.archedhood)throw Error('Dundas restores generic arches over its district windows: '+JSON.stringify({offset:sample.offset,kinds:sample.facadePlacementKinds}));
    if(!sample.facades.counts.flathead||!sample.facades.counts.downpipe||!(sample.facades.counts.spandrel||sample.facades.counts.stringcourse))throw Error('Dundas lost its modeled window heads, wall panels or drainage detail at '+sample.offset);
+   if(sample.facades.infillMissing)throw Error('Intersection building shells were omitted by the asset budget at '+sample.offset);
    if(!sample.signPanels.length)throw Error('Dundas sign layout metadata is empty at '+sample.offset);
    for(const p of sample.signPanels){
     const [u,v,uw,vh]=p.region,[atlasWidth,atlasHeight]=sample.signAtlasSize;

@@ -29,6 +29,7 @@ jobs:
           node qa/check_graphics_budget.mjs
           node qa/check_cameras.mjs
           node qa/check_facade_windows.mjs
+          node qa/check_intersection_blocks.mjs
           node qa/check_sensory_logic.mjs
           node qa/check_weather_cycle.mjs
           node qa/check_departure_bell.mjs

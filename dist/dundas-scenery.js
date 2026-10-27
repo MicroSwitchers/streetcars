@@ -5,13 +5,14 @@ import {createDundasRetail,dundasShopType} from './dundas-retail.js';
 import {createDundasFacades} from './dundas-facades.js';
 import {facadeRectangles,windowGeometries,WINDOW_DEPTH} from './facade-windows.js';
 import {treeShape} from './surfaces.js';
+import {intersectionInfill} from './intersection-blocks.js';
 
 // A complete resident 505 streetscape, reusing the same GPU buffers at every
 // section change. Districts change both massing and street-level objects.
 export function createDundasScenery({scene,route,mats,foliage,streetProps,architecturalAssets}){
  const group=new THREE.Group();group.name='505_Dundas_District_Streetscape';scene.add(group);
  const boxGeometry=new THREE.BoxGeometry(1,1,1),dummy=new THREE.Object3D();
- const pools=new Map(),displays=[],zones=[],landmarks=[],frontages=[],nightMaterials=[],facadeWindows=[],endWalls=[],sideStreets=[],trees=[],reliefSurfaces=[];let sourceSerial=0,officeFinish=0,featuredBays=0,featuredBalconies=0;
+ const pools=new Map(),displays=[],zones=[],landmarks=[],frontages=[],nightMaterials=[],facadeWindows=[],endWalls=[],sideStreets=[],trees=[],reliefSurfaces=[],infill=[];let sourceSerial=0,officeFinish=0,featuredBays=0,featuredBalconies=0;
  const officeColours=[new THREE.Color(0xd8e7f2),new THREE.Color(0xe1e6d5),new THREE.Color(0xd6c2a3)];
  const stats={meshes:0,instances:0,triangles:0,capacityTriangles:0,atlasPixels:1024*1024,overflow:0,frontages:0,trees:0,sources:0,rebuilds:0,windowFrames:0,facadeDetails:0,parkSlopes:0,skylineTowers:0,activeZones:[],landmarks:[]};
  const material=(name,colour,roughness=.85,metalness=0)=>{
@@ -41,7 +42,7 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.castShadow=shadow;mesh.receiveShadow=true;
    // Bounds are fixed to the resident section, rather than allocating them on a
    // route change. Instance counts, matrices and sign regions are the only edits.
-   mesh.boundingBox=new THREE.Box3(new THREE.Vector3(-145,-2,-465),new THREE.Vector3(145,85,645));
+   mesh.boundingBox=new THREE.Box3(new THREE.Vector3(-190,-2,-465),new THREE.Vector3(190,85,645));
    mesh.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,40,90),590);
    const p={mesh,count:0,capacity,triangles:geometry.index?geometry.index.count/3:geometry.attributes.position.count/3};
    pools.set(name,p);group.add(mesh);stats.capacityTriangles+=p.triangles*capacity;return p;
@@ -97,7 +98,7 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
  const signTexture=new THREE.CanvasTexture(atlas);signTexture.colorSpace=THREE.SRGBColorSpace;signTexture.anisotropy=4;
  const signMaterial=material('Signs',0xffffff,.68);signMaterial.map=signTexture;signMaterial.emissive.setHex(0xffd4a1);
  signMaterial.emissiveMap=signTexture;nightMaterials.push({material:signMaterial,power:.26});
- const signGeometry=new THREE.PlaneGeometry(1,1),signRegions=new THREE.InstancedBufferAttribute(new Float32Array(240*4),4);signRegions.setUsage(THREE.DynamicDrawUsage);signGeometry.setAttribute('signRegion',signRegions);
+ const signGeometry=new THREE.PlaneGeometry(1,1),signRegions=new THREE.InstancedBufferAttribute(new Float32Array(320*4),4);signRegions.setUsage(THREE.DynamicDrawUsage);signGeometry.setAttribute('signRegion',signRegions);
  signMaterial.onBeforeCompile=shader=>{
    shader.vertexShader='attribute vec4 signRegion;\n'+shader.vertexShader;
    shader.vertexShader=shader.vertexShader.replace('#include <uv_vertex>',`#include <uv_vertex>
@@ -108,7 +109,7 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
        vEmissiveMapUv=signRegion.xy+uv*signRegion.zw;
      #endif`);
  };signMaterial.customProgramCacheKey=()=> 'dundas-sign-regions-v1';
- pool('sign',signGeometry,signMaterial,240,false);
+ pool('sign',signGeometry,signMaterial,320,false);
  const signEntries=[],signPanels=[],signCache=new Map(),signColumns=[0,0];
  const palette={west:['#e6ddc3','#364b44'],portugal:['#fff0d1','#555e76'],bellwoods:['#efe8cf','#3f614e'],chinatown:['#ffe8b9','#943c32'],culture:['#ede7d4','#54483c'],core:['#e0e8e3','#314b58'],garden:['#efe4cd','#546052'],regent:['#eef0df','#4c6573'],don:['#e6e7d0','#3e5e4a'],riverside:['#f1e2bf','#6e483b'],riverdale:['#ece9d1','#4f6952'],terminal:['#f4e8d3','#9b3e37']};
  for(const district of DUNDAS_DISTRICTS)for(let j=0;j<2;j++)signEntries.push({text:district.shops[j],colors:palette[district.id],kind:'shop'});
@@ -246,7 +247,7 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
      const endZ=z+edge*width/2,rotation=edge*Math.PI/2;
      // Party walls cannot have visible windows into the adjoining building.
      // Keep exposed corner windows and those above a shorter neighbour's roof.
-     const neighbours=frontages.filter(f=>f.kind!=='tree'&&f.side===side&&Math.abs(f.z-z)>.2&&Math.abs(f.z-endZ)<f.width/2+1&&f.front<front+depth&&f.front+f.depth>front);
+     const neighbours=[...frontages,...infill].filter(f=>f.kind!=='tree'&&f.side===side&&Math.abs(f.z-z)>.2&&Math.abs(f.z-endZ)<f.width/2+1&&f.front<front+depth&&f.front+f.depth>front);
      const holes=layout.filter(w=>!neighbours.some(f=>w.y-w.height/2<f.height+.25&&front+depth/2+w.u>f.front-.3&&front+depth/2+w.u<f.front+f.depth+.3));
      for(const r of facadeRectangles(depth,bottom,top,holes))put('wall_'+kind,side*(front+depth/2+(r.left+r.right)/2),(r.bottom+r.top)/2,endZ,1,r.top-r.bottom,r.right-r.left,rotation);
      for(const w of holes)insetPane(side*(front+depth/2+w.u),w.y,endZ,w.width,w.height,rotation);
@@ -643,6 +644,17 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
  }
  function background(){
    for(const cross of route.crossings)for(const side of [-1,1])for(const end of [-1,1])sideStreet(cross,side,end);
+   for(const cross of route.crossings)for(const side of [-1,1]){
+     if(!sideStreets.some(a=>a.z===cross.z&&a.side===side))continue;
+     // A second junction and occupied block beyond the visible side street
+     // close the sightline with city geometry rather than an empty world edge.
+     put('stone',side*164,-.25,cross.z,48,.3,160);
+     put('roof',side*145.625,-.08,cross.z,11.75,.16,13.5);
+     put('roof',side*158.25,-.08,cross.z,13.5,.16,120);
+     put('stone',side*166.5,.09,cross.z,3,.18,120);
+     officeFinish=Math.abs(Math.round(cross.z))%3;const h=12+officeFinish*4;
+     put('office',side*178,h/2,cross.z,20,h,110);put('roof',side*178,h+.12,cross.z,20.2,.24,110.2);
+   }
    for(const side of [-1,1])for(let k=0;k<5;k++){
      const z=-360+k*205,index=dundasIndexAtZ(route,z),district=dundasDistrictAt(index);
      if(!clear(z,25))continue;
@@ -668,7 +680,7 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    group.visible=route.id==='dundas';stats.rebuilds++;
    if(!group.visible){retail.setRoute(route,[]);facades.setRoute(route,[]);return;}
    for(const p of pools.values())p.count=0;
-   displays.length=zones.length=landmarks.length=frontages.length=facadeWindows.length=endWalls.length=sideStreets.length=trees.length=reliefSurfaces.length=0;sourceSerial=featuredBays=featuredBalconies=0;
+   displays.length=zones.length=landmarks.length=frontages.length=facadeWindows.length=endWalls.length=sideStreets.length=trees.length=reliefSurfaces.length=infill.length=0;sourceSerial=featuredBays=featuredBalconies=0;
    stats.overflow=stats.frontages=stats.trees=stats.windowFrames=stats.facadeDetails=stats.parkSlopes=stats.skylineTowers=0;
    stats.overflows={};signPanels.length=0;signCache.clear();signColumns.fill(0);ctx.clearRect(0,0,1024,1024);
    const activeFeatures=special.map(f=>({...f,z:localZ(f.index)})).filter(f=>clear(f.z,f.width));
@@ -699,6 +711,12 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
      }
    }
    for(const feature of activeFeatures)buildSpecial(feature,feature.z);
+   for(const side of [-1,1])for(const p of intersectionInfill(route.crossings,[...zones,...activeFeatures.map(f=>({...f,z:f.z}))],{side})){
+     const index=dundasIndexAtZ(route,p.z),district=dundasDistrictAt(index);
+     if(district.id==='don')valley(side,p.z,p.width);
+     else if(district.id==='riverdale'&&side===1||district.id==='bellwoods'&&side===-1&&index<13.1)park(side,p.z,p.width,index,district.id==='riverdale'?'riverdale':'bellwoods');
+     else{infill.push({...p,front:11.75,depth:12.9,height:7.58,index:500+infill.length,district:district.id});panel(side,p.z,3.51,3.2,3.2*.54/5.8,shopLabel(district,0,side),11.56);}
+   }
    finishEndWalls();
    background();
    for(let z=-210;z<370;z+=68){const district=dundasDistrictAt(dundasIndexAtZ(route,z));if(['core','culture','don'].includes(district.id))continue;for(const side of [-1,1])if(clear(z,5)){const before=stats.trees;tree(side,z,9.3,.92);if(stats.trees>before)frontages.push({kind:'tree',side,z,width:2,height:4,front:9.3,depth:1,index:Math.round(z+500),district:district.id});}}
@@ -707,12 +725,14 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
      p.mesh.count=p.count;p.mesh.instanceMatrix.needsUpdate=true;if(p.mesh.instanceColor)p.mesh.instanceColor.needsUpdate=true;
      stats.instances+=p.count;stats.triangles+=p.count*p.triangles;
    }
-   retail.setRoute(route,frontages,sideStreets);
-   facades.setRoute(route,frontages,380000-stats.triangles-retail.stats.triangles,reliefSurfaces);
+   const replacements=frontages.flatMap(b=>(b.windows||[]).filter(w=>w.feature)).reduce((n,w)=>n+architecturalAssets.models.get(w.feature).triangles,0);
+   const structural=infill.length*architecturalAssets.models.get('cornerblock').triangles+replacements;
+   retail.setRoute(route,frontages,sideStreets,380000-stats.triangles-structural-22000);
+   facades.setRoute(route,frontages,380000-stats.triangles-retail.stats.triangles,reliefSurfaces,infill);
    signRegions.needsUpdate=true;signTexture.needsUpdate=true;stats.meshes=pools.size;stats.sources=displays.length;
    stats.activeZones=[...new Set(zones.map(z=>z.id))];stats.landmarks=landmarks.map(f=>f.id);
  }
  function setNight(amount){const value=THREE.MathUtils.clamp(amount,0,1);for(const {material,power} of nightMaterials)material.emissiveIntensity=power*value;retail.setNight(value);facades.setNight(value);}
  setNight(0);setRoute();
- return {group,setRoute,setNight,stats,displays,retail,facades,facadeWindows,sideStreets,trees,get signPanels(){return signPanels;},get frontages(){return frontages;},get zones(){return zones;},get landmarks(){return landmarks;}};
+ return {group,setRoute,setNight,stats,displays,retail,facades,facadeWindows,sideStreets,trees,infill,get signPanels(){return signPanels;},get frontages(){return frontages;},get zones(){return zones;},get landmarks(){return landmarks;}};
 }

@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import {facadeReliefs,reliefFacade,FACADE_RELIEFS} from './facade-details.js';
+import {architectureMaterial} from './architecture.js';
 
 // The same authored architectural kit used on Queen, with a bounded resident
 // pool. Section changes only replace instance matrices; they never make new
 // meshes, geometries, materials, textures, lights, or shader programs.
-const CAPACITIES=Object.freeze({cornice:168,firelanding:12,escapeladder:8,rooflantern:12,chimneypots:16,baywindow:8,balcony:6,pediment:4,flathead:480,spandrel:160,frieze:240,wallvent:120,downpipe:160,pilaster:100,stringcourse:100});
+const CAPACITIES=Object.freeze({cornice:168,firelanding:12,escapeladder:8,rooflantern:12,chimneypots:16,baywindow:8,balcony:6,pediment:4,flathead:480,spandrel:160,frieze:240,wallvent:120,downpipe:160,pilaster:100,stringcourse:100,cornerblock:100,roundel:100,shutters:100});
 const HERITAGE=new Set(['west','portugal','bellwoods','chinatown','garden','riverside','riverdale','terminal']);
 const MAX_TRIANGLES=145000;
 const round=n=>Math.round(n*1000)/1000;
@@ -20,7 +21,7 @@ export function createDundasFacades({group,mats,assets}){
    const model=assets.models.get(kind);if(!model)throw new Error('Missing Dundas architectural asset: '+kind);
    const parts=[];
    for(const [index,part] of model.parts.entries()){
-     const material=part.material.name==='Architecture_WindowGlass'?mats.glass:part.material;
+     const material=architectureMaterial(part,mats);
      // Register the original materials before the environment's surface and
      // weather preparation. Queen and Dundas share the same finish treatment.
      if(material!==mats.glass)mats['dundasArchitecture'+part.material.name]=material;
@@ -28,7 +29,8 @@ export function createDundasFacades({group,mats,assets}){
      mesh.name='Dundas_Architecture_'+kind+'_'+index;mesh.count=0;
      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.setColorAt(0,white);
      mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
-     mesh.castShadow=material!==mats.glass&&!FACADE_RELIEFS.includes(kind);mesh.receiveShadow=true;
+     mesh.castShadow=kind==='cornerblock'?/BlockBrick|Slate/.test(part.material.name):material!==mats.glass&&!material.transparent&&!FACADE_RELIEFS.includes(kind);
+     mesh.receiveShadow=!material.transparent&&(kind!=='cornerblock'||!/Limestone|Sash/.test(part.material.name));
      mesh.userData.architecture=true;mesh.userData.dundasFacade=true;
      mesh.boundingBox=new THREE.Box3(new THREE.Vector3(-90,-1,-250),new THREE.Vector3(90,85,400));
      mesh.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,35,75),380);
@@ -72,7 +74,7 @@ export function createDundasFacades({group,mats,assets}){
    return windows;
  }
 
- function setRoute(route,frontages=[],budget=MAX_TRIANGLES,returns=[]){
+ function setRoute(route,frontages=[],budget=MAX_TRIANGLES,returns=[],infill=[]){
    triangleLimit=Math.min(MAX_TRIANGLES,Math.max(0,budget));stats.triangleLimit=triangleLimit;
    for(const p of pools.values())p.count=0;
    placements.length=surfaces.length=0;stats.instances=stats.triangles=stats.frontages=stats.overflow=stats.budgetOmissions=0;stats.counts={};stats.rebuilds++;
@@ -80,6 +82,8 @@ export function createDundasFacades({group,mats,assets}){
      // The builder cuts these apertures and omits its original pane/sash.
      // Place the authored replacements first, before optional roof decoration.
      for(const b of frontages)for(const w of b.windows||[])if(w.feature)place(w.feature,b,w.y,w.z);
+     stats.infill=infill.length;stats.infillMissing=0;
+     for(const b of infill)if(!place('cornerblock',b,.18,b.z,{sx:b.width/6}))stats.infillMissing++;
      // Reliefs get a bounded share before expensive ornamental cornices. This
      // spreads useful wall detail across buildings and street orientations.
      const savedLimit=triangleLimit,reliefBudget=Math.min(29000,Math.max(0,triangleLimit-stats.triangles-6000));

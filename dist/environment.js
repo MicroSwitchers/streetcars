@@ -3,6 +3,7 @@ import {buildStreetLife} from './street-life.js';
 import * as THREE from 'three';
 import {mergeGeometries} from 'geometry-utils';
 import {createFoliage,createOfficeMaterial,treeShape} from './surfaces.js';
+import {intersectionInfill} from './intersection-blocks.js';
 import {createStreetscape} from './streetscape.js';
 import {createArchitecture} from './architecture.js';
 import {createDundasScenery} from './dundas-scenery.js';
@@ -129,7 +130,7 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
  const mainFrontages=[];
  setSceneryLayer(true);
  for(const side of [-1,1]){
-   for(let z=-518;z<675;){const width=7.5+rnd()*4.4,mid=z+width/2;z+=width+.12;if(route.crossings.some(c=>Math.abs(mid-c.z)<width/2+11)||(side===-1&&mid+width/2>-179&&mid-width/2<-142))continue;
+   for(let z=-518;z<675;){const width=7.5+rnd()*4.4,mid=z+width/2;z+=width+.12;if(route.crossings.some(c=>Math.abs(mid-c.z)<width/2+20.6)||(side===-1&&mid+width/2>-179&&mid-width/2<-142))continue;
      const height=7.0+rnd()*7.0,material=shop%7===0?plaster[shop%3]:'brick'+Math.floor(rnd()*5),depth=8+rnd()*3;
      const entry=mid+(width-.9)/3,paneWidth=(width-.9)/3-.13;
      const detailed=mid>route.start-45&&mid<route.end+60;
@@ -268,6 +269,11 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
      shop++;
    }
  }
+ const cornerPlots=[...mainFrontages.map(b=>({side:b.side,z:b.mid,width:b.width})),...neighbourhood.cornerFootprints,{side:-1,minZ:-179,maxZ:-142}];
+ for(const side of [-1,1])for(const p of intersectionInfill(route.crossings,cornerPlots,{side,min:-518,max:675})){
+   architecture.infill(p);
+   sign(['CORNER STUDIO','THE WORKSHOP','LOCAL GOODS'][Math.abs(Math.round(p.z))%3],p.side*11.21,3.51,p.z,Math.min(5.4,p.width*.83),.30,-p.side*Math.PI/2,'#e8dfc5','#36483e','','shop');
+ }
  // Finish the exposed returns at intersections and beside the garden. Party
  // walls remain plain; daylight-facing end elevations get real inset windows.
  for(const side of [-1,1]){
@@ -325,7 +331,7 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
  }
  setSceneryLayer(true);
  // Distant skyline and a restrained CN Tower silhouette south-east of the corridor.
-  for(const side of [-1,1])for(let z=-510;z<730;z+=34){const h=16+rnd()*35;const x=side*(65+rnd()*50),w=12+rnd()*14,d=15+rnd()*16;box('officeFacade',x,h/2,z,w,h,d);box('roof',x,h+.13,z,w+.3,.26,d+.3); }
+  for(const side of [-1,1])for(let z=-510;z<730;z+=34){const h=16+rnd()*35;const x=side*(65+rnd()*50),w=12+rnd()*14,d=15+rnd()*16;if(route.crossings.some(c=>Math.abs(z-c.z)<d/2+9))continue;box('officeFacade',x,h/2,z,w,h,d);box('roof',x,h+.13,z,w+.3,.26,d+.3); }
  cylinder('skyline',78,48,190,1.4,96);cylinder('skyline',78,78,190,5.8,4);cylinder('dark',78,80,190,4.5,1.5);cylinder('skyline',78,96,190,.38,31);cylinder('skyline',78,112,190,.12,9);
  const scenery=streetscape.finish();
  const architecturalDetails=architecture.finish();

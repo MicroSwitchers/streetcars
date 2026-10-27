@@ -295,7 +295,7 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
      }
    }
  }
- function setRoute(route,frontages=[],sideStreets=[]){
+ function setRoute(route,frontages=[],sideStreets=[],budget=maxTriangles){
    for(const p of pools.values()){p.count=0;for(const part of p.parts)part.count=0;}
    leafPool.count=flowerPool.count=0;for(const p of Object.values(fixturePools))p.count=0;placements.length=rooms.length=fixtures.length=reserved.length=0;
    for(const key of ['instances','triangles','overflow','budgetSkipped','rooms','furniture','plants','fixtureInstances','fixtureTriangles','fixtureRooms','windowGardens','roofDetails','shopfrontDetails','dressingTriangles'])stats[key]=0;stats.types={};stats.roomIndices.length=0;stats.rebuilds++;
@@ -316,7 +316,7 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
      // upper shelves, so later stops retain dressed windows as well.
      for(let row=0;row<2;row++)for(const room of rooms)backContents(room,row);
      for(const room of rooms)rearDisplay(room);
-     triangleLimit=maxTriangles;
+     triangleLimit=Math.min(maxTriangles,Math.max(150000,budget));
      const plantedFronts=active.filter(f=>!['tree','valley'].includes(f.kind)),plantStride=Math.max(1,Math.ceil(plantedFronts.length/8));
      for(let j=0;j<plantedFronts.length;j+=plantStride){const f=plantedFronts[j],kind=['core','regent','culture'].includes(f.district)?'stoneplanter':j%2?'stoneplanter':'timberplanter',z=f.z+f.width*(f.kind==='house'?.24:-.22);for(const dz of [0,-3,3])if(furniture(route,kind,f.side,z+dz))break;}
      let supportedBikes=0;for(const f of [...plantedFronts].sort((a,b)=>Math.abs(a.z+100)-Math.abs(b.z+100))){if(supportedBikes>=2)break;for(const dz of [0,-3.2,3.2])if(furniture(route,'parkedbike',f.side,f.z+dz)){supportedBikes++;break;}}

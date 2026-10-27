@@ -6,6 +6,7 @@ export function buildNeighbourhood(c){
  mat('parkGrass',0x6c7c50);mat('fence',0x3d4b40,.68,.3);mat('roofTile',0x73564a);mat('path',0xb7ad94);mat('warmStone',0xb6a58a);mat('rust',0x8c5e46);
  const pitchedRoof=new THREE.BufferGeometry();pitchedRoof.setAttribute('position',new THREE.Float32BufferAttribute([-.5,0,-.5,.5,0,-.5,-.5,0,.5,.5,0,.5,-.5,1,0,.5,1,0],3));pitchedRoof.setIndex([0,2,4,1,5,3,0,4,5,0,5,1,2,3,5,2,5,4,0,1,3,0,3,2]);pitchedRoof.computeVertexNormals();
  // Side streets continue beyond the crossing instead of ending at empty asphalt.
+ const cornerFootprints=[];
  let sideStreetBuildings=0,sideStreetWindows=0,finishedEndWalls=0,sideElevationDetails=0,sideStreetAwnings=0,crosswalkStripes=0;
  const mainCrosswalkStripeCount=10,sideCrosswalkStripeCount=9,mainCrosswalkCenterOffset=8.75,sideCrosswalkCenterOffset=8.5;
  const sideStreetSidewalkInnerEdge=11.3,sideStreetSidewalkLength=129;
@@ -49,10 +50,11 @@ export function buildNeighbourhood(c){
        for(let x=sideStreetSidewalkInnerEdge+3;x<137;x+=3)box('stone',side*x,.184,cross.z+end*8.5,.018,.004,3.05);
        setSceneryLayer(true);
        for(let j=0;j<11;j++){
-         const x=side*(15.5+j*10.8),width=10.65,depth=10.1;
+         const x=side*(17.3+j*10.8),width=10.65,depth=10.1;
          const variation=(j*2+Math.abs(cross.z/100)+end+4)%4;
          const height=8.2+variation*1.55,front=cross.z+end*10.25,centerZ=front+end*depth/2;
          const brickIndex=(j+Math.abs(cross.z/100)+end+8)%5;
+         if(j===0)cornerFootprints.push({side,minZ:Math.min(front,front+end*depth),maxZ:Math.max(front,front+end*depth)});
          box('brick'+brickIndex,x,height/2,centerZ+end*windowDepth/2,width,height,depth-windowDepth);
          const apertures=[{u:0,y:.95,width:1.25,height:1.90}];
          for(const u of [-2.45,2.45]){
@@ -105,39 +107,40 @@ export function buildNeighbourhood(c){
          // Project the end-unit wall toward the main street as a finished corner,
          // with returned stone trim and windows rather than exposed brick.
          if(j===0||j===10){
-           const faceX=x+side*(width/2+.18);
+           const endSide=j===0?-side:side;
+           const faceX=x+endSide*(width/2+.18);
            const endOpenings=[];
            for(const u of [-2.5,2.5])for(const y of [2,5.45,8.1])if(y<=height-1)endOpenings.push({u,y,width:1.72,height:2.12});
-           for(const r of facadeRectangles(depth+.16,.35,height-.35,endOpenings))facadePanel('brick'+brickIndex,faceX+side*.24,(r.bottom+r.top)/2,centerZ+(r.left+r.right)/2,r.right-r.left,r.top-r.bottom,side===1?Math.PI:0);
-           box('trim',faceX+side*.22,height-.36,centerZ,.20,.18,depth+.1);
-           box('warmStone',faceX+side*.22,.43,centerZ,.24,.30,depth+.1);
+           for(const r of facadeRectangles(depth+.16,.35,height-.35,endOpenings))facadePanel('brick'+brickIndex,faceX+endSide*.24,(r.bottom+r.top)/2,centerZ+(r.left+r.right)/2,r.right-r.left,r.top-r.bottom,endSide===1?Math.PI:0);
+           box('trim',faceX+endSide*.22,height-.36,centerZ,.20,.18,depth+.1);
+           box('warmStone',faceX+endSide*.22,.43,centerZ,.24,.30,depth+.1);
            for(const zOffset of [-2.5,2.5]){
              for(let y of [2.0,5.45,8.1]){
                if(y>height-1)continue;
-               insetWindow(faceX+side*.24,y,centerZ+zOffset,1.72,2.12,side===1?Math.PI:0,j);
-               box('warmStone',faceX+side*.44,y+.94,centerZ+zOffset,.12,.16,1.92);
-               box('warmStone',faceX+side*.44,y-.96,centerZ+zOffset,.14,.18,1.98);
-               box('trim',faceX+side*.43,y-.28,centerZ+zOffset,.08,.07,1.28);
+               insetWindow(faceX+endSide*.24,y,centerZ+zOffset,1.72,2.12,endSide===1?Math.PI:0,j);
+               box('warmStone',faceX+endSide*.44,y+.94,centerZ+zOffset,.12,.16,1.92);
+               box('warmStone',faceX+endSide*.44,y-.96,centerZ+zOffset,.14,.18,1.98);
+               box('trim',faceX+endSide*.43,y-.28,centerZ+zOffset,.08,.07,1.28);
                sideStreetWindows++;
              }
            }
            for(const level of [4.45,7.25]){
              if(level<height-.35){
-               box('warmStone',faceX+side*.28,level,centerZ,.18,.16,depth+.12);
-               box('trim',faceX+side*.34,level+.14,centerZ,.12,.10,depth+.18);
+               box('warmStone',faceX+endSide*.28,level,centerZ,.18,.16,depth+.12);
+               box('trim',faceX+endSide*.34,level+.14,centerZ,.12,.10,depth+.18);
                sideElevationDetails+=2;
              }
            }
            for(const zEdge of [-1,1]){
              const quoinZ=centerZ+zEdge*(depth/2-.34);
-             box('warmStone',faceX+side*.28,height/2,quoinZ,.22,height-.45,.38);
-             for(let y=.8;y<height-.45;y+=.72)box('trim',faceX+side*.39,y,quoinZ,.12,.12,.43);
+             box('warmStone',faceX+endSide*.28,height/2,quoinZ,.22,height-.45,.38);
+             for(let y=.8;y<height-.45;y+=.72)box('trim',faceX+endSide*.39,y,quoinZ,.12,.12,.43);
              sideElevationDetails++;
            }
            if((j+variation)%2===0){
-             const escapeZ=centerZ+end*4.15,escapeX=faceX+side*.62;
+             const escapeZ=centerZ+end*4.15,escapeX=faceX+endSide*.62;
              for(const level of [3.25,6.15]){
-               box('rust',faceX+side*.50,level,escapeZ,.95,.11,1.46);
+               box('rust',faceX+endSide*.50,level,escapeZ,.95,.11,1.46);
                for(const zRail of [-.66,.66]){
                  rod('rust',[escapeX,level+.08,escapeZ+zRail],[escapeX,level+.88,escapeZ+zRail],.035);
                  rod('rust',[escapeX,level+.88,escapeZ+zRail],[escapeX,level+.88,escapeZ-zRail],.035);
@@ -171,6 +174,17 @@ export function buildNeighbourhood(c){
      box('white',x,.014,z,3.2,.024,.46);crosswalkStripes++;
    }
  }
+ // Continue the view through another junction and a distant occupied block.
+ setSceneryLayer(true);
+ for(const cross of route.crossings)for(const side of [-1,1]){
+   box('concrete',side*164,-.25,cross.z,48,.3,160);
+   box('road',side*145.625,-.08,cross.z,11.75,.16,13.5);
+   box('road',side*158.25,-.08,cross.z,13.5,.16,120);
+   box('concrete',side*166.5,.09,cross.z,3,.18,120);
+   box('officeFacade',side*178,6.8,cross.z,20,13.6,110);
+   box('roof',side*178,13.72,cross.z,20.2,.24,110.2);
+ }
+ setSceneryLayer(false);
  // A small green setback interrupts the north-side row near the start of the drive.
  setSceneryLayer(true);
  const park={minZ:-178,maxZ:-143,frontX:-11.45,backX:-28};
@@ -192,5 +206,5 @@ export function buildNeighbourhood(c){
    plantTree(x,z,1.14,x+z);
  }
  setSceneryLayer(false);
- return {pitchedRoof,park,sideStreetBuildings,sideStreetWindows,finishedEndWalls,sideElevationDetails,sideStreetAwnings,crosswalkStripes,mainCrosswalkStripeCount,sideCrosswalkStripeCount,mainCrosswalkCenterOffset,sideCrosswalkCenterOffset,mainCrosswalkSpacing:1.30,sideCrosswalkSpacing:1.38,mainCrosswalkOrientation:'along-Queen-Street',sideCrosswalkOrientation:'along-side-street',mainCrosswalkStripeSize:[.46,3.2],sideCrosswalkStripeSize:[3.2,.46],sideStreetSidewalkInnerEdge};
+ return {pitchedRoof,park,cornerFootprints,sideStreetBuildings,sideStreetWindows,finishedEndWalls,sideElevationDetails,sideStreetAwnings,crosswalkStripes,mainCrosswalkStripeCount,sideCrosswalkStripeCount,mainCrosswalkCenterOffset,sideCrosswalkCenterOffset,mainCrosswalkSpacing:1.30,sideCrosswalkSpacing:1.38,mainCrosswalkOrientation:'along-Queen-Street',sideCrosswalkOrientation:'along-side-street',mainCrosswalkStripeSize:[.46,3.2],sideCrosswalkStripeSize:[3.2,.46],sideStreetSidewalkInnerEdge};
 }
