@@ -4,13 +4,14 @@ import {shopLighting} from './night-windows.js';
 import {createDundasRetail,dundasShopType} from './dundas-retail.js';
 import {createDundasFacades} from './dundas-facades.js';
 import {facadeRectangles,windowGeometries,WINDOW_DEPTH} from './facade-windows.js';
+import {treeShape} from './surfaces.js';
 
 // A complete resident 505 streetscape, reusing the same GPU buffers at every
 // section change. Districts change both massing and street-level objects.
 export function createDundasScenery({scene,route,mats,foliage,streetProps,architecturalAssets}){
  const group=new THREE.Group();group.name='505_Dundas_District_Streetscape';scene.add(group);
  const boxGeometry=new THREE.BoxGeometry(1,1,1),dummy=new THREE.Object3D();
- const pools=new Map(),displays=[],zones=[],landmarks=[],frontages=[],nightMaterials=[],facadeWindows=[],endWalls=[],sideStreets=[];let sourceSerial=0,officeFinish=0,featuredBays=0,featuredBalconies=0;
+ const pools=new Map(),displays=[],zones=[],landmarks=[],frontages=[],nightMaterials=[],facadeWindows=[],endWalls=[],sideStreets=[],trees=[];let sourceSerial=0,officeFinish=0,featuredBays=0,featuredBalconies=0;
  const officeColours=[new THREE.Color(0xd8e7f2),new THREE.Color(0xe1e6d5),new THREE.Color(0xd6c2a3)];
  const stats={meshes:0,instances:0,triangles:0,capacityTriangles:0,atlasPixels:1024*1024,overflow:0,frontages:0,trees:0,sources:0,rebuilds:0,windowFrames:0,facadeDetails:0,parkSlopes:0,skylineTowers:0,activeZones:[],landmarks:[]};
  const material=(name,colour,roughness=.85,metalness=0)=>{
@@ -53,8 +54,13 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
  for(const kind of ['brick','buff','warmBrick','darkBrick','greyBrick','plaster','stone'])pool('wall_'+kind,wallGeometry,materials[kind],kind==='stone'?5400:kind==='brick'?3400:2400);
  // More, smaller leaf clumps preserve Queen's leaf scale and branching crown.
  const crownGeometry=foliage.geometry.clone();crownGeometry.setIndex(Array.from(foliage.geometry.index.array).filter((_,i)=>Math.floor(i/6)%2===0));
+ // Slightly broader leaf clusters keep the half-card canopy full at the same
+ // triangle count, including the small trees along residential side streets.
+ const crownPositions=crownGeometry.attributes.position;
+ for(let i=0;i<crownPositions.count;i+=4){const centre=new THREE.Vector3();for(let j=0;j<4;j++)centre.add(new THREE.Vector3().fromBufferAttribute(crownPositions,i+j));centre.multiplyScalar(.25);for(let j=0;j<4;j++){const v=new THREE.Vector3().fromBufferAttribute(crownPositions,i+j).sub(centre).multiplyScalar(1.28).add(centre);crownPositions.setXYZ(i+j,v.x,v.y,v.z);}}
+ crownGeometry.computeBoundingSphere();
  pool('leaf',crownGeometry,leaf,300,false);
- pool('branch',new THREE.CylinderGeometry(1,1,1,7),mats.bark||materials.timber,360);
+ pool('branch',new THREE.CylinderGeometry(.48,1,1,7,1,true),mats.bark||materials.timber,480);
  pool('office',boxGeometry,mats.officeFacade,660,false);
  pool('cream',boxGeometry,mats.paintedCream,1400);
  pool('charcoal',boxGeometry,material('Charcoal',0x293635,.64,.1),1200);
@@ -249,16 +255,10 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
  }
  function tree(side,z,front=15,size=1){
    if(!clear(z,6*size)||stats.trees>=40)return;
-   const x=side*front;
-   twig([x,.18,z],[x,3.5*size,z],.10*size);
-   for(let j=0;j<6;j++){
-     const a=j*2.4,dx=Math.sin(a)*1.02*size,dz=Math.cos(a)*1.02*size,y=(3.35+(j%3)*.36)*size;
-     twig([x,2.15*size,z],[x+dx,y,z+dz],.034*size);
-     const radius=(.80+hash(j+z)*.21)*size;
-     put('leaf',x+dx,y+.62*size,z+dz,radius,radius*1.03,radius*1.08);
-   }
+   drawTree(side*front,z,size,z+side*13);
    stats.trees++;
  }
+ function drawTree(x,z,size,seed,clumps=6){const shape=treeShape(x,z,size,seed,clumps);for(const b of shape.branches)twig(b.a,b.b,b.r);for(const c of shape.crowns)put('leaf',c.x,c.y,c.z,c.sx,c.sy,c.sz,c.yaw);trees.push({x,z,size,variant:shape.variant,clumps});}
  function windows(side,z,width,height,kind='window',front=11.56,floors=2,columns=2,style=0,serial=-1){
    const openings=[],count=Math.max(columns,Math.floor((width-.8)/2.65)),pitch=(width-.9)/count;
    const levels=Math.min(floors,Math.max(1,Math.round((height-3.7)/2.9))),rise=(height-3.7)/levels;
@@ -633,7 +633,7 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    // Blender props and the existing foliage buffers; never add route textures.
    for(const [i,distance] of [43,80,117].entries()){
      arm.furniture.push({kind:i===0?'hydrant':i===1?'bench':'bins',x:side*distance,z:cross.z+end*7.65,yaw:end===1?Math.PI:0});
-     if(!modern&&i===1){const x=side*(distance+7),z=cross.z+end*8.15;twig([x,.18,z],[x,3.5,z],.085);for(let j=0;j<3;j++){const a=j*2.1,dx=Math.sin(a)*.7,dz=Math.cos(a)*.7;twig([x,2.5,z],[x+dx,3.8,z+dz],.028);put('leaf',x+dx,4.15,z+dz,.95,1.15,.95);}}
+     if(!modern&&i===1)drawTree(side*(distance+7),cross.z+end*8.15,.88,distance+cross.z+end,3);
    }
  }
  function background(){
@@ -663,7 +663,7 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    group.visible=route.id==='dundas';stats.rebuilds++;
    if(!group.visible){retail.setRoute(route,[]);facades.setRoute(route,[]);return;}
    for(const p of pools.values())p.count=0;
-   displays.length=zones.length=landmarks.length=frontages.length=facadeWindows.length=endWalls.length=sideStreets.length=0;sourceSerial=featuredBays=featuredBalconies=0;
+   displays.length=zones.length=landmarks.length=frontages.length=facadeWindows.length=endWalls.length=sideStreets.length=trees.length=0;sourceSerial=featuredBays=featuredBalconies=0;
    stats.overflow=stats.frontages=stats.trees=stats.windowFrames=stats.facadeDetails=stats.parkSlopes=stats.skylineTowers=0;
    stats.overflows={};signPanels.length=0;signCache.clear();signColumns.fill(0);ctx.clearRect(0,0,1024,1024);
    const activeFeatures=special.map(f=>({...f,z:localZ(f.index)})).filter(f=>clear(f.z,f.width));
@@ -709,5 +709,5 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
  }
  function setNight(amount){const value=THREE.MathUtils.clamp(amount,0,1);for(const {material,power} of nightMaterials)material.emissiveIntensity=power*value;retail.setNight(value);facades.setNight(value);}
  setNight(0);setRoute();
- return {group,setRoute,setNight,stats,displays,retail,facades,facadeWindows,sideStreets,get signPanels(){return signPanels;},get frontages(){return frontages;},get zones(){return zones;},get landmarks(){return landmarks;}};
+ return {group,setRoute,setNight,stats,displays,retail,facades,facadeWindows,sideStreets,trees,get signPanels(){return signPanels;},get frontages(){return frontages;},get zones(){return zones;},get landmarks(){return landmarks;}};
 }

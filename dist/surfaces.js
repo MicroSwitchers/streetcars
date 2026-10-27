@@ -145,23 +145,67 @@ function weathering(material,strength,baseDirt=0){
 }
 
 export function createFoliage(){
- const c=canvas(128),ctx=c.getContext('2d'),gradient=ctx.createLinearGradient(25,120,95,5);
- gradient.addColorStop(0,'#748645');gradient.addColorStop(.45,'#c8d19b');gradient.addColorStop(1,'#e1e7bf');
- ctx.fillStyle=gradient;ctx.beginPath();ctx.moveTo(64,124);ctx.bezierCurveTo(7,88,13,35,64,4);ctx.bezierCurveTo(113,31,119,91,64,124);ctx.fill();
- ctx.strokeStyle='#edf0c178';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(64,119);ctx.lineTo(64,15);ctx.stroke();
- ctx.lineWidth=1;for(let y=35;y<100;y+=15)for(const side of [-1,1]){ctx.beginPath();ctx.moveTo(64,y+15);ctx.lineTo(64+side*26,y-7);ctx.stroke();}
+ const c=canvas(256),ctx=c.getContext('2d'),leafRandom=random(94);
+ for(let j=0;j<40;j++){
+   const a=j*2.39996,r=Math.sqrt((j+.5)/40)*94,x=128+Math.sin(a)*r,y=128+Math.cos(a)*r*1.04,length=42+leafRandom()*17,halfWidth=14+leafRandom()*5;
+   ctx.save();ctx.translate(x,y);ctx.rotate(a+(leafRandom()-.5)*.7);
+   const leafTone=ctx.createLinearGradient(-halfWidth,0,halfWidth,0);leafTone.addColorStop(0,'#879b5e');leafTone.addColorStop(.48,j%3?'#c9d59a':'#a9c17b');leafTone.addColorStop(1,'#a3b974');ctx.fillStyle=leafTone;
+   ctx.beginPath();ctx.moveTo(0,length/2);ctx.bezierCurveTo(-halfWidth,length*.13,-halfWidth,-length*.20,0,-length/2);ctx.bezierCurveTo(halfWidth,-length*.20,halfWidth,length*.13,0,length/2);ctx.fill();
+   ctx.strokeStyle='#dae2ac90';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(0,length*.35);ctx.lineTo(0,-length*.40);ctx.stroke();ctx.restore();
+ }
+ // A twig with small overlapping leaves replaces each former oversized leaf
+ // card. The same 72 cards now describe thousands of fine canopy leaflets.
+ ctx.strokeStyle='#727943';ctx.lineWidth=2.2;ctx.beginPath();ctx.moveTo(128,242);ctx.bezierCurveTo(120,180,140,80,128,18);ctx.stroke();
+ for(let row=0;row<8;row++)for(const side of [-1,1]){
+   const y=37+row*25,x=128+side*(24+leafRandom()*25),length=29+leafRandom()*13;
+   ctx.strokeStyle='#869155';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(128,y+20);ctx.lineTo(x,y);ctx.stroke();
+   ctx.save();ctx.translate(x,y);ctx.rotate(side*(.50+leafRandom()*.35));
+   const gradient=ctx.createLinearGradient(-14,0,14,0);gradient.addColorStop(0,'#8d9e60');gradient.addColorStop(.48,'#d4dba6');gradient.addColorStop(1,'#acbc77');ctx.fillStyle=gradient;
+   ctx.beginPath();ctx.moveTo(0,length*.53);ctx.bezierCurveTo(-19,length*.15,-16,-length*.26,0,-length*.56);ctx.bezierCurveTo(16,-length*.26,19,length*.15,0,length*.53);ctx.fill();
+   ctx.strokeStyle='#e2e7b485';ctx.lineWidth=.9;ctx.beginPath();ctx.moveTo(0,length*.40);ctx.lineTo(0,-length*.44);ctx.stroke();ctx.restore();
+ }
  const map=texture(c),rnd=random(84),geometries=[];
+ // Preserve cutout coverage in distant mip levels: fine leaves must not vanish
+ // as their alpha values average with the transparent space around the twig.
+ const base=ctx.getImageData(0,0,256,256),coverage=Array.from({length:256*256},(_,i)=>base.data[i*4+3]>=115?1:0).reduce((a,b)=>a+b,0)/(256*256);
+ map.mipmaps=[c];map.generateMipmaps=false;
+ for(let size=128;size>=1;size/=2){const mip=canvas(size),mc=mip.getContext('2d');mc.drawImage(c,0,0,size,size);const pixels=mc.getImageData(0,0,size,size);let lo=.25,hi=4;
+   for(let pass=0;pass<10;pass++){const scale=(lo+hi)/2;let visible=0;for(let i=3;i<pixels.data.length;i+=4)if(pixels.data[i]*scale>=115)visible++;if(visible/(size*size)<coverage)lo=scale;else hi=scale;}
+   for(let i=3;i<pixels.data.length;i+=4)pixels.data[i]=Math.min(255,pixels.data[i]*(lo+hi)/2);mc.putImageData(pixels,0,0);map.mipmaps.push(mip);
+ }
  for(let i=0;i<72;i++){
    const angle=i*2.39996,up=1-2*(i+.5)/72,ring=Math.sqrt(1-up*up),r=.55+rnd()*.5;
    const geo=new THREE.PlaneGeometry(.34+rnd()*.26,.42+rnd()*.26);
    geo.rotateX((rnd()-.5)*Math.PI);geo.rotateY(angle);geo.rotateZ(rnd()*Math.PI);
    geo.translate(Math.cos(angle)*ring*r,up*r,Math.sin(angle)*ring*r);
+   const positions=geo.attributes.position,normals=geo.attributes.normal,softNormal=new THREE.Vector3(),radial=new THREE.Vector3();
+   for(let v=0;v<4;v++){softNormal.fromBufferAttribute(normals,v);radial.fromBufferAttribute(positions,v).normalize();if(softNormal.dot(radial)<0)softNormal.negate();softNormal.lerp(radial,.68).normalize();normals.setXYZ(v,softNormal.x,softNormal.y,softNormal.z);}
    const shade=.65+Math.max(0,up)*.35+rnd()*.1,colors=[];
    for(let v=0;v<4;v++)colors.push(shade,shade,shade);
    geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geometries.push(geo);
  }
  const geometry=mergeGeometries(geometries);geometries.forEach(g=>g.dispose());
+ geometry.userData.foliage={cards:72,leafletsPerCard:56,textureSize:256};
  return {geometry,map};
+}
+
+// Shared deterministic tree silhouettes for both routes, parks and side roads.
+// Seven to nine tapered, uncapped branch segments keep the former canopy budget.
+export function treeShape(x,z,size=1,seed=z,clumps=6){
+ const hash=n=>{const v=Math.sin(n*127.1+311.7)*43758.5453;return v-Math.floor(v);},variant=Math.floor(hash(seed+8)*3);
+ const spread=[1.04,1.24,.83][variant],stretch=[1.,.88,1.18][variant],angle=hash(seed)*Math.PI*2;
+ const ground=.18,leanX=Math.sin(angle)*.11*size,leanZ=Math.cos(angle)*.10*size;
+ const fork=[x+leanX,ground+1.9*size,z+leanZ],top=[x+leanX*1.7,ground+4.03*size,z+leanZ*1.7];
+ const branches=[{a:[x,ground,z],b:fork,r:.12*size},{a:fork,b:top,r:.078*size}],crowns=[];
+ for(let i=0;i<clumps-1;i++){
+   const a=angle+i*2.39996,d=(.84+hash(seed+i+19)*.31)*spread*size,y=ground+(3.05+(i%3)*.37)*size;
+   const centre=[x+Math.sin(a)*d,y+.43*size,z+Math.cos(a)*d],tip=[centre[0],y,centre[2]],r=(.78+hash(seed+i+45)*.19)*size;
+   branches.push({a:[fork[0],fork[1]+i*.09*size,fork[2]],b:tip,r:(.041-i*.002)*size});
+   crowns.push({x:centre[0],y:centre[1],z:centre[2],sx:r*spread,sy:r*stretch,sz:r*(1.03+hash(i+seed)*.13),yaw:a,tint:(i+variant)%3});
+   if(i<2)branches.push({a:[(fork[0]+tip[0])*.5,(fork[1]+tip[1])*.5,(fork[2]+tip[2])*.5],b:[tip[0]+Math.cos(a)*.28*size,tip[1]+.35*size,tip[2]-Math.sin(a)*.28*size],r:.017*size});
+ }
+ crowns.push({x:top[0],y:ground+4.40*size,z:top[2],sx:.83*spread*size,sy:.98*stretch*size,sz:.85*size,yaw:angle,tint:variant});
+ return {x,z,size,variant,branches,crowns};
 }
 
 // World-scale UVs prevent tiny street details stretching over the entire route.
@@ -338,6 +382,7 @@ export function finishSurfaces(mats,renderer,route){
    const wood=canvas(256),w=wood.getContext('2d');w.fillStyle='#c5b391';w.fillRect(0,0,256,256);
    for(let i=0;i<7000;i++){w.fillStyle=i%2?'#66523e12':'#f1debd17';w.fillRect(rnd()*256,rnd()*256,.5+rnd(),2+rnd()*12);}
    const m=mats.dundasTimber;m.map=texture(wood);m.bumpMap=relief(wood);m.bumpScale=.006;m.roughnessMap=roughness(wood,.78,.96);m.roughness=1;worldMasonry(m,1.4,2.8);weathering(m,.08,.08);
+   for(const material of new Set(Object.values(mats)))if(/Prop_Cedar$/.test(material.name)){material.map=m.map;material.bumpMap=m.bumpMap;material.bumpScale=.004;material.roughnessMap=m.roughnessMap;material.roughness=1;worldMasonry(material,.9,1.4);}
  }
  // Mipmapped, irregular turf variation gives the garden floor scale without
  // parallel grass stripes or thousands of distant blade meshes.
@@ -346,5 +391,8 @@ export function finishSurfaces(mats,renderer,route){
  for(let i=0;i<32;i++){const x=rnd()*256,y=rnd()*256,r=8+rnd()*28,g=tc.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,i%2?'#bfbd741b':'#344a2820');g.addColorStop(1,'#00000000');tc.fillStyle=g;tc.fillRect(x-r,y-r,r*2,r*2);}
  mats.parkGrass.map=texture(turf);mats.parkGrass.color.setHex(0xc0c5a0);mats.parkGrass.bumpMap=relief(turf);mats.parkGrass.bumpScale=.015;mats.parkGrass.roughness=1;worldSurface(mats.parkGrass,2.8);
  mats.steel.roughness=.24;mats.steel.metalness=.88;
+ const bark=canvas(256),bc=bark.getContext('2d');bc.fillStyle='#857665';bc.fillRect(0,0,256,256);
+ for(let i=0;i<430;i++){const x=rnd()*256,y=rnd()*256;bc.strokeStyle=i%3?'#302c253b':'#d6c9a336';bc.lineWidth=.5+rnd()*2;bc.beginPath();bc.moveTo(x,y);bc.bezierCurveTo(x-2,y+8,x+3,y+18,x+(rnd()-.5)*7,y+25+rnd()*50);bc.stroke();}
+ mats.bark.map=texture(bark);mats.bark.color.setHex(0xd3c9b8);mats.bark.bumpMap=relief(bark);mats.bark.bumpScale=.005;mats.bark.roughness=.96;worldMasonry(mats.bark,.7,2.4);
  for(const m of Object.values(mats))for(const key of ['map','bumpMap','roughnessMap'])if(m[key])m[key].anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
 }

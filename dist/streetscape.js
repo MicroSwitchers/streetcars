@@ -29,6 +29,7 @@ export function createStreetscape(c,assets){
  const {scene,route,mats,mat,box,cylinder,rod,add,sign,leafGeo}=c;
  const batches=new Map(),interiorMaterials=new Map(),placements=[],reserved=[],entries=[],dummy=new THREE.Object3D(),counts={};
  const stats={placements,entries,counts,models:assets.models,meshes:[],displays:[],windowGardens:0,roofDetails:0,people:0,cellLength:96};
+ for(const [name,material] of assets.materials)mats['streetProp'+name]=material;
  let seed=8401;const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
  mat('gardenSoil',0x493d2a,1);mat('gardenFlower',0xc8a96b,.85);mat('gardenLavender',0x947b9e,.86);mat('gardenTimber',0x7a6248,.87);mat('gardenLight',0xe4dac1,.45,.15);
  mat('shopInteriorWall',0xaca28b,.92);mat('shopInteriorCeiling',0xd5c9ad,.91);
@@ -53,14 +54,14 @@ export function createStreetscape(c,assets){
    const model=assets.models.get(kind);if(!model)throw new Error('Missing street prop: '+kind);
    dummy.position.set(x,y,z);dummy.rotation.set(0,yaw,0);dummy.scale.setScalar(scale);dummy.updateMatrix();
    const footprint=model.bounds.clone().applyMatrix4(dummy.matrix);
-   const placed={kind,x,y,z,yaw,interior,bounds:footprint};placements.push(placed);counts[kind]=(counts[kind]??0)+1;
+   const placed={kind,x,y,z,yaw,scale,interior,bounds:footprint,rack:kind==='parkedbike'};placements.push(placed);counts[kind]=(counts[kind]??0)+1;
    const cell=Math.floor(z/stats.cellLength);
    for(const part of model.parts){
      const key=cell+'/'+part.geometry.uuid+'/'+interior;
      if(interior&&!interiorMaterials.has(part.material)){
        const material=part.material.clone();
        material.emissive.copy(material.name==='Prop_ShopLamp'?new THREE.Color(0xffffff):material.color);retailMaterial(material);
-       interiorMaterials.set(part.material,material);
+       interiorMaterials.set(part.material,material);mats['queenRetail'+part.material.name]=material;
      }
      const material=interior?interiorMaterials.get(part.material):part.material;
      if(!batches.has(key))batches.set(key,{part,material,matrices:[],illumination:[],cell,kind,interior});
@@ -125,6 +126,16 @@ export function createStreetscape(c,assets){
    }
  }
  function planter(x,z,yaw=0){prop('planter',x,.18,z,yaw);planting(x,.73,z,1,yaw+Math.PI/2);}
+ function plantedBox(kind,x,y,z,yaw=0,scale=1){const p=prop(kind,x,y,z,yaw,scale),top=kind==='timberplanter'?.52:kind==='wallplanter'?.28:.75;planting(x,y+top*scale,z,kind==='stoneplanter'?.65:1.20*scale,yaw+Math.PI/2);return p;}
+ function sideStreet(cross,side,end){
+   const yaw=end===1?Math.PI:0;
+   for(const [j,distance] of [32.3,75.5,118.7].entries()){
+     const kind=j%2?'stoneplanter':'timberplanter',x=side*distance,z=cross.z+end*9.56;
+     plantedBox(kind,x,.18,z,yaw).sideStreet=true;
+     if(j===1){prop('trellis',x,.65,cross.z+end*10.04,yaw).sideStreet=true;for(const y of [1.15,1.75,2.25])add(leafGeo,mats.leaf2,x,y,cross.z+end*9.87,.22,.30,.24);}
+     prop('walllantern',side*(37.1+j*43.2),2.05,cross.z+end*10.10,yaw).sideStreet=true;
+   }
+ }
  function cafe(side,mid){
    // The table clusters replace the former box-shaped stools in the same zone.
    for(const dz of [-1.3,1.3]){
@@ -151,9 +162,8 @@ export function createStreetscape(c,assets){
    }
    if(index%7===4&&!fireEscape){
      for(let z=mid-width/2+1.35;z<mid+width/2-.7;z+=2.35){
-       box('terracotta',side*10.91,4.36,z,.34,.22,1.28);
-       box('gardenSoil',side*10.91,4.478,z,.28,.018,1.17);
-       planting(side*10.91,4.49,z,1.05,0);stats.windowGardens++;
+       prop('wallplanter',side*10.91,4.25,z,-side*Math.PI/2);
+       planting(side*10.91,4.54,z,1.05,0);stats.windowGardens++;
      }
    }
    if(index%4===0){prop('hvac',side*(11.4+depth*.45),height+.30,mid);stats.roofDetails++;}
@@ -173,6 +183,11 @@ export function createStreetscape(c,assets){
      box('dark',side*10.15,4.36,z,.63,.88,.10);
      sign(['BOOKS','VINYL','FLOWERS'][Math.floor(index/14)%3],side*10.15,4.36,z+.058,.55,.72,0,'#eee0b9','#30453c');
    }
+   if(index%7===1&&clear(mid-width*.25,1.0)){
+     const kind=index%2?'timberplanter':'stoneplanter',z=mid-width*.25;
+     if(ground(kind,side*10.45,z,-side*Math.PI/2)){planting(side*10.45,kind==='timberplanter'?.72:.95,z,1.15,0);}
+   }
+   if(index%11===0)prop('walllantern',side*11.18,3.23,mid-width/2+.24,-side*Math.PI/2);
  }
  function streetFurniture(side,z){
    // Original low-detail bins and benches are replaced, rather than layered.
@@ -187,12 +202,15 @@ export function createStreetscape(c,assets){
    if(n%3===1)ground('meter',side*8.85,z-3,-side*Math.PI/2);
    if(n%6===2)ground('postbox',side*8.95,z+1,-side*Math.PI/2);
    if(z>-235&&z<385){
-     if(n%3===0)ground('bikestand',side*8.90,z+28,-side*Math.PI/2);
+     if(n%3===0)ground(n%6===0?'parkedbike':'bikestand',side*8.95,z+28,-side*Math.PI/2);
      if(n%6===1)ground('newsbox',side*9.05,z+24,-side*Math.PI/2);
      if(n%7===3)ground('utilitycabinet',side*9.05,z-5,-side*Math.PI/2);
    }
  }
  function park(){
+   for(const z of [-165,-155])prop('parkedbike',-10.65,.18,z,-Math.PI/2);
+   for(const z of [-175.8,-145.2])plantedBox('timberplanter',-25.2,.20,z,0);
+   prop('trellis',-27.68,.5,-172.0,Math.PI/2);for(const y of [1.,1.6,2.1])add(leafGeo,mats.leaf,-27.43,y,-172.0,.23,.34,.34);
    // Central walkway stays open underneath a cedar pergola; beds and picnic
    // furniture occupy the lawns, leaving the entrance and mural visible.
    for(const x of [-22.7,-17.7])for(const z of [-163.3,-157.5]){
@@ -245,7 +263,8 @@ export function createStreetscape(c,assets){
    stats.windowLighting=createWindowLighting(scene,mats,stats.displays);
    return stats;
  }
- return {display,shop,streetFurniture,treeGrate(side,z){if(z>-235&&z<385&&clear(z,.7))prop('treegrate',side*9.2,.18,z);},drain(side,z){if(z>-235&&z<385&&clear(z,.5))prop('stormdrain',side*7.2,.008,z);},finish,setNight(night){
+ return {display,shop,sideStreet,streetFurniture,treeGrate(side,z){if(z>-235&&z<385&&clear(z,.7))prop('treegrate',side*9.2,.18,z);},drain(side,z){if(z>-235&&z<385&&clear(z,.5))prop('stormdrain',side*7.2,.008,z);},finish,setNight(night){
+   const lantern=assets.materials.get('Prop_ShopLamp');lantern.emissive.setHex(0xffcf98);lantern.emissiveIntensity=night*.9;
    mats.gardenLight.emissive.setHex(0xffd2a0);mats.gardenLight.emissiveIntensity=night*1.8;
    for(const material of interiorMaterials.values()){
      material.emissiveIntensity=night*(material.name==='Prop_ShopLamp'?3.2:.25);

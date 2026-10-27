@@ -2,7 +2,7 @@ import {buildNeighbourhood} from './neighbourhood.js';
 import {buildStreetLife} from './street-life.js';
 import * as THREE from 'three';
 import {mergeGeometries} from 'geometry-utils';
-import {createFoliage,createOfficeMaterial} from './surfaces.js';
+import {createFoliage,createOfficeMaterial,treeShape} from './surfaces.js';
 import {createStreetscape} from './streetscape.js';
 import {createArchitecture} from './architecture.js';
 import {createDundasScenery} from './dundas-scenery.js';
@@ -17,7 +17,7 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
  const queenScenery=new THREE.Group();queenScenery.name='Queen_Streetscape';scene.add(queenScenery);
  let sceneryLayer=false;const setSceneryLayer=value=>sceneryLayer=value;
  const foliage=createFoliage();
- const boxGeo=new THREE.BoxGeometry(1,1,1),cylGeo=new THREE.CylinderGeometry(1,1,1,12),leafGeo=foliage.geometry,linePoints=[];
+ const boxGeo=new THREE.BoxGeometry(1,1,1),cylGeo=new THREE.CylinderGeometry(1,1,1,12),treeBranchGeo=new THREE.CylinderGeometry(.48,1,1,7,1,true),leafGeo=foliage.geometry,linePoints=[],trees=[];
  const mat=(name,color,roughness=.85,metalness=0)=>mats[name]=new THREE.MeshStandardMaterial({color,roughness,metalness});
  mat('road',0x515550);mat('trackbed',0x484c48);mat('concrete',0xaaa69a);mat('curb',0xb9b8aa);mat('roof',0x454940);mat('trim',0xafa28a);mat('dark',0x273d38);mat('glass',0x304c4f,.25,.3);mat('warmglass',0x8d8870,.4,.1);mat('white',0xe7dfbf);mat('yellow',0xd3ad55);mat('steel',0x9baba6,.25,.8);mat('groove',0x202925);mat('pole',0x4e5b50,.6,.4);mat('red',0xa92e30);mat('wood',0x77563a);mat('leaf',0x526d42);mat('leaf2',0x78884c);mat('bark',0x665843);mat('stone',0x9d9885);mat('blue',0x43646c);mat('maroon',0x5f3131);mat('creamcar',0xb2ac91);mat('rubber',0x252b28);mat('signalCase',0x31342b);mat('signalRed',0xb24e3c);mat('signalGreen',0x789466);mat('signalAmber',0xd9ad54);mat('skyline',0x9aa6a0);mat('skin',0xa77a56);mat('coat',0x435c65);mat('trousers',0x3b403e);
  mat('awningRed',0x9e4a3d);mat('awningGreen',0x536b58);mat('awningBlue',0x4e6970);mat('awningOchre',0xb38a50);mat('awningCream',0xe7d7b6);
@@ -27,7 +27,8 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
  function add(geometry,material,x,y,z,sx,sy,sz,ry=0,rx=0,rz=0){const cell=Math.floor(z/96),key=String(sceneryLayer)+cell+geometry.uuid+material.uuid;if(!batches.has(key))batches.set(key,{geometry,material,cell,sceneryLayer,matrices:[]});dummy.position.set(x,y,z);dummy.rotation.set(rx,ry,rz);dummy.scale.set(sx,sy,sz);dummy.updateMatrix();batches.get(key).matrices.push(dummy.matrix.clone());}
  const box=(m,x,y,z,sx,sy,sz,ry=0)=>{add(boxGeo,mats[m],x,y,z,sx,sy,sz,ry);if(m==='pole'&&y-sy/2<2)cameraObstacles.push({minX:x-sx/2,maxX:x+sx/2,minZ:z-sz/2,maxZ:z+sz/2,maxY:y+sy/2});};
  const cylinder=(m,x,y,z,r,h)=>{add(cylGeo,mats[m],x,y,z,r,h,r);if(m==='pole'&&y-h/2<2)cameraObstacles.push({minX:x-r,maxX:x+r,minZ:z-r,maxZ:z+r,maxY:y+h/2});};
- function rod(m,a,b,r){const av=new THREE.Vector3(...a),bv=new THREE.Vector3(...b),delta=bv.clone().sub(av);dummy.position.copy(av.add(bv).multiplyScalar(.5));dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.clone().normalize());dummy.scale.set(r,delta.length(),r);dummy.updateMatrix();const cell=Math.floor(dummy.position.z/96),key=String(sceneryLayer)+cell+cylGeo.uuid+mats[m].uuid;if(!batches.has(key))batches.set(key,{geometry:cylGeo,material:mats[m],cell,sceneryLayer,matrices:[]});batches.get(key).matrices.push(dummy.matrix.clone());}
+ function rod(m,a,b,r,geometry=cylGeo){const av=new THREE.Vector3(...a),bv=new THREE.Vector3(...b),delta=bv.clone().sub(av);dummy.position.copy(av.add(bv).multiplyScalar(.5));dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.clone().normalize());dummy.scale.set(r,delta.length(),r);dummy.updateMatrix();const cell=Math.floor(dummy.position.z/96),key=String(sceneryLayer)+cell+geometry.uuid+mats[m].uuid;if(!batches.has(key))batches.set(key,{geometry,material:mats[m],cell,sceneryLayer,matrices:[]});batches.get(key).matrices.push(dummy.matrix.clone());}
+ function plantTree(x,z,size=1,seed=z,clumps=6){const shape=treeShape(x,z,size,seed,clumps);for(const b of shape.branches)rod('bark',b.a,b.b,b.r,treeBranchGeo);for(const c of shape.crowns)add(leafGeo,mats[['leaf','leaf2','leaf3'][c.tint]],c.x,c.y,c.z,c.sx,c.sy,c.sz,c.yaw);trees.push({x,z,size,variant:shape.variant,clumps});}
  const wire=(a,b)=>linePoints.push(...a,...b);
  const windowKit=windowGeometries(),facadeWindows=[];
  const wallPlane=new THREE.PlaneGeometry(1,1);wallPlane.rotateY(-Math.PI/2);
@@ -119,8 +120,8 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
 
    }
  }
- const neighbourhood=buildNeighbourhood({scene:queenScenery,route,mats,mat,box,cylinder,rod,add,sign,rnd,leafGeo,canvasMap,setSceneryLayer,insetWindow,facadePanel,facadeRectangles,windowDepth:WINDOW_DEPTH});
  const streetscape=createStreetscape({scene,route,mats,mat,box,cylinder,rod,add,sign,leafGeo},streetProps);
+ const neighbourhood=buildNeighbourhood({scene:queenScenery,route,mats,mat,box,cylinder,rod,add,sign,rnd,leafGeo,canvasMap,setSceneryLayer,insetWindow,facadePanel,facadeRectangles,windowDepth:WINDOW_DEPTH,plantTree,streetscape});
  const architecture=createArchitecture({scene,route,mats},architecturalAssets);
  const shopNames=['PAPER & INK','QUEEN RECORDS','THE CORNER CAFE','WEST END BOOKS','BELLWOODS CYCLE','STUDIO 501','GOLDEN PHO','THREAD & NEEDLE','CITY FLOWERS','NIGHT OWL','VINYL EXCHANGE','QUEEN HARDWARE','PARKDALE MARKET','SILVER SCREEN','GOOD NEIGHBOUR','THE LITTLE BAKERY'];
  const signColours=['#283e37','#883e31','#303f52','#d1bc83','#344548','#6c513d'];
@@ -294,8 +295,7 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
      wire([side*8.05,6.35,z],[0,5.8,z]);
      setSceneryLayer(true);
      if(Math.round(z)%3!==0){
-       cylinder('bark',side*9.2,1.70,z+6,.11,3.1);box('dark',side*9.2,.19,z+6,1.25,.018,1.25);streetscape.treeGrate(side,z+6);
-       for(let j=0;j<6;j++){const a=j*2.40,dx=Math.sin(a)*.85,dz=Math.cos(a)*.85,y=3.3+rnd()*1.3;rod('bark',[side*9.2,2.15,z+6],[side*9.2+dx,y,z+6+dz],.038);const radius=.65+rnd()*.48;add(leafGeo,mats[['leaf','leaf2','leaf3'][j%3]],side*9.2+dx,y+.43,z+6+dz,radius,radius*.95,radius*1.10);}
+       box('dark',side*9.2,.19,z+6,1.25,.018,1.25);streetscape.treeGrate(side,z+6);plantTree(side*9.2,z+6,.94,z+side*13);
      }
      streetscape.streetFurniture(side,z);
      setSceneryLayer(false);
@@ -368,5 +368,5 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
    const props=route.id==='dundas'?districts.retail.placements:scenery.placements;
    return cameraObstacles.concat(props.filter(p=>!p.interior&&p.y<2).map(p=>p.bounds?{minX:p.bounds.min.x,maxX:p.bounds.max.x,minZ:p.bounds.min.z,maxZ:p.bounds.max.z,maxY:p.bounds.max.y}:{...p,maxY:p.y+streetProps.models.get(p.kind).bounds.max.y*(p.scale??1)}));
  }
- return {setRoute,sidewalkObstacles,facadeWindows,queenScenery,districts,routeSigns,routeTexture,signals,materials:mats,actors,neighbourhood,scenery,architecture:architecturalDetails,buildingCount:shop,awningCount,upperWindowCount,facadeDetailCount,rooflineDetailCount,shopfrontCount,shopfrontFeatureCount,storeGlazingCount,storeGlazing,signCount:signIndex,update(time,dt,alwaysGreen=false){actors.update(time,dt,alwaysGreen);},setNight(amount){const night=THREE.MathUtils.clamp(amount,0,1);cityNight=night;actors.setNight(night);streetscape.setNight(night);districts.setNight(night);mats.glass.emissive.setHex(0xffffff);mats.glass.emissiveIntensity=.42*night;mats.officeFacade.emissiveIntensity=.22*night;signMat.emissive.copy(windowGlow);signMat.emissiveIntensity=.10*night;routeSignMat.emissive.copy(windowGlow);routeSignMat.emissiveIntensity=.10*night;for(let i=0;i<4;i++){mats['display'+i].emissive.copy(windowGlow);mats['display'+i].emissiveIntensity=.18*night;}},updateSignals(time,alwaysGreen=false){const phase=time%42,state=alwaysGreen||phase<23?'green':phase<27?'amber':'red';signals.forEach(({group})=>group.children.forEach((lamp,i)=>lamp.material.color.setHex(i===(state==='red'?0:state==='amber'?1:2)?[0xff6c46,0xffc76c,0x9edb89][i]:0x29352c)));return state;}};
+ return {trees,foliage,setRoute,sidewalkObstacles,facadeWindows,queenScenery,districts,routeSigns,routeTexture,signals,materials:mats,actors,neighbourhood,scenery,architecture:architecturalDetails,buildingCount:shop,awningCount,upperWindowCount,facadeDetailCount,rooflineDetailCount,shopfrontCount,shopfrontFeatureCount,storeGlazingCount,storeGlazing,signCount:signIndex,update(time,dt,alwaysGreen=false){actors.update(time,dt,alwaysGreen);},setNight(amount){const night=THREE.MathUtils.clamp(amount,0,1);cityNight=night;actors.setNight(night);streetscape.setNight(night);districts.setNight(night);mats.officeFacade.emissiveIntensity=.58*night;mats.glass.emissive.setHex(0xffffff);mats.glass.emissiveIntensity=.42*night;signMat.emissive.copy(windowGlow);signMat.emissiveIntensity=.10*night;routeSignMat.emissive.copy(windowGlow);routeSignMat.emissiveIntensity=.10*night;for(let i=0;i<4;i++){mats['display'+i].emissive.copy(windowGlow);mats['display'+i].emissiveIntensity=.18*night;}},updateSignals(time,alwaysGreen=false){const phase=time%42,state=alwaysGreen||phase<23?'green':phase<27?'amber':'red';signals.forEach(({group})=>group.children.forEach((lamp,i)=>lamp.material.color.setHex(i===(state==='red'?0:state==='amber'?1:2)?[0xff6c46,0xffc76c,0x9edb89][i]:0x29352c)));return state;}};
 }

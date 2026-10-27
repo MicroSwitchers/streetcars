@@ -75,3 +75,58 @@ def build(api):
         box('Cast drain frame',(0,.021,edge*.35),(.35,.028,.04),iron,p,0)
     for j in range(-4,5):box('Slotted drain bar',(0,.026,j*.073),(.35,.027,.023),iron,p,0)
     for z in [-.30,.30]:cyl('Drain fixing',(.19,.039,z),.012,.007,zinc,p,vertices=6)
+
+    # Additional low-poly, original planting containers. The runtime supplies
+    # the shared fine foliage, keeping these meshes and their materials tiny.
+    wood, stone, soil = [api[k] for k in ('wood','stone','soil')]
+    p = root('timberplanter')
+    for x in [-.66,.66]:box('Raised planter foot',(x,.035,0),(.15,.07,.58),iron,p,0)
+    for y in [.15,.29,.43]:
+        for z in [-.29,.29]:box('Cedar planter board',(0,y,z),(1.65,.125,.055),wood,p,0)
+        for x in [-.80,.80]:box('End grain board',(x,y,0),(.055,.125,.54),wood,p,0)
+    for x in [-.65,.65]:
+        for z in [-.322,.322]:box('Recessed steel binding',(x,.29,z),(.045,.44,.012),iron,p,0)
+    box('Planter soil',(0,.475,0),(1.53,.035,.50),soil,p,0)
+    for z in [-.30,.30]:box('Cedar rim',(0,.515,z),(1.72,.055,.075),wood,p,.006)
+
+    p = root('stoneplanter')
+    box('Raised stone plinth',(0,.045,0),(.80,.09,.57),stone,p,.014)
+    for z in [-.29,.29]:box('Cast stone wall',(0,.39,z),(.92,.64,.08),stone,p,.018)
+    for x in [-.42,.42]:box('Cast stone return',(x,.39,0),(.08,.64,.50),stone,p,.018)
+    box('Dark planted soil',(0,.67,0),(.77,.025,.48),soil,p,0)
+    for z in [-.29,.29]:box('Chamfered planter lip',(0,.73,z),(.98,.06,.10),stone,p,.012)
+    for x in [-.44,.44]:box('Chamfered return lip',(x,.73,0),(.10,.06,.50),stone,p,.012)
+
+    p = root('wallplanter')
+    box('Terracotta window trough',(0,.12,0),(1.30,.24,.34),api['red'],p,.012)
+    box('Window box upper rim',(0,.245,0),(1.38,.045,.39),stone,p,.006)
+    box('Inset soil',(0,.268,0),(1.22,.016,.28),soil,p,0)
+    for x in [-.43,.43]:
+        tube('Wall box bracket',[(x,.10,-.20),(x,-.12,-.20),(x,.02,.14)],.016,iron,p)
+
+    p = root('trellis')
+    for x in [-.52,.52]:box('Trellis outer stile',(x,.90,0),(.07,1.80,.07),wood,p,.004)
+    for x in [-.34,-.17,0,.17,.34]:box('Climbing lattice upright',(x,.92,.025),(.027,1.69,.025),wood,p,0)
+    for y in [.20,.45,.70,.95,1.20,1.45,1.70]:box('Climbing lattice crossbar',(0,y,.05),(1.04,.027,.025),wood,p,0)
+    for x in [-.52,.52]:
+        for y in [.22,1.56]:box('Wall mounting spacer',(x,y,-.075),(.10,.10,.10),iron,p,0)
+
+    p = root('walllantern')
+    box('Lantern mounting plate',(0,.28,-.12),(.16,.44,.04),iron,p,.006)
+    tube('Curved lantern bracket',[(0,.45,-.12),(0,.52,.08),(0,.43,.16)],.018,iron,p)
+    box('Warm lantern diffuser',(0,.24,.17),(.18,.28,.17),api['lamp'],p,.006)
+    for x in [-.11,.11]:
+        for z in [.065,.275]:box('Lantern corner frame',(x,.24,z),(.025,.32,.025),iron,p,0)
+    for y in [.065,.415]:box('Lantern weather cap',(0,y,.17),(.28,.055,.27),iron,p,.006)
+
+    # A bicycle, locking ring and U-lock are one prototype, so placement and
+    # budget checks can never emit an unsupported freestanding sidewalk bike.
+    p = root('parkedbike')
+    for name,offset in [('bicycle',(0,0,.12)),('bikestand',(0,0,0))]:
+        source = bpy.data.objects['Prop_'+name]
+        for original in list(source.children):
+            if original.type != 'MESH':continue
+            o=original.copy();o.data=original.data.copy();bpy.context.collection.objects.link(o)
+            o.parent=p;o.location+=V(offset)
+    tube('Bicycle U-lock',[(-.08,.64,.03),(-.08,.80,.03),(.08,.80,.03),(.08,.64,.03)],.013,iron,p,8)
+    tube('Lock around frame',[(-.08,.65,.03),(-.08,.65,.15),(.08,.65,.15),(.08,.65,.03)],.013,iron,p,8)

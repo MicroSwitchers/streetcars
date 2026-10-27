@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 // Static additions share the main street's material batches and do not enter the rail corridor.
 export function buildNeighbourhood(c){
- const {scene,route,mats,mat,box,cylinder,rod,add,sign,rnd,leafGeo,canvasMap,setSceneryLayer=()=>{},insetWindow,facadePanel,facadeRectangles,windowDepth}=c;
+ const {scene,route,mats,mat,box,cylinder,rod,add,sign,rnd,leafGeo,canvasMap,setSceneryLayer=()=>{},insetWindow,facadePanel,facadeRectangles,windowDepth,plantTree,streetscape}=c;
  mat('parkGrass',0x6c7c50);mat('fence',0x3d4b40,.68,.3);mat('roofTile',0x73564a);mat('path',0xb7ad94);mat('warmStone',0xb6a58a);mat('rust',0x8c5e46);
  const pitchedRoof=new THREE.BufferGeometry();pitchedRoof.setAttribute('position',new THREE.Float32BufferAttribute([-.5,0,-.5,.5,0,-.5,-.5,0,.5,.5,0,.5,-.5,1,0,.5,1,0],3));pitchedRoof.setIndex([0,2,4,1,5,3,0,4,5,0,5,1,2,3,5,2,5,4,0,1,3,0,3,2]);pitchedRoof.computeVertexNormals();
  // Side streets continue beyond the crossing instead of ending at empty asphalt.
@@ -151,6 +151,8 @@ export function buildNeighbourhood(c){
          }
          sideStreetBuildings++;
        }
+       streetscape.sideStreet(cross,side,end);
+       for(const distance of [48,108])plantTree(side*distance,cross.z+end*8.3,.82,distance+cross.z+end,3);
        setSceneryLayer(false);
        for(let x=24;x<137;x+=23){cylinder('pole',side*x,3.3,cross.z+end*8.1,.065,6.2);rod('pole',[side*x,6.3,cross.z+end*8.1],[side*x,6.3,cross.z+end*6.5],.045);box('dark',side*x,6.26,cross.z+end*6.4,.24,.10,.48);}
      }
@@ -186,14 +188,7 @@ export function buildNeighbourhood(c){
  });
  const muralMat=new THREE.MeshStandardMaterial({map:mural,roughness:.94});const muralMesh=new THREE.Mesh(new THREE.PlaneGeometry(30,5.1),muralMat);muralMesh.rotation.y=Math.PI/2;muralMesh.position.set(park.backX+.025,3.28,-160.5);scene.add(muralMesh);
  for(const [x,z] of [[-16,-171],[-24,-169],[-22,-150],[-15,-148]]){
-   cylinder('bark',x,2.0,z,.14,3.55);for(let j=0;j<7;j++){const a=j*2.4,r=1.0+((j*7)%4)*.16;rod('bark',[x,2.5,z],[x+Math.sin(a),4,z+Math.cos(a)],.045);add(leafGeo,mats[['leaf','leaf2','leaf3'][j%3]],x+Math.sin(a),4.5+(j%3)*.3,z+Math.cos(a),r,r*.85,r);}
- }
- // Two parked bicycles lean beside the park entrance, away from the sidewalk walking line.
- const wheel=new THREE.TorusGeometry(.33,.025,5,20);wheel.rotateY(Math.PI/2);
- for(const z of [-165,-155]){
-   for(const dz of [-.58,.58]){add(wheel,mats.rubber,-12.0,.57,z+dz,1,1,1);rod('steel',[-12,.57,z+dz],[-12,.86,z],.009);}
-   for(const [a,b] of [[[.57,-.58],[.92,-.1]],[[.92,-.1],[.57,.58]],[[.57,.58],[.57,0]],[[.57,0],[.92,-.1]],[[.57,0],[.94,.35]],[[.94,.35],[.57,.58]],[[.92,-.1],[.94,.35]]])rod('rust',[-12,a[0],z+a[1]],[-12,b[0],z+b[1]],.018);
-   box('rubber',-12,.98,z-.12,.14,.055,.24);rod('steel',[-12,.96,z+.35],[-12,1.14,z+.43],.018);rod('rubber',[-12.2,1.14,z+.43],[-11.8,1.14,z+.43],.022);
+   plantTree(x,z,1.14,x+z);
  }
  setSceneryLayer(false);
  return {pitchedRoof,park,sideStreetBuildings,sideStreetWindows,finishedEndWalls,sideElevationDetails,sideStreetAwnings,crosswalkStripes,mainCrosswalkStripeCount,sideCrosswalkStripeCount,mainCrosswalkCenterOffset,sideCrosswalkCenterOffset,mainCrosswalkSpacing:1.30,sideCrosswalkSpacing:1.38,mainCrosswalkOrientation:'along-Queen-Street',sideCrosswalkOrientation:'along-side-street',mainCrosswalkStripeSize:[.46,3.2],sideCrosswalkStripeSize:[3.2,.46],sideStreetSidewalkInnerEdge};

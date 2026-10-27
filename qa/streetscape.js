@@ -2,10 +2,13 @@ import * as THREE from '../dist/vendor/three.module.js';
 
 export function checkStreetscape(api,check,w){
  const s=api.city.scenery;
- check('Expanded Blender furniture and retail kit is loaded',s.models.size===27&&Object.keys(s.counts).length===27&&s.counts.bench>25&&s.counts.hydrant>10&&s.counts.chair>50);
+ check('Expanded Blender furniture and retail kit is loaded',s.models.size===33&&Object.keys(s.counts).length===33&&s.counts.bench>25&&s.counts.hydrant>10&&s.counts.chair>50);
+ check('New planter variants, trellises, lanterns and supported bicycles are used',['timberplanter','stoneplanter','wallplanter','trellis','walllantern','parkedbike'].every(kind=>s.counts[kind]>0));
+ check('Every outdoor bicycle is paired with its physical locking rack',s.placements.filter(p=>p.kind==='bicycle').every(p=>p.interior)&&s.placements.filter(p=>p.kind==='parkedbike').every(p=>p.rack));
  check('Small Blender street fittings are placed in the game',['utilitycabinet','newsbox','bikestand','treegrate','stormdrain'].every(kind=>s.counts[kind]>0));
  check('World contains cars and objects with no pedestrian actors',s.people===0&&api.city.actors.walkers===0&&api.city.actors.actors.every(a=>a.type==='car'));
- check('Fine prop buffers are shared between spatial instance batches',s.meshes.every(m=>m.isInstancedMesh)&&new Set(s.meshes.map(m=>m.geometry.attributes.position)).size<120&&s.geometryBytes<1500000);
+ const prototypeParts=[...s.models.values()].reduce((n,m)=>n+m.parts.length,0);
+ check('Fine prop buffers are shared between spatial instance batches',s.meshes.every(m=>m.isInstancedMesh)&&new Set(s.meshes.map(m=>m.geometry.attributes.position)).size<=prototypeParts&&prototypeParts<140&&s.geometryBytes<1500000);
  check('Every furniture instance has a finite, non-empty world footprint',s.placements.every(p=>!p.bounds.isEmpty()&&[...p.bounds.min,...p.bounds.max].every(Number.isFinite)));
  const ground=s.placements.filter(p=>p.y<.3&&p.kind!=='stormdrain'&&p.bounds.max.x>-11.3&&p.bounds.min.x<11.3);
  check('Furniture leaves the curb camera and rail corridor clear',ground.every(p=>p.bounds.min.x>8.4||p.bounds.max.x< -8.4));

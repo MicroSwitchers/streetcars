@@ -1,5 +1,21 @@
 # Photo-refined TTC CLRV game asset
 
+The shared street-furniture kit now has 33 original prototypes. New planting
+assets include a slatted cedar trough, cast-stone planter, wall flower box,
+climbing trellis and wall lantern. The `parkedbike` prototype contains its bicycle,
+ring-and-post stand and U-lock together; freestanding `bicycle` is shop merchandise
+only. These six additions total 5,644 source triangles, reuse the existing PBR
+materials, and add no image textures or decoders. The editable lineup is saved as
+`../street-furniture-game-ready.blend` relative to the repository root. Rebuild with
+Blender 4.5 and `source/build_street_props.py -- --skip-render`.
+
+Trees on both routes, their side streets and parks use the shared deterministic
+`treeShape()` in `dist/surfaces.js`: tapered, forked branches and three crown
+proportions. Each foliage card carries 56 fine leaflets, with cutout coverage
+preserved in the 256-pixel texture's mipmaps. This replaces large leaf shapes
+without increasing canopy triangles; uncapped branch segments reduce trunk cost.
+Planters, trellises and window boxes reuse this foliage and shared cedar grain.
+
 The street furniture kit also includes five original Blender models: a louvered
 utility cabinet, newspaper dispenser, cast ring-and-post bicycle stand, tree
 grate and slotted curb drain. Their combined source budget is 3,747 triangles.

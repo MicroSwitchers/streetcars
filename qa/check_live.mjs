@@ -12,7 +12,8 @@ const districts=process.argv.includes('--districts');
 const sidewalk=process.argv.includes('--sidewalk');
 const facadeDepth=process.argv.includes('--facades');
 const pavement=process.argv.includes('--pavement');
-const routeInput=routes||districts||sidewalk||facadeDepth||process.argv.includes('--route-input');
+const greenery=process.argv.includes('--greenery');
+const routeInput=routes||districts||sidewalk||facadeDepth||greenery||process.argv.includes('--route-input');
 const morning=process.argv.includes('--morning'),dawn=process.argv.includes('--dawn'),atmosphere=process.argv.includes('--atmosphere');
 const output=join(qa,'renders-live-'+Date.now());await mkdir(output);
 const profile=await mkdtemp(join(qa,'headless-live-'));
@@ -197,6 +198,26 @@ try{
    }
    await checkRoute('dundas');
   }
+  if(greenery){
+   for(const id of ['queen','dundas']){
+    await checkRoute(id);
+    const report=await evaluate(`(async()=>{const a=queenStreet,THREE=await import(new URL('./vendor/three.module.js',document.querySelector('script[src$="main.js"]').src).href);a.updateSettings({mode:'one',night:false,weatherMode:'off',volume:0});a.restart();a.setPaused(true);
+     const trees=a.route.id==='queen'?a.city.trees:a.city.districts.trees,props=a.route.id==='queen'?a.city.scenery.placements:a.city.districts.retail.placements,models=a.city.scenery.models;
+     const variants=new Set(trees.map(t=>t.variant)),sideTrees=trees.filter(t=>t.clumps===3),kinds=['timberplanter','stoneplanter','wallplanter','trellis','walllantern','parkedbike'];
+     if(variants.size<3||sideTrees.length<4||a.city.foliage.geometry.userData.foliage.leafletsPerCard<40||!a.city.materials.bark.bumpMap)throw Error('Trees lost fine foliage, branch variety or side-street coverage');
+     if(props.some(p=>p.kind==='bicycle'&&!p.interior)||kinds.some(kind=>!props.some(p=>p.kind===kind)))throw Error('Missing new decorations or an unsupported sidewalk bicycle');
+     const group=new THREE.Group(),testMaterial=new THREE.MeshBasicMaterial({side:THREE.DoubleSide});for(const p of models.get('parkedbike').parts)group.add(new THREE.Mesh(p.geometry,testMaterial));group.updateMatrixWorld(true);
+     const ray=new THREE.Raycaster();for(const [x,y] of [[0,.99],[.245,.82]]){ray.set(new THREE.Vector3(x,y,.6),new THREE.Vector3(0,0,-1));ray.far=1;if(!ray.intersectObject(group,true).length)throw Error('Paired bicycle has no physical locking ring/post');}testMaterial.dispose();
+     const sidePlanters=props.filter(p=>p.sideStreet&&['timberplanter','stoneplanter'].includes(p.kind));if(sidePlanters.length<6)throw Error('Side streets lack planter coverage');
+     for(const p of sidePlanters){const minZ=p.bounds?.min.z??p.minZ,maxZ=p.bounds?.max.z??p.maxZ,c=a.route.crossings.reduce((b,c)=>Math.abs(c.z-p.z)<Math.abs(b.z-p.z)?c:b),near=Math.min(Math.abs(minZ-c.z),Math.abs(maxZ-c.z));if(near<8.8)throw Error('Side planter blocks the curb-to-door walking line');}
+     window.__greenView=a.view.update;a.view.update=()=>{};a.view.transition=null;window.__greenCapture=(kind)=>{const tree=kind==='tree',p=(tree?trees:props.filter(p=>p.kind===kind)).sort((p,q)=>Math.abs(p.z+124)-Math.abs(q.z+124))[0];if(!p)throw Error('Missing capture '+kind);const side=Math.sign(p.x),y=tree?2.8:kind==='wallplanter'?p.y+.2:kind==='walllantern'?p.y+.3:.7;a.camera.clearViewOffset();a.camera.fov=tree?58:48;a.camera.position.set(p.x-side*(tree?5:2.4),y+(tree?.4:1.0),p.z-(tree?5:2.8));a.camera.lookAt(p.x,y,p.z);a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);};
+     return {route:a.route.id,trees:trees.length,variants:variants.size,sideTrees:sideTrees.length,sidePlanters:sidePlanters.length,counts:Object.fromEntries(kinds.map(kind=>[kind,props.filter(p=>p.kind===kind).length]))};})()`);
+    console.log('PASS: Both-route tree detail, planting coverage, physical bicycle racks and clear side-street footways: '+JSON.stringify(report));
+    for(const kind of ['tree','timberplanter','stoneplanter','wallplanter','trellis','walllantern','parkedbike']){await evaluate('window.__greenCapture('+JSON.stringify(kind)+')');const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'greenery-'+id+'-'+kind+'.png'),Buffer.from(shot.data,'base64'));}
+    await evaluate('queenStreet.view.update=window.__greenView');
+   }
+   await checkRoute('dundas');
+  }
   if(routes){
   for(const id of ['dundas','queen']){
    await checkRoute(id);
@@ -309,7 +330,7 @@ try{
    const report=await evaluate(`(()=>{const a=queenStreet,d=a.city.districts,arms=d.sideStreets;if(!arms?.length)throw Error('Missing detailed side streets');
     for(const arm of arms){if(arm.buildings.length!==6)throw Error('Incomplete side-street block');for(const b of arm.buildings){if(Math.abs(b.x)-b.width/2<24||Math.abs(b.front-arm.z)<10.2)throw Error('Side street enters main frontage or footway');}}
     const props=d.retail.placements.filter(p=>p.sideStreet);if(!props.length)throw Error('No Blender furnishings on side streets');
-    for(const p of props)if(Math.abs(p.z-arms.find(arm=>Math.abs(arm.z-p.z)<10).z)<6.9)throw Error('Side-street prop enters roadway');
+    for(const p of props){const arm=arms.reduce((b,c)=>Math.abs(c.z-p.z)<Math.abs(b.z-p.z)?c:b);if(Math.abs(p.z-arm.z)<6.9)throw Error('Side-street prop enters roadway');}
     const arm=arms.filter(arm=>arm.side===-1&&arm.end===1).sort((p,q)=>Math.abs(p.z+100)-Math.abs(q.z+100))[0]||arms[0];
     a.camera.fov=64;a.camera.position.set(arm.side*21,2.8,arm.z);a.camera.lookAt(arm.side*100,4,arm.z+arm.end*2);a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);
     return {offset:${offset},arms:arms.length,buildings:arms.reduce((n,a)=>n+a.buildings.length,0),props:props.length,windows:d.facadeWindows.filter(w=>Math.abs(w.x)>25).length};})()`);

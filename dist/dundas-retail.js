@@ -29,7 +29,7 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
  let night=0,triangleLimit=maxTriangles;
  // The tiny matrix buffers accommodate even a section containing only one
  // merchandise type. The rendered count and triangle ceiling remain capped.
- const capacities={bookshelf:64,recordbin:40,bakerycase:64,grocerstand:64,floriststand:64,coffeecounter:64,hardware:40,bicycle:48,pendant:56,bench:32,bins:32,planter:32,hydrant:32,meter:32,table:4,chair:8,aboard:8,crate:8,hvac:6,aircon:8,utilitycabinet:8,newsbox:8,bikestand:16,treegrate:24,stormdrain:64};
+ const capacities={bookshelf:64,recordbin:40,bakerycase:64,grocerstand:64,floriststand:64,coffeecounter:64,hardware:40,bicycle:48,pendant:56,bench:32,bins:32,planter:32,timberplanter:32,stoneplanter:32,wallplanter:32,trellis:16,walllantern:32,parkedbike:16,hydrant:32,meter:32,table:4,chair:8,aboard:8,crate:8,hvac:6,aircon:8,utilitycabinet:8,newsbox:8,bikestand:16,treegrate:24,stormdrain:64};
  function makePool(name,geometry,material,capacity,shadow=true){
    const mesh=new THREE.InstancedMesh(geometry,material,capacity);mesh.name='Dundas_Retail_'+name;mesh.count=0;
    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.castShadow=shadow;mesh.receiveShadow=true;
@@ -64,8 +64,8 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
    pools.set(kind,{model,parts,count:0,capacity});
  }
  const leafGeometry=foliageGeometry,flowerGeometry=new THREE.IcosahedronGeometry(1,0);
- const leafPool=makePool('PlanterFoliage',leafGeometry,mats.leaf2||mats.leaf,96,false);
- const flowerPool=makePool('PlanterFlowers',flowerGeometry,mats.gardenFlower||mats.terracotta,96,false);
+ const leafPool=makePool('PlanterFoliage',leafGeometry,mats.leaf2||mats.leaf,180,false);
+ const flowerPool=makePool('PlanterFlowers',flowerGeometry,mats.gardenFlower||mats.terracotta,144,false);
  // Small physical wall dressings use three shared primitive buffers. They are
  // independent of the original Blender counters and keep deep shop recesses
  // from reading as empty white rooms. Instance colours retain varied products.
@@ -118,7 +118,7 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
      part.mesh.setMatrixAt(p.count,dummy.matrix);part.illumination.setXYZ(p.count,lightColour.r,lightColour.g,lightColour.b);part.count++;
    }
    p.count++;stats.instances++;stats.triangles+=p.model.triangles;stats.types[kind]=(stats.types[kind]||0)+1;
-   placements.push({kind,x,y:anchorY,floorY:y,z,yaw,scale,interior,minX:footprint.min.x,maxX:footprint.max.x,minZ:footprint.min.z,maxZ:footprint.max.z});
+   placements.push({kind,x,y:anchorY,floorY:y,z,yaw,scale,interior,rack:kind==='parkedbike',minX:footprint.min.x,maxX:footprint.max.x,minZ:footprint.min.z,maxZ:footprint.max.z});
    return true;
  }
  const lightColour=new THREE.Color();
@@ -220,18 +220,32 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
  }
  function furniture(route,kind,side,z){
    const p=pools.get(kind);if(!p)return false;
-   const yaw=-side*Math.PI/2,x=side*(kind==='bench'?9.55:kind==='planter'?9.65:kind==='bicycle'?9.60:8.82);
+   const planted=['planter','timberplanter','stoneplanter'].includes(kind),yaw=-side*Math.PI/2,x=side*(kind==='bench'?9.55:planted?9.65:kind==='parkedbike'?9.60:8.82);
    dummy.position.set(x,.18,z);dummy.rotation.set(0,yaw,0);dummy.scale.setScalar(1);dummy.updateMatrix();footprint.copy(p.model.bounds).applyMatrix4(dummy.matrix);
    const radius=(footprint.max.z-footprint.min.z)/2+.12,minX=footprint.min.x-.10,maxX=footprint.max.x+.10,minZ=footprint.min.z-.18,maxZ=footprint.max.z+.18;
    if(!clear(route,z,radius)||Math.min(Math.abs(footprint.min.x),Math.abs(footprint.max.x))<8.35||Math.max(Math.abs(footprint.min.x),Math.abs(footprint.max.x))>10.25)return false;
    if(reserved.some(r=>minX<r.maxX&&maxX>r.minX&&minZ<r.maxZ&&maxZ>r.minZ))return false;
    if(!prop(kind,x,.18,z,yaw))return false;
    reserved.push({minX,maxX,minZ,maxZ});stats.furniture++;
-   if(kind==='planter'){
-     for(const dz of [-.33,0,.33])plantInstance(leafPool,x,.88,z+dz,.29,.31,.26);
-     for(const dz of [-.30,.05,.30])plantInstance(flowerPool,x-.08*side,1.11,z+dz,.11,.085,.095);
-   }
+   if(planted)plantContents(kind,x,.18,z,yaw);
    return true;
+ }
+ function plantContents(kind,x,y,z,yaw=0){
+   const top=kind==='timberplanter'?.52:kind==='wallplanter'?.28:.75,span=kind==='stoneplanter'?.25:.43;
+   for(const u of [-span,0,span]){const px=x+Math.cos(yaw)*u,pz=z-Math.sin(yaw)*u;plantInstance(leafPool,px,y+top+.16,pz,.25,.25,.26);plantInstance(flowerPool,px,y+top+.35,pz,.085,.07,.085);}
+ }
+ function sidePlanting(arms){
+   for(const [i,arm] of arms.entries()){
+     const b=arm.buildings[0];if(!b)continue;
+     const x=b.x-arm.side*(b.width/2-.95),z=b.front-arm.end*.65,yaw=arm.end===1?Math.PI:0,kind=i%2?'stoneplanter':'timberplanter';
+     if(prop(kind,x,.18,z,yaw)){placements.at(-1).sideStreet=true;plantContents(kind,x,.18,z,yaw);}
+   }
+   for(const [i,arm] of arms.entries()){
+     const b=arm.buildings[0];if(!b)continue;const yaw=arm.end===1?Math.PI:0;
+     const x=b.x-arm.side*(b.width/2-.95),z=b.front-arm.end*.15;
+     if(i%2===0&&prop('trellis',x,.65,z,yaw)){placements.at(-1).sideStreet=true;for(const y of [1.25,1.85,2.25])plantInstance(leafPool,x,y,z-arm.end*.18,.22,.29,.24);}
+     if(prop('walllantern',b.x+(b.shop?5.9:-4.8),2.85,z,yaw,1,{color:0xffcf98,power:.45}))placements.at(-1).sideStreet=true;
+   }
  }
  function finishPool(p){p.mesh.count=p.count;p.mesh.instanceMatrix.needsUpdate=true;if(p.mesh.instanceColor)p.mesh.instanceColor.needsUpdate=true;if(p.illumination)p.illumination.needsUpdate=true;}
  function storefrontDressing(route,frontages){
@@ -249,12 +263,13 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
      const ordinal=Math.abs(f.index||0),w=f.windows?.find(w=>w.y>4.2&&w.y<7.5&&!w.feature);
      if(w&&ordinal%2===0&&stats.windowGardens<24){
        const room={type:'windowGarden',index:f.index,side:f.side,exterior:true,lighting:{color:0,power:0}},x=f.side*(f.front-.20),y=w.y-w.height/2-.12,z=w.z,span=Math.min(1.32,w.width+.14);
-       if(fixture('shelf',room,x,y,z,.38,.22,span,0x946b50)){
-         fixture('shelf',room,x,y+.115,z,.30,.018,span-.10,0x493f2e);
+       if(prop('wallplanter',x,y-.12,z,-f.side*Math.PI/2,Math.min(1,span/1.38))){
+         Object.assign(placements.at(-1),{facade:true,frontageIndex:f.index,side:f.side});
          for(const dz of [-.30,.30]){plantInstance(leafPool,x,y+.25,z+dz,.23,.22,.27);plantInstance(flowerPool,x-f.side*.04,y+.43,z+dz,.10,.075,.10);}
          stats.windowGardens++;
        }
      }
+     if(ordinal%9===0&&f.kind!=='house'&&(stats.types.walllantern||0)<24){if(prop('walllantern',f.side*(f.front-.16),3.24,f.z-f.width/2+.25,-f.side*Math.PI/2,1,{color:0xffcf98,power:.45}))placements.at(-1).facade=true;}
      if(f.kind==='house')continue;
      const type=dundasShopType(f.district,ordinal,f.side),displayZ=f.room?.z??f.z-f.width*.12;
      if(stats.shopfrontDetails<10&&ordinal%3===1){
@@ -293,7 +308,7 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
      // Central shops receive the detailed original assets; far facade silhouettes
      // retain the cheaper pooled geometry. The cap is independent of route size.
      const eligible=active.filter(f=>f.room).sort((a,b)=>Math.abs(a.z-60)-Math.abs(b.z-60)).slice(0,maxRooms);
-     triangleLimit=118000;
+     triangleLimit=110000;
      for(const f of eligible)interior(f);
      triangleLimit=132000;
      for(const room of rooms)backShelves(room);
@@ -302,7 +317,11 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
      for(let row=0;row<2;row++)for(const room of rooms)backContents(room,row);
      for(const room of rooms)rearDisplay(room);
      triangleLimit=maxTriangles;
+     const plantedFronts=active.filter(f=>!['tree','valley'].includes(f.kind)),plantStride=Math.max(1,Math.ceil(plantedFronts.length/8));
+     for(let j=0;j<plantedFronts.length;j+=plantStride){const f=plantedFronts[j],kind=['core','regent','culture'].includes(f.district)?'stoneplanter':j%2?'stoneplanter':'timberplanter',z=f.z+f.width*(f.kind==='house'?.24:-.22);for(const dz of [0,-3,3])if(furniture(route,kind,f.side,z+dz))break;}
+     let supportedBikes=0;for(const f of [...plantedFronts].sort((a,b)=>Math.abs(a.z+100)-Math.abs(b.z+100))){if(supportedBikes>=2)break;for(const dz of [0,-3.2,3.2])if(furniture(route,'parkedbike',f.side,f.z+dz)){supportedBikes++;break;}}
      storefrontDressing(route,active);
+     sidePlanting(sideStreets);
      const sideBudget=stats.triangles+14000;
      for(const [i,arm] of sideStreets.entries()){
        const f=arm.furniture[i%arm.furniture.length],p=pools.get(f?.kind);
@@ -311,7 +330,7 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
      }
      for(const f of active.filter(f=>f.kind==='tree'))prop('treegrate',f.side*9.3,.18,f.z);
      for(let z=-224;z<380;z+=29)if(clear(route,z,.5))for(const side of [-1,1])prop('stormdrain',side*7.2,.008,z);
-     const kinds=['bench','planter','bins','hydrant','newsbox','meter','bikestand','bicycle','utilitycabinet','planter','bench'];
+     const kinds=['bench','timberplanter','bins','hydrant','stoneplanter','newsbox','meter','bikestand','parkedbike','utilitycabinet','planter','timberplanter'];
      const street=active.filter(f=>f.kind!=='tree').sort((a,b)=>a.z-b.z||a.side-b.side);
      const stride=Math.max(1,Math.ceil(street.length/maxFurniture));
      // Spread the fixed furniture allowance along the whole resident section,
