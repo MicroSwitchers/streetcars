@@ -45,13 +45,13 @@ export function createWeather(scene,mats,lighting,graphics,renderer){
        }
        // Damp aggregate keeps a soft sheen between puddles while retaining
        // its grain. Night changes illumination, never the physical polish.
-       roughnessFactor=mix(roughnessFactor,max(.48,roughnessFactor*.62),min(1.,waterFilm*1.45));
-       roughnessFactor=mix(roughnessFactor,.24,standingWater*.88);
+       roughnessFactor=mix(roughnessFactor,max(.46,roughnessFactor*.60),min(1.,waterFilm*1.60));
+       roughnessFactor=mix(roughnessFactor,.32,standingWater*.82);
        diffuseColor.rgb*=mix(1.,.70,waterFilm);`);
      shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
        if(wetness>.001&&vWaterFilmNormal.y>.95){
          vec3 upView=normalize(mat3(viewMatrix)*vec3(0.,1.,0.));
-         normal=normalize(mix(normal,upView,standingWater*.78));
+         normal=normalize(mix(normal,upView,standingWater*.65));
          vec2 ripple=rainRipple(vWaterFilmPosition.xz,weatherTime)*rainAmount*standingWater;
          normal=normalize(normal+mat3(viewMatrix)*vec3(ripple.x,0.,ripple.y));}`);
    };material.customProgramCacheKey=()=>key+'-rain-water-film-v2-aggregate';material.needsUpdate=true;

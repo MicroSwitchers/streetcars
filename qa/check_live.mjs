@@ -380,14 +380,22 @@ try{
    // transfer function, so its displayed grey is not a linear roughness value.
    const sample=()=>{a.renderer.setRenderTarget(null);a.renderer.render(a.scene,a.camera);const gl=a.renderer.getContext(),width=gl.drawingBufferWidth,height=gl.drawingBufferHeight,rgba=new Uint8Array(width*height*4);gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,rgba);const values=[];
     for(let x=-7.3;x<=7.3;x+=.19)for(let z=-156;z<=-144;z+=.41){if([a.route.trackX,-a.route.trackX].some(t=>Math.abs(Math.abs(x-t)-a.route.gauge/2)<.18))continue;const p=new THREE.Vector3(x,.005,z).project(a.camera),px=Math.round((p.x*.5+.5)*(width-1)),py=Math.round((p.y*.5+.5)*(height-1));if(px<0||py<0||px>=width||py>=height)continue;values.push(rgba[(py*width+px)*4]/255);}return values;};
-   const settle=()=>{for(let i=0;i<100;i++)a.weather.update(.1,a.state.z,a.nightAmount,a.renderer.getPixelRatio(),false);};
+   const settle=(seconds=10)=>{for(let i=0;i<seconds*10;i++)a.weather.update(.1,a.state.z,a.nightAmount,a.renderer.getPixelRatio(),false);};
    a.updateSettings({weatherMode:'off',night:false});settle();const dry=sample();
-   a.updateSettings({weatherMode:'fixed',weather:'rain'});settle();a.weather.uniforms.wetness.value=1;if(a.graphics.uniforms)a.graphics.uniforms.wetness.value=0;const wet=sample();
-   a.updateSettings({night:true});a.weather.uniforms.wetness.value=1;if(a.graphics.uniforms)a.graphics.uniforms.wetness.value=0;const dark=sample();
+   a.updateSettings({weatherMode:'fixed',weather:'rain'});settle(60);const wet=sample();
+   a.updateSettings({night:true});a.weather.update(0,a.state.z,a.nightAmount,a.renderer.getPixelRatio(),false);const dark=sample();
    const mean=values=>values.reduce((sum,n)=>sum+n,0)/values.length,dryMean=mean(dry),wetMean=mean(wet),matte=wet.filter(n=>n>.55).length/wet.length,puddles=wet.filter(n=>n<.48).length/wet.length,nightDifference=mean(dark.map((n,i)=>Math.abs(n-wet[i])));
+   const backgroundMean=mean(wet.filter(n=>n>.55)),puddleMean=mean(wet.filter(n=>n<.48)),contrast=backgroundMean-puddleMean;
+   const {WEATHER}=await import(new URL('./weather-cycle.js',document.querySelector('script[src$="main.js"]').src).href),profiles=[];
+   for(const [id,preset] of Object.entries(WEATHER)){
+    a.updateSettings({weatherMode:'off',night:id==='rainnight'});settle();a.updateSettings({weatherMode:'fixed',weather:id});settle(60);
+    const values=sample(),water=a.weather.uniforms.wetness.value,rain=a.weather.uniforms.rainAmount.value,roughness=mean(values),standing=values.filter(n=>n<.48).length/values.length,target=Math.max(preset.wet,preset.rain*.9);
+    if(Math.abs(water-target)>.002||Math.abs(rain-preset.rain)>.0001||target===0&&Math.abs(roughness-dryMean)>.004||target<.36&&standing>.005||target>.9&&Math.abs(roughness-wetMean)>.004)throw Error('Pavement does not follow '+id+' wetness: '+JSON.stringify({water,rain,roughness,standing,target}));
+    profiles.push({id,rain,wetness:water,roughness,puddles:standing});
+   }
    for(const o of surfaces)o.material=m;diagnostic.dispose();a.updateSettings({weatherMode:'off',night:false});settle();a.view.update=update;a.restart();
-   if(dry.length<1000||dryMean<.80||matte<.55||puddles<.01||puddles>.4||nightDifference>.01)throw Error('Road roughness readback failed: '+JSON.stringify({samples:dry.length,dryMean,wetMean,matte,puddles,nightDifference}));
-   return {samples:dry.length,dryMean,wetMean,matte,puddles,nightDifference,maps:3,mapSize:512};
+   if(dry.length<1000||dryMean<.80||matte<.55||puddles<.01||puddles>.4||nightDifference>.01||contrast<.15||contrast>.44)throw Error('Road roughness readback failed: '+JSON.stringify({samples:dry.length,dryMean,wetMean,matte,puddles,nightDifference,backgroundMean,puddleMean,contrast}));
+   return {samples:dry.length,dryMean,wetMean,matte,puddles,nightDifference,backgroundMean,puddleMean,contrast,profiles,maps:3,mapSize:512};
   })()`);
   await writeFile(join(output,'pavement.json'),JSON.stringify(report,null,2));console.log('PASS: Rendered asphalt stays matte between localized puddles; night does not change its physical roughness: '+JSON.stringify(report));
  }

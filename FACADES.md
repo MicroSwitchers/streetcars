@@ -61,5 +61,9 @@ iPad keeps its single forward pass and uses the same PBR material. No extra road
 geometry, texture downloads, light sources or render targets are required.
 
 `qa/check_live.mjs --pavement` reads the actual rendered roughness across more
-than 2,000 road samples in dry, rainy and night scenes. It checks that most wet
-asphalt remains matte, puddles are localized, and day/night roughness matches.
+than 2,000 road samples across every weather preset, including after-storm drizzle,
+heavy rain, storm fronts, city rain and damp mist. It checks actual accumulated
+wetness, a gentler contrast between the surrounding sheen and puddles, localized
+standing water, and matching day/night material roughness. The shared material
+and reflection response follow surface wetness throughout weather transitions;
+recently soaked streets can remain wet even after rain weakens.

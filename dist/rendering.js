@@ -188,7 +188,9 @@ export function createSceneRenderer(renderer,{compatibility=false}={}){
    vec3 p=viewPosition(uv),world=(inverseView*vec4(p,1.)).xyz;
    vec3 n=normalize(mat3(inverseView)*(encodedNormal.rgb*2.-1.));
    if(n.y<.96||world.y>.45||abs(world.x)>11.35||length(p)>110.)return color;
-   float puddle=puddleCoverage(world,wetness),film=dampFilm(world,wetness)*(.10+.26*(1.-puddle))+puddle*.78;
+   // One wetness-driven response for every rain profile and its transitions:
+   // a wider damp sheen, with softer highlights where water accumulates.
+   float puddle=puddleCoverage(world,wetness),film=dampFilm(world,wetness)*(.10+.30*(1.-puddle))+puddle*.62;
    // Stable world-space grain breaks up the smooth normal used by SSR without
    // deriving normals from depth (which previously caused scan-line bands).
    vec2 grain=vec2(weatherNoise(world.xz*13.),weatherNoise(world.xz*13.+37.))-.5;
@@ -214,7 +216,7 @@ export function createSceneRenderer(renderer,{compatibility=false}={}){
        vec4 hit=viewProjection*vec4(p+normalView*.065+ray*high,1.);vec2 hitUv=hit.xy/hit.w*.5+.5;
        float edge=min(min(hitUv.x,1.-hitUv.x),min(hitUv.y,1.-hitUv.y));
        confidence=smoothstep(.005,.13,edge)*(1.-smoothstep(28.,47.,high));
-       vec2 blur=vec2(mix(5.,2.,puddle))/resolution;
+       vec2 blur=vec2(mix(5.,2.8,puddle))/resolution;
        vec3 reflected=(texture2D(image,hitUv).rgb*2.+texture2D(image,hitUv+blur).rgb+texture2D(image,hitUv-blur).rgb)*.25;
        reflection=mix(reflection,reflected,confidence);break;
      }
