@@ -1,3 +1,20 @@
+The architectural kit now contains 17 Blender prototypes, including seven low-cost
+masonry reliefs: straight window hoods, terracotta spandrels, recessed parapet
+friezes, louvred vents, collared downpipes, fluted piers and profiled stone belts.
+These additions total 472 source triangles and about 30 KB in the decoder-free
+GLB. The complete kit remains below its original 11,000-triangle source budget.
+`source/facade_detail_models.py` builds the new parts; rebuild the full kit with
+`source/build_architecture.py`. The editable file is
+`../building-architecture-game-ready.blend` relative to the repository root.
+
+`dist/facade-details.js` plans reliefs around actual window apertures, with four
+masonry styles and a separate modern podium treatment. Queen and Dundas reuse
+the same prototypes on their main frontages, exposed upper party walls, corner
+returns and side streets. Dundas reserves at most 29,000 of its existing facade
+triangles for these reliefs; the overall 380,000-triangle resident budget remains
+unchanged. No lights, shadow maps or texture atlases were added. Side-street
+offices also continue their glazed upper floors above the masonry podium.
+
 # Photo-refined TTC CLRV game asset
 
 The shared street-furniture kit now has 33 original prototypes. New planting

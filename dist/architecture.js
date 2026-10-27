@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {GLTFLoader} from 'gltf-loader';
+import {facadeReliefs,reliefFacade,FACADE_RELIEFS} from './facade-details.js';
 
 export async function loadArchitecture(){
  const loader=new GLTFLoader(),embedded=document.getElementById('embedded-architecture');
@@ -29,12 +30,12 @@ export async function loadArchitecture(){
 // occupied-window material so these windows share the existing night cycle.
 export function createArchitecture({scene,route,mats},assets){
  const batches=new Map(),dummy=new THREE.Object3D();
- const stats={models:assets.models,buildings:[],placements:[],meshes:[],counts:{},cellLength:96,people:0};
- function place(kind,side,y,z,{x=11.4,sx=1,sy=1,sz=1,roof=false,index}={}){
+ const stats={models:assets.models,buildings:[],surfaces:[],placements:[],meshes:[],counts:{},cellLength:96,people:0};
+ function place(kind,side,y,z,{x=11.4,sx=1,sy=1,sz=1,roof=false,index,origin,rotation,relief=false}={}){
    const model=assets.models.get(kind);if(!model)throw new Error('Missing architectural asset: '+kind);
-   dummy.position.set(side*x,y,z);dummy.rotation.set(0,-side*Math.PI/2,0);dummy.scale.set(sx,sy,sz);dummy.updateMatrix();
+   dummy.position.set(origin?.[0]??side*x,y,origin?.[2]??z);dummy.rotation.set(0,rotation??-side*Math.PI/2,0);dummy.scale.set(sx,sy,sz);dummy.updateMatrix();
    const bounds=model.bounds.clone().applyMatrix4(dummy.matrix);
-   stats.placements.push({kind,side,y,z,index,roof,bounds});stats.counts[kind]=(stats.counts[kind]??0)+1;
+   stats.placements.push({kind,side,y,z,index,roof,relief,bounds});stats.counts[kind]=(stats.counts[kind]??0)+1;
    for(const part of model.parts){
      const key=Math.floor(z/stats.cellLength)+'/'+part.geometry.uuid;
      if(!batches.has(key))batches.set(key,{part,material:part.material.name==='Architecture_WindowGlass'?mats.glass:part.material,matrices:[],colors:[],kind});
@@ -42,6 +43,11 @@ export function createArchitecture({scene,route,mats},assets){
      const stone=/Limestone|CarvedStone/.test(part.material.name),sash=part.material.name==='Architecture_Sash';
      batch.colors.push(new THREE.Color(stone?[0xffffff,0xdeddd1,0xf3e7cd,0xd6d4ca][index%4]:sash?[0xffffff,0xc0c7b4,0xa7b3aa,0xdad5bd][index%4]:0xffffff));
    }
+ }
+ function surface(b){
+   const f=b.origin?b:reliefFacade(b),layout=facadeReliefs(f),cos=Math.cos(f.rotation),sin=Math.sin(f.rotation);
+   stats.surfaces.push({...f,style:layout.style,details:layout.details.length});
+   for(const d of layout.details){const origin=[f.origin[0]+cos*d.u,0,f.origin[2]-sin*d.u];place(d.kind,b.side,d.y,origin[2],{origin,rotation:f.rotation,sx:d.sx,sy:d.sy,index:b.index,relief:true});}
  }
  function plan({index,mid,width,height,detailed}){
    const windows=[];for(let z=mid-width/2+1.35;z<mid+width/2-.7;z+=2.35)windows.push(z);
@@ -61,6 +67,8 @@ export function createArchitecture({scene,route,mats},assets){
  function building(b,p){
    const {side,mid,width,height,depth,index,detailed}=b;if(!detailed)return;
    stats.buildings.push({...b,featureZ:p.featureZ,features:{bay:p.bay,balcony:p.balcony,fire:p.fire}});
+   const windows=[];for(let y=5.3;y<height-1.65;y+=2.7)for(const z of p.windows)windows.push({y,z,width:1.25,height:1.97,feature:p.replaces(y,z)?(p.bay?'baywindow':'balcony'):!p.fire&&index%4===0&&height-y>2.35?'archedhood':null});
+   surface({side,front:11.4,z:mid,width,height,index,kind:'shop',windows});
    // One-metre cornice modules keep the dentils at a believable physical scale.
    const count=Math.ceil(width),span=width/count;
    for(let j=0;j<count;j++)place('cornice',side,height+.20,mid-width/2+(j+.5)*span,{sx:span,index});
@@ -84,11 +92,13 @@ export function createArchitecture({scene,route,mats},assets){
      const mesh=new THREE.InstancedMesh(part.geometry,material,matrices.length);
      mesh.name='Architecture_'+kind;mesh.userData.architecture=true;
      matrices.forEach((m,i)=>{mesh.setMatrixAt(i,m);mesh.setColorAt(i,colors[i]);});mesh.instanceMatrix.needsUpdate=true;
-     mesh.castShadow=material!==mats.glass;mesh.receiveShadow=true;mesh.computeBoundingSphere();scene.add(mesh);stats.meshes.push(mesh);
+     // Tiny wall reliefs use surface lighting and AO. Keeping them out of the
+     // shadow pass avoids thin-edge self-shadow stripes and extra tablet cost.
+     mesh.castShadow=material!==mats.glass&&!FACADE_RELIEFS.includes(kind);mesh.receiveShadow=true;mesh.computeBoundingSphere();scene.add(mesh);stats.meshes.push(mesh);
    }
    stats.geometryBytes=[...geometrySet].reduce((n,g)=>n+(g.index?.array.byteLength??0)+Object.values(g.attributes).reduce((s,a)=>s+a.array.byteLength,0),0);
    stats.sourceTriangles=[...stats.models.values()].reduce((n,m)=>n+m.triangles,0);
    stats.instances=stats.placements.length;return stats;
  }
- return {plan,window,building,finish,stats};
+ return {plan,window,building,surface,finish,stats};
 }

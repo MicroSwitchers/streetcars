@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 // Static additions share the main street's material batches and do not enter the rail corridor.
 export function buildNeighbourhood(c){
- const {scene,route,mats,mat,box,cylinder,rod,add,sign,rnd,leafGeo,canvasMap,setSceneryLayer=()=>{},insetWindow,facadePanel,facadeRectangles,windowDepth,plantTree,streetscape}=c;
+ const {scene,route,mats,mat,box,cylinder,rod,add,sign,rnd,leafGeo,canvasMap,setSceneryLayer=()=>{},insetWindow,facadePanel,facadeRectangles,windowDepth,plantTree,streetscape,architecture}=c;
  mat('parkGrass',0x6c7c50);mat('fence',0x3d4b40,.68,.3);mat('roofTile',0x73564a);mat('path',0xb7ad94);mat('warmStone',0xb6a58a);mat('rust',0x8c5e46);
  const pitchedRoof=new THREE.BufferGeometry();pitchedRoof.setAttribute('position',new THREE.Float32BufferAttribute([-.5,0,-.5,.5,0,-.5,-.5,0,.5,.5,0,.5,-.5,1,0,.5,1,0],3));pitchedRoof.setIndex([0,2,4,1,5,3,0,4,5,0,5,1,2,3,5,2,5,4,0,1,3,0,3,2]);pitchedRoof.computeVertexNormals();
  // Side streets continue beyond the crossing instead of ending at empty asphalt.
@@ -101,6 +101,7 @@ export function buildNeighbourhood(c){
          box(awningColours[variation%awningColours.length],x,3.04,front-end*1.10,width*.84,.22,.10);
          for(const edge of [-1,1])rod('dark',[x+edge*width*.39,3.48,front-end*.43],[x+edge*width*.39,3.03,front-end*1.08],.025);
          sideStreetAwnings++;
+         if(j<4)architecture.surface({side,origin:[x,0,front],rotation:end===1?Math.PI:0,z:front,width,height,index:j+Math.abs(cross.z)+end+5,kind:'side-street',windows:apertures.filter(w=>w.y>4).map(w=>({...w,u:-end*w.u}))});
          // Project the end-unit wall toward the main street as a finished corner,
          // with returned stone trim and windows rather than exposed brick.
          if(j===0||j===10){

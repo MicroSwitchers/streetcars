@@ -121,8 +121,8 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
    }
  }
  const streetscape=createStreetscape({scene,route,mats,mat,box,cylinder,rod,add,sign,leafGeo},streetProps);
- const neighbourhood=buildNeighbourhood({scene:queenScenery,route,mats,mat,box,cylinder,rod,add,sign,rnd,leafGeo,canvasMap,setSceneryLayer,insetWindow,facadePanel,facadeRectangles,windowDepth:WINDOW_DEPTH,plantTree,streetscape});
  const architecture=createArchitecture({scene,route,mats},architecturalAssets);
+ const neighbourhood=buildNeighbourhood({scene:queenScenery,route,mats,mat,box,cylinder,rod,add,sign,rnd,leafGeo,canvasMap,setSceneryLayer,insetWindow,facadePanel,facadeRectangles,windowDepth:WINDOW_DEPTH,plantTree,streetscape,architecture});
  const shopNames=['PAPER & INK','QUEEN RECORDS','THE CORNER CAFE','WEST END BOOKS','BELLWOODS CYCLE','STUDIO 501','GOLDEN PHO','THREAD & NEEDLE','CITY FLOWERS','NIGHT OWL','VINYL EXCHANGE','QUEEN HARDWARE','PARKDALE MARKET','SILVER SCREEN','GOOD NEIGHBOUR','THE LITTLE BAKERY'];
  const signColours=['#283e37','#883e31','#303f52','#d1bc83','#344548','#6c513d'];
  let shop=0,awningCount=0,upperWindowCount=0,facadeDetailCount=0,rooflineDetailCount=0,shopfrontCount=0,shopfrontFeatureCount=0;
@@ -214,7 +214,7 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
          upperWindowCount++;
          if(architecture.window({side,y,z:zz,index:shop,height,detailed,plan:architecturePlan}))continue;
          insetWindow(side*11.4,y,zz,1.25,1.97,side===1?0:Math.PI,shop);
-         box('warmStone',side*11.32,y+1.06,zz,.28,.14,1.44);
+         if(!detailed||height-y<1.91||!architecturePlan.fire&&shop%4===0&&height-y>2.35)box('warmStone',side*11.32,y+1.06,zz,.28,.14,1.44);
          box('warmStone',side*11.30,y-1.05,zz,.34,.13,1.48);
          facadeDetailCount+=6;
        }
@@ -254,7 +254,7 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
        box('trim',side*11.27,2.05,zz,.30,3.8,.20);
        for(let y=4.5;y<height-.7;y+=.58)box('trim',side*11.30,y,zz,.18,.22,.30);
      }
-     rod('pole',[side*11.13,.35,mid-width/2+.42],[side*11.13,height-.55,mid-width/2+.42],.032);
+     if(!detailed)rod('pole',[side*11.13,.35,mid-width/2+.42],[side*11.13,height-.55,mid-width/2+.42],.032);
      if(!detailed&&shop%6===1){
        // A small steel fire escape adds a different silhouette to selected facades.
        for(const y of [5.0,7.7]){box('dark',side*10.89,y,mid,.68,.08,2.5);rod('dark',[side*10.56,y+.06,mid-1.2],[side*10.56,y+.85,mid-1.2],.018);rod('dark',[side*10.56,y+.85,mid-1.2],[side*10.56,y+.85,mid+1.2],.018);for(let zz=mid-1;zz<mid+1.3;zz+=.35)rod('dark',[side*10.56,y+.05,zz],[side*10.56,y+.85,zz],.012);}
@@ -275,15 +275,17 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
    for(const [index,b] of row.entries())for(const edge of [-1,1]){
      const neighbour=row[index+edge],endZ=b.mid+edge*b.width/2;
      const exposed=!neighbour||Math.abs(neighbour.mid-b.mid)-(neighbour.width+b.width)/2>2;
+     const visibleBottom=exposed?3.4:neighbour.height+.30;
      const holes=[];
-     if(exposed)for(let y=5.3;y<b.height-1.0;y+=2.7)for(const u of [-b.depth*.23,b.depth*.23])holes.push({u,y,width:1.40,height:1.97});
+     for(let y=5.3;y<b.height-1.0;y+=2.7)if(exposed||y-.985>visibleBottom)for(const u of [-b.depth*.23,b.depth*.23])holes.push({u,y,width:1.40,height:1.97});
      for(const r of facadeRectangles(b.depth,.15,b.height+.15,holes))facadePanel(b.material,side*(11.4+b.depth/2+(r.left+r.right)/2),(r.bottom+r.top)/2,endZ,r.right-r.left,r.top-r.bottom,edge*Math.PI/2);
      for(const w of holes){
        const x=side*(11.4+b.depth/2+w.u);insetWindow(x,w.y,endZ,w.width,w.height,edge*Math.PI/2,b.index);
        box('warmStone',x,w.y-1.05,endZ+edge*.06,w.width+.18,.14,.30);
-       box('warmStone',x,w.y+1.06,endZ+edge*.04,w.width+.14,.14,.24);
+       if(!b.detailed||b.height-w.y<1.91)box('warmStone',x,w.y+1.06,endZ+edge*.04,w.width+.14,.14,.24);
      }
      if(exposed)box('trim',side*(11.4+b.depth/2),4.15,endZ+edge*.04,b.depth,.16,.18);
+     if(b.detailed&&b.height-visibleBottom>1.1)architecture.surface({side,origin:[side*(11.4+b.depth/2),0,endZ],rotation:edge===1?0:Math.PI,z:endZ,width:b.depth,height:b.height,bottom:visibleBottom,index:b.index+edge+2,kind:'corner',windows:holes.map(w=>({...w,u:side*edge*w.u}))});
    }
  }
  setSceneryLayer(false);
