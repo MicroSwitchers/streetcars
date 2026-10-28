@@ -15,10 +15,11 @@ const sidewalk=process.argv.includes('--sidewalk');
 const facadeDepth=process.argv.includes('--facades');
 const pavement=process.argv.includes('--pavement');
 const paint=process.argv.includes('--paint');
+const streetlights=process.argv.includes('--streetlights');
 const greenery=process.argv.includes('--greenery');
 const buildings=process.argv.includes('--buildings');
 const intersections=process.argv.includes('--intersections');
-const routeInput=routes||districts||sidewalk||facadeDepth||greenery||buildings||intersections||process.argv.includes('--route-input');
+const routeInput=routes||districts||sidewalk||facadeDepth||greenery||buildings||intersections||streetlights||process.argv.includes('--route-input');
 const morning=process.argv.includes('--morning'),dawn=process.argv.includes('--dawn'),atmosphere=process.argv.includes('--atmosphere');
 const output=join(qa,'renders-live-'+Date.now());await mkdir(output);
 const profile=await mkdtemp(join(qa,'headless-live-'));
@@ -196,6 +197,32 @@ try{
     await evaluate('queenStreet.view.update=window.__facadeView');
    }
    await checkRoute('dundas');
+  }
+  if(streetlights){
+   for(const id of ['queen','dundas']){
+    await checkRoute(id);
+    const report=await evaluate(`(()=>{
+     const a=queenStreet,s=a.lighting.streetLights;a.updateSettings({volume:0,weatherMode:'fixed',weather:'rain',night:true,quality:'balanced'});a.restart();a.setPaused(true);a.view.transition=null;window.__lampView=a.view.update;a.view.update=()=>{};for(let i=0;i<81;i++)a.weather.update(.1,a.state.z,1,a.renderer.getPixelRatio(),false);
+     if(s.stats.fixtures>16||s.stats.trianglesPerHead>500||s.stats.heads<50||new Set(s.meshes.map(m=>m.geometry)).size!==4)throw Error('Street lights exceed their shared geometry or light budget');
+     for(const h of s.heads){const pole=a.city.sidewalkObstacles().find(p=>p.maxY>7&&Math.abs((p.minX+p.maxX)/2-h.x)<.1&&Math.abs((p.minZ+p.maxZ)/2-h.z)<.1);if(!pole)throw Error('Streetlight arm has no supporting pole');}
+     const f=s.fixtures.filter(f=>f.side===-1).sort((p,q)=>Math.abs(p.z-a.state.z)-Math.abs(q.z-a.state.z))[0];a.camera.clearViewOffset();a.camera.fov=52;a.camera.position.set(-8,3.2,f.z+8);a.camera.lookAt(-4.9,.2,f.z);a.camera.updateProjectionMatrix();a.camera.updateMatrixWorld(true);
+     const point=a.camera.position.clone().set(-4.9,.02,f.z).project(a.camera),gl=a.renderer.getContext();
+     const read=()=>{a.graphics.render(a.scene,a.camera);const pixels=new Uint8Array(9*9*4);gl.readPixels(Math.round((point.x*.5+.5)*gl.drawingBufferWidth)-4,Math.round((point.y*.5+.5)*gl.drawingBufferHeight)-4,9,9,gl.RGBA,gl.UNSIGNED_BYTE,pixels);const rgb=[0,0,0];for(let i=0;i<pixels.length;i+=4)for(let c=0;c<3;c++)rgb[c]+=pixels[i+c]/81;return rgb;};
+     const lit=read();s.setNight(0);s.update(a.state.z);const dark=read();s.setNight(1);s.update(a.state.z);const delta=lit.map((n,i)=>n-dark[i]);
+     if(delta[0]<1||delta[1]<.5||delta[1]<delta[2]*1.5)throw Error('Night streetlight spill is not measurably yellow: '+JSON.stringify(delta));
+     a.camera.position.set(f.x+4.4,4.3,f.z+4.5);a.camera.lookAt(f.lampX,6.7,f.lampZ);a.camera.fov=46;a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);
+     window.__lampFixture=f;return {route:a.route.id,stats:s.stats,pavementLightDelta:delta,geometryBuffers:new Set(s.meshes.map(m=>m.geometry.uuid)).size};
+    })()`);
+    let shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'toronto-streetlight-'+id+'-night.png'),Buffer.from(shot.data,'base64'));
+    await evaluate('(()=>{const a=queenStreet;a.updateSettings({night:false});a.graphics.render(a.scene,a.camera);if(a.lighting.streetLights.fixtures.some(f=>f.light.intensity!==0)||a.lighting.streetLights.heads.some(h=>h.bulb.material.emissiveIntensity!==0))throw Error("Street lights remain lit in daytime");})()');
+    shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'toronto-streetlight-'+id+'-day.png'),Buffer.from(shot.data,'base64'));
+    await evaluate('(()=>{const a=queenStreet,s=a.city.signals[0];a.camera.position.set(s.group.position.x+1.3,6.5,s.group.position.z-3.2);a.camera.lookAt(s.group.position);a.camera.fov=38;a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);})()');
+    shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'toronto-traffic-signal-'+id+'.png'),Buffer.from(shot.data,'base64'));
+    await evaluate('(()=>{const a=queenStreet,f=window.__lampFixture;a.updateSettings({night:true});a.camera.position.set(-7.8,2.1,f.z+12);a.camera.lookAt(0,3.6,f.z-12);a.camera.fov=60;a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);})()');
+    shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'toronto-streetlights-'+id+'-street.png'),Buffer.from(shot.data,'base64'));
+    console.log('PASS: Mounted Toronto streetlights have yellow night spill and switch off in daylight: '+JSON.stringify(report));
+    await evaluate('queenStreet.view.update=window.__lampView');
+   }
   }
   if(sidewalk){
    for(const id of ['queen','dundas']){

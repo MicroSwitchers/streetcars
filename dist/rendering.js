@@ -305,7 +305,7 @@ export function createSceneRenderer(renderer,{compatibility=false}={}){
      for(let i=0;i<3;i++){
        const light=nearby[i];if(!light){v.lamps.value[i].set(0,0,0,0);continue;}
        const position=light.getWorldPosition(new THREE.Vector3()),direction=light.target.getWorldPosition(new THREE.Vector3()).sub(position).normalize();
-       v.lamps.value[i].set(position.x,position.y,position.z,light.intensity*(light.name==='Runtime_Headlight'?.6:1));v.lampDirections.value[i].set(direction.x,direction.y,direction.z,Math.cos(light.angle));v.lampColors.value[i].copy(light.color);
+     v.lamps.value[i].set(position.x,position.y,position.z,light.intensity*(light.userData.volumetricScale??(light.name==='Runtime_Headlight'?.6:1)));v.lampDirections.value[i].set(direction.x,direction.y,direction.z,Math.cos(light.angle));v.lampColors.value[i].copy(light.color);
      }
    }
    renderer.setRenderTarget(target);renderer.render(scene,view);

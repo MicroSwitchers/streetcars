@@ -207,10 +207,12 @@ try{
    check('Streetcar continues through a red light when disabled',api.state.signal==='red'&&api.state.speed>0&&api.state.z>-120);
    check('Signal indicator hides when red-light stops are disabled',doc.querySelector('#signal-status').hidden);
    api.updateSettings({stopAtLights:true,dayNightCycle:true});
+   // Finish the initial weather crossfade before measuring the daylight sun.
+   for(let i=0;i<81;i++)api.weather.update(.1,api.state.z,api.nightAmount,api.renderer.getPixelRatio(),false);
    check('Day/night switch appears when cycle is enabled',!doc.querySelector('#day-night-toggle').hidden);
    check('Daylight starts at the day setting',api.nightAmount===0&&api.lighting.sun.intensity>2);
    check('Street lamps stay unlit in daylight',api.lighting.streetLights.fixtures.length>=10&&api.lighting.streetLights.fixtures.every(fixture=>fixture.light.intensity===0&&fixture.bulb.material.emissiveIntensity===0));
-   api.step(255);
+   api.step(270); // Midpoint of the current 60-second dusk after 240 seconds of day.
    check('Day/night lighting transitions smoothly',api.nightAmount>.45&&api.nightAmount<.55&&api.lighting.sun.intensity<3.2);
    check('Twilight fog warms toward sunset',api.scene.fog.color.r>api.scene.fog.color.b);
    api.toggleDayNight();

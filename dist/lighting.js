@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {mergeGeometries} from 'geometry-utils';
 import {stabilizeSceneShadows} from './shadow-bias.js';
 
 function finishStreetcarPaint(paint){
@@ -81,50 +82,81 @@ function stabilizeBumperTrim(car,rig){
  bumper.castShadow=false;bumper.receiveShadow=false;source.parent.add(bumper);
 }
 
-function createStreetLights(scene){
- const poleX=8.05,fixtureZ=[];
- for(let z=-238;z<=374;z+=34){
-   if([-100,100,300].some(cross=>Math.abs(z-cross)<20))continue;
-   const side=fixtureZ.length%2===0?1:-1,x=side*poleX;
-   const arm=new THREE.Mesh(new THREE.CylinderGeometry(.035,.045,1,8),new THREE.MeshStandardMaterial({color:0x39423d,metalness:.65,roughness:.5}));
-   arm.position.set(x-side*.62,5.35,z);arm.rotation.z=side*Math.PI/2;arm.scale.set(1,2.0,1);scene.add(arm);
-   const shade=new THREE.Mesh(new THREE.CylinderGeometry(.17,.24,.11,12),new THREE.MeshStandardMaterial({color:0x3c443c,metalness:.5,roughness:.55}));
-   shade.position.set(x-side*1.58,5.24,z);scene.add(shade);
-   const bulb=new THREE.Mesh(new THREE.SphereGeometry(.105,12,8),new THREE.MeshStandardMaterial({color:0xffdda0,emissive:0xffa943,emissiveIntensity:0,roughness:.35}));
-   bulb.position.set(x-side*1.58,5.16,z);scene.add(bulb);
-   const target=new THREE.Object3D();target.position.set(x-side*4.4,.04,z);scene.add(target);
-   const light=new THREE.SpotLight(0xffc77a,0,30,.95,.85,1.5);light.position.set(x-side*1.58,5.12,z);light.target=target;scene.add(light);
-   fixtureZ.push({z,light,bulb});
+// Rounded die-cast cobra heads on Toronto Hydro's curved six-foot brackets.
+// Profiles share one small mesh per material; the existing poles carry the arm.
+function cobraHeadParts(){
+ function profile(rings,sides=10){
+  const positions=[],uv=[],indices=[];
+  for(const [i,[x,y,ry,rz]] of rings.entries())for(let j=0;j<sides;j++){const a=j*Math.PI*2/sides;positions.push(x,y+Math.cos(a)*ry,.15+Math.sin(a)*rz);uv.push(i/(rings.length-1),j/sides);}
+  for(let i=0;i<rings.length-1;i++)for(let j=0;j<sides;j++){const a=i*sides+j,b=i*sides+(j+1)%sides,c=a+sides,d=b+sides;indices.push(a,b,d,a,d,c);}
+  for(const end of [0,rings.length-1]){const centre=positions.length/3,[x,y]=rings[end];positions.push(x,y,.15);uv.push(.5,.5);for(let j=0;j<sides;j++){const a=end*sides+j,b=end*sides+(j+1)%sides;indices.push(centre,...(end?[a,b]:[b,a]));}}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();return g;
+ }
+ const curve=new THREE.CatmullRomCurve3([[.015,0,0],[.35,.25,.05],[.85,.65,.12],[1.5,.88,.15],[1.83,.9,.15]].map(p=>new THREE.Vector3(...p)));
+ const arm=new THREE.TubeGeometry(curve,9,.034,6,false),plate=new THREE.BoxGeometry(.06,.31,.18);plate.translate(.025,0,0);
+ const shell=profile([[1.68,.89,.05,.065],[1.82,.94,.11,.18],[2.06,.95,.13,.235],[2.35,.925,.105,.20],[2.50,.90,.07,.14],[2.58,.88,.012,.012]]);
+ const lens=profile([[1.85,.79,.015,.035],[1.98,.79,.075,.175],[2.17,.79,.095,.195],[2.38,.79,.07,.15],[2.46,.79,.012,.025]]);
+ const rim=profile([[1.84,.81,.015,.035],[1.98,.81,.018,.185],[2.17,.81,.018,.205],[2.38,.81,.018,.16],[2.47,.81,.012,.025]]);
+ const cell=new THREE.CylinderGeometry(.036,.036,.035,6);cell.translate(1.98,1.095,.15);
+ const straps=[-.10,.10].map(y=>new THREE.BoxGeometry(.17,.035,.19).translate(0,y,0));
+ const housing=mergeGeometries([arm,plate,shell]),hardware=mergeGeometries([rim,cell,...straps]);
+ for(const g of [arm,plate,shell,rim,cell,...straps])g.dispose();return {housing,hardware,lens};
+}
+
+function createStreetLights(scene,route){
+ const fixtureZ=[],heads=[],meshes=[],parts=cobraHeadParts(),dummy=new THREE.Object3D();
+ const sodium=0xffc34a,metal=new THREE.MeshStandardMaterial({color:0x9b9d95,metalness:.65,roughness:.47});
+ const hardware=new THREE.MeshStandardMaterial({color:0x4d5554,metalness:.7,roughness:.52});
+ const glass=new THREE.MeshStandardMaterial({color:0xc8c4b4,emissive:0xffbf42,emissiveIntensity:0,metalness:.06,roughness:.27,flatShading:true});
+ // These positions are shared with the catenary poles in buildEnvironment.
+ for(let z=-510;z<=665;z+=34){
+  if((route?.crossings??[{z:-100},{z:100},{z:300}]).some(c=>Math.abs(z-c.z)<14))continue;
+  for(const side of [-1,1])heads.push({side,z,x:side*8.05,y:6,lampX:side*(8.05-2.16),lampY:6.69,lampZ:z-side*.15});
+  if(z<-238||z>374)continue;
+  const side=fixtureZ.length%2===0?1:-1,head=heads.find(h=>h.z===z&&h.side===side);
+  const target=new THREE.Object3D();target.position.set(side*3.65,.04,head.lampZ);
+  const light=new THREE.SpotLight(sodium,0,30,.95,.85,1.5);light.name='Toronto_Sodium_Streetlight';light.position.set(head.lampX,head.lampY,head.lampZ);light.target=target;light.userData.volumetricScale=.3;scene.add(light,target);
+  fixtureZ.push({...head,light,target});
  }
  const poolCanvas=document.createElement('canvas');poolCanvas.width=128;poolCanvas.height=128;
  const ctx=poolCanvas.getContext('2d'),gradient=ctx.createRadialGradient(64,64,2,64,64,62);
- gradient.addColorStop(0,'rgba(255,190,105,.28)');gradient.addColorStop(.45,'rgba(255,177,91,.12)');gradient.addColorStop(1,'rgba(255,169,78,0)');
+ gradient.addColorStop(0,'rgba(255,255,255,.28)');gradient.addColorStop(.45,'rgba(255,255,255,.12)');gradient.addColorStop(1,'rgba(255,255,255,0)');
  ctx.fillStyle=gradient;ctx.fillRect(0,0,128,128);
  const poolMap=new THREE.CanvasTexture(poolCanvas);
- const poolMaterial=new THREE.MeshBasicMaterial({map:poolMap,color:0xffc77a,transparent:true,opacity:0,depthWrite:false,toneMapped:false});
+ const poolMaterial=new THREE.MeshBasicMaterial({map:poolMap,color:sodium,transparent:true,opacity:0,depthWrite:false,toneMapped:false});
  const poolGeometry=new THREE.PlaneGeometry(8,9);
- fixtureZ.forEach(({z},i)=>{
-   const side=i%2===0?1:-1,pool=new THREE.Mesh(poolGeometry,poolMaterial);
-   pool.rotation.x=-Math.PI/2;pool.position.set(side*5.6,.012,z);pool.renderOrder=1;scene.add(pool);
- });
+ const cells=new Map();for(const h of heads){const key=Math.floor(h.z/96);if(!cells.has(key))cells.set(key,[]);cells.get(key).push(h);}
+ for(const cell of cells.values()){
+  for(const [name,geometry,material] of [['Housing',parts.housing,metal],['Hardware',parts.hardware,hardware],['Refractor',parts.lens,glass],['Pavement',poolGeometry,poolMaterial]]){
+   const mesh=new THREE.InstancedMesh(geometry,material,cell.length);mesh.name='Toronto_Cobra_Head_'+name;mesh.castShadow=false;mesh.receiveShadow=name==='Housing';
+   for(const [i,h] of cell.entries()){
+    if(name==='Pavement'){dummy.position.set(h.side*5.6,.012,h.lampZ);dummy.rotation.set(-Math.PI/2,0,0);}else{dummy.position.set(h.x,h.y,h.z);dummy.rotation.set(0,h.side===1?Math.PI:0,0);}
+    dummy.scale.setScalar(1);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);if(name==='Refractor')h.bulb=mesh;
+   }
+   mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();if(name==='Pavement')mesh.renderOrder=1;scene.add(mesh);meshes.push(mesh);
+  }
+ }
+ for(const f of fixtureZ)f.bulb=heads.find(h=>h.z===f.z&&h.side===f.side).bulb;
+ const dayLens=new THREE.Color(0xc8c4b4),nightLens=new THREE.Color(0xffd878);
+ const stats={heads:heads.length,fixtures:fixtureZ.length,meshes:meshes.length,trianglesPerHead:Object.values(parts).reduce((sum,g)=>sum+g.index.count/3,0),texturePixels:128*128,colour:sodium};
  let amount=0;
  return {
-   fixtures:fixtureZ,
-   setNight(value){amount=THREE.MathUtils.clamp(value,0,1);poolMaterial.opacity=amount*.8;
-     for(const {bulb} of fixtureZ)bulb.material.emissiveIntensity=amount*2.2;
+   fixtures:fixtureZ,heads,meshes,stats,
+   setNight(value){amount=THREE.MathUtils.clamp(value,0,1);poolMaterial.opacity=amount*.66;
+     glass.color.copy(dayLens).lerp(nightLens,amount);glass.emissiveIntensity=amount*1.8;
    },
    update(z){
      const nearby=fixtureZ.map(fixture=>({fixture,distance:Math.abs(fixture.z-z)})).sort((a,b)=>a.distance-b.distance);
      for(const {fixture,distance} of nearby){
        const reach=THREE.MathUtils.clamp(1-distance/42,0,1);
-       fixture.light.intensity=amount*32*(.38+.62*reach);
+       fixture.light.intensity=amount*42*(.38+.62*reach);
      }
    },
-   dispose(){poolMap.dispose();poolGeometry.dispose();poolMaterial.dispose();}
+   dispose(){poolMap.dispose();poolGeometry.dispose();poolMaterial.dispose();for(const g of Object.values(parts))g.dispose();for(const m of [metal,hardware,glass])m.dispose();for(const mesh of meshes)mesh.removeFromParent();for(const f of fixtureZ){f.light.removeFromParent();f.target.removeFromParent();}}
  };
 }
 
-export function createDaylight(renderer,scene){
+export function createDaylight(renderer,scene,route){
  renderer.outputColorSpace=THREE.SRGBColorSpace;
  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.;
  renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
@@ -161,7 +193,7 @@ export function createDaylight(renderer,scene){
  const up=new THREE.Vector3().crossVectors(direction,right).normalize();
  const centre=new THREE.Vector3(),snapped=new THREE.Vector3();let texel=60/2048;
  const sky=new THREE.Group();sky.name='Daylight_Anchor';
- const streetLights=createStreetLights(scene);
+ const streetLights=createStreetLights(scene,route);
  const volumeLights=streetLights.fixtures.map(f=>f.light);
  const streetcarRigs=new Set();let nightAmount=0,weather={cloud:.18,haze:0};
  function update(z){

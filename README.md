@@ -45,6 +45,17 @@ audio loading is deferred, scenery uses local culling cells, and paused scenes
 reuse their rendered frame. Startup prepares the HDR shaders asynchronously
 without generating a redundant sky/reflection map.
 
+Streetlights use rounded aluminium cobra-head housings, dropped prismatic lenses
+and curved six-foot brackets, following [Toronto Hydro drawing 30-1600](https://www.torontohydro.com/documents/20143/361903/30-1600-Street-Lighting-Brackets-Details.pdf/4c1c545d-b89c-884c-9bfc-b11adb19121d).
+Their yellow sodium glow follows the [City's lighting reference](https://www.toronto.ca/wp-content/uploads/2018/03/8ff6-city-planning-bird-effective-lighting.pdf).
+The heads mount on the existing catenary poles on both routes. Four shared
+geometry buffers provide all housings, fittings, lenses and pavement pools;
+the existing 16 real-time streetlight fixtures and mobile graphics limits remain.
+`qa/check_live.mjs --iphone --streetlights --sidewalk` checks physical supports,
+rendered yellow pavement spill, daytime shutoff and camera clearance on both routes.
+Intersection signals also have yellow housings and outer visors, black visor
+interiors and inset lenses, following [Toronto TS 808.210](https://www.toronto.ca/wp-content/uploads/2017/11/91cf-ecs-specs-tcspecs-section-808-210-material-spec-for-traffic-signal-heads.pdf).
+
 An installable, offline-capable PWA is available in **pwa/**. It checks for
 updates automatically and preserves the ride while applying complete updates
 at a pause or the end of the route. Incomplete or corrupt updates retain the

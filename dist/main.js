@@ -24,7 +24,7 @@ renderer.userData={compatibility:device.compatibility,device,recovery};
 const initial=qualityProfile(initialQuality(device),device.compatibility);
 renderer.setPixelRatio(renderRatio(initial,innerWidth,innerHeight,devicePixelRatio));
 const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(48,1,.5,device.compatibility?180:1000);
-const lighting=createDaylight(renderer,scene),{sky,sun}=lighting;
+const lighting=createDaylight(renderer,scene,route),{sky,sun}=lighting;
 $('load-message').textContent='Loading the streetcar and neighbourhood...';
 const [trafficCars,streetProps,architecture,gltf]=await Promise.all([loadTrafficCars(),loadStreetProps(),loadArchitecture(),loadStreetcar()]);
 if(recovery.lost)throw Error('Graphics paused during loading');

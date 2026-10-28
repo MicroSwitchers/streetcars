@@ -22,6 +22,9 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
  const mat=(name,color,roughness=.85,metalness=0)=>mats[name]=new THREE.MeshStandardMaterial({color,roughness,metalness});
  mat('road',0x515550);mat('trackbed',0x484c48);mat('concrete',0xaaa69a);mat('curb',0xb9b8aa);mat('roof',0x454940);mat('trim',0xafa28a);mat('dark',0x273d38);mat('glass',0x304c4f,.25,.3);mat('warmglass',0x8d8870,.4,.1);mat('white',0xe7dfbf);mat('yellow',0xd3ad55);mat('steel',0x9baba6,.25,.8);mat('groove',0x202925);mat('pole',0x4e5b50,.6,.4);mat('red',0xa92e30);mat('wood',0x77563a);mat('leaf',0x526d42);mat('leaf2',0x78884c);mat('bark',0x665843);mat('stone',0x9d9885);mat('blue',0x43646c);mat('maroon',0x5f3131);mat('creamcar',0xb2ac91);mat('rubber',0x252b28);mat('signalCase',0x31342b);mat('signalRed',0xb24e3c);mat('signalGreen',0x789466);mat('signalAmber',0xd9ad54);mat('skyline',0x9aa6a0);mat('skin',0xa77a56);mat('coat',0x435c65);mat('trousers',0x3b403e);
  mat('awningRed',0x9e4a3d);mat('awningGreen',0x536b58);mat('awningBlue',0x4e6970);mat('awningOchre',0xb38a50);mat('awningCream',0xe7d7b6);
+ // Toronto TS 808.210: yellow housing/visor outside, flat black inside.
+ mats.signalCase.color.setHex(0xf2bd27);mats.signalCase.roughness=.65;
+ mat('signalBezel',0x20231f,.95);mat('signalVisorInside',0x20231f,.95).side=THREE.BackSide;
  mats.officeFacade=createOfficeMaterial();
  mats.storeGlass=new THREE.MeshStandardMaterial({color:0xd7e4e6,roughness:.16,metalness:.12,transparent:true,opacity:.14,depthWrite:false,side:THREE.DoubleSide});
  const storeGlazingGeometries=[];let storeGlazingCount=0;
@@ -109,13 +112,20 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
  box('concrete',0,-.25,75,280,.3,1500);box('road',0,-.08,75,15,.16,1200);
  // Cross streets, walk markings and overhead street signs.
  const signals=[];
+ const signalBezel=new THREE.RingGeometry(.82,1,16),signalHood=new THREE.CylinderGeometry(1,1,1,12,1,true,Math.PI/3,Math.PI*4/3);signalHood.rotateX(Math.PI/2);
  for(const [slot,cross] of route.crossings.entries()){
    // Side-street arms meet the main road at its edges; no coplanar overlap.
    for(const side of [-1,1])box('road',side*73.75,-.08,cross.z,132,.16,13.5);
    for(const side of [-1,1]){
      const z=cross.z+side*12.5;cylinder('pole',side*8,3.8,z,.085,7.6);rod('pole',[side*8,7.2,z],[side*Math.abs(route.trackX),7.2,z],.065);
      box('signalCase',side*Math.abs(route.trackX),6.65,z,.36,.95,.27);const group=new THREE.Group();group.position.set(side*Math.abs(route.trackX),6.65,z);if(side===-1)group.rotation.y=Math.PI;
-     for(let i=0;i<3;i++){const m=new THREE.MeshBasicMaterial({color:0x242f27});const lamp=new THREE.Mesh(new THREE.CircleGeometry(.115,12),m);lamp.position.set(0,.28-i*.28,.144);group.add(lamp);}scene.add(group);signals.push({group,z:cross.z-12,cross});
+     rod('pole',[side*Math.abs(route.trackX),7.2,z],[side*Math.abs(route.trackX),7.1,z],.035);
+     for(let i=0;i<3;i++){
+       const radius=i===0?.13:.105,y=6.65+.28-i*.28,rotation=side===-1?Math.PI:0;
+       add(signalBezel,mats.signalBezel,side*Math.abs(route.trackX),y,z+side*.145,radius/.82,radius/.82,1,rotation);
+       for(const material of [mats.signalCase,mats.signalVisorInside])add(signalHood,material,side*Math.abs(route.trackX),y,z+side*.24,radius+.022,radius+.022,.18,rotation);
+       const m=new THREE.MeshBasicMaterial({color:0x242f27}),lamp=new THREE.Mesh(new THREE.CircleGeometry(radius,16),m);lamp.position.set(0,.28-i*.28,.148);group.add(lamp);
+     }scene.add(group);signals.push({group,z:cross.z-12,cross});
      sign(cross.road.toUpperCase(),side*8,4.0,cross.z+side*12.5,2.0,.38,0,'#f0ead8','#244c3c','','street',{type:'road',slot});
      sign(cross.name,side*8,4.45,cross.z+side*12.5,2.0,.38,Math.PI/2,'#f0ead8','#244c3c','','street',{type:'cross',slot});
 
@@ -299,7 +309,7 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
  for(let z=-510;z<=665;z+=34){
    if(route.crossings.some(c=>Math.abs(z-c.z)<14))continue;
    for(const side of [-1,1]){
-     cylinder('pole',side*8.05,3.55,z,.078,7.1);rod('pole',[side*8.05,6.85,z],[side*6.3,6.85,z],.05);box('dark',side*6.25,6.80,z,.65,.12,.28);
+     cylinder('pole',side*8.05,3.55,z,.078,7.1);
      wire([side*8.05,6.35,z],[0,5.8,z]);
      setSceneryLayer(true);
      if(Math.round(z)%3!==0){
@@ -354,7 +364,7 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
  const architecturalDetails=architecture.finish();
  queenScenery.add(...scenery.meshes,...architecturalDetails.meshes);
  setSceneryLayer(false);
- const groundDetails=new Set(['road','trackbed','patch','groove','steel','white','yellow','stone'].map(name=>mats[name]));
+ const groundDetails=new Set(['road','trackbed','patch','groove','steel','white','yellow','stone','signalBezel','signalVisorInside'].map(name=>mats[name]));
  const singleGeometryGroups=new Map();
  for(const {geometry,material,matrices,cell,sceneryLayer:original} of batches.values()){
    const parent=original?queenScenery:scene;
