@@ -36,3 +36,18 @@ def build(c):
 
     p=root('stringcourse')
     profile('Weathered stone belt',[(-.08,.005),(-.08,.13),(-.02,.13),(.015,.19),(.075,.19),(.075,.005)],1,stone,p)
+
+    # Separate projecting soldiers and a limestone keystone. One metre of
+    # real masonry relief shares the existing clay/stone finishes and textures.
+    p=root('brickheader')
+    for j in range(7):
+        x=(j-3)*.14
+        box('Soldier brick',(x,0,.055 if j%2 else .070),(.127,.26,.11),terra,p,0)
+    box('Header drip',(0,.15,.08),(1.04,.045,.18),edge,p,0)
+    mesh('Tapered limestone key',[(-.07,-.16,.05),(.07,-.16,.05),(.10,.17,.05),(-.10,.17,.05),(-.07,-.16,.20),(.07,-.16,.20),(.10,.17,.20),(-.10,.17,.20)],[(0,3,2,1),(4,5,6,7),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7)],stone,p)
+
+    # Alternating long/short corner stones. The local origin is the centre of
+    # a 0.9 m course, so modules can stop below the cornice without stretching.
+    p=root('quoin')
+    box('Long rusticated block',(0,-.225,.08),(.40,.42,.16),stone,p,0)
+    box('Short rusticated block',(0,.225,.055),(.28,.42,.11),edge,p,0)

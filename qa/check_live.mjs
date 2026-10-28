@@ -224,13 +224,20 @@ try{
    for(const id of ['queen','dundas']){
     await checkRoute(id);
     const report=await evaluate(`(()=>{const a=queenStreet;a.updateSettings({quality:'balanced',volume:0,night:false,dayNightCycle:true,weatherMode:'off'});a.restart();a.setPaused(true);const d=a.route.id==='queen'?a.city.architecture:a.city.districts.facades,kinds=['flathead','spandrel','frieze','wallvent','downpipe','pilaster','stringcourse'],counts=d.counts||d.stats.counts;
-     if(a.city.architecture.models.size!==20||!kinds.every(k=>counts[k]>0))throw Error('Missing modeled facade reliefs on '+a.route.id+': '+JSON.stringify(counts));
+     if(a.city.architecture.models.size!==22||!kinds.every(k=>counts[k]>0))throw Error('Missing modeled facade reliefs on '+a.route.id+': '+JSON.stringify(counts));
      const coverage={};for(const s of d.surfaces)if(s.details)coverage[s.kind]=(coverage[s.kind]||0)+1;
      if(!coverage.shop||!coverage.corner||!coverage['side-street'])throw Error('Facade details do not cover every street orientation: '+JSON.stringify(coverage));
-     const old=a.view.update;a.view.update=()=>{};a.view.transition=null;a.camera.clearViewOffset();window.__buildingRestore=()=>{a.view.update=old;};window.__buildingCapture=kind=>{const f=d.surfaces.filter(s=>s.kind===kind&&s.details>0&&(s.bottom??3.4)<4).sort((p,q)=>Math.abs(p.origin[2]+124)-Math.abs(q.origin[2]+124))[0];if(!f)throw Error('No visible '+kind+' detail');const n=[Math.sin(f.rotation),Math.cos(f.rotation)],t=[Math.cos(f.rotation),-Math.sin(f.rotation)];a.camera.fov=62;a.camera.position.set(f.origin[0]+n[0]*7-t[0]*5,6.4,f.origin[2]+n[1]*7-t[1]*5);a.camera.lookAt(f.origin[0],Math.min(6,f.height-.8),f.origin[2]);a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);};
-     return {route:a.route.id,coverage,counts:Object.fromEntries(kinds.map(k=>[k,counts[k]])),sourceTriangles:a.city.architecture.sourceTriangles,geometryBytes:a.city.architecture.geometryBytes};})()`);
+     const towers=a.route.id==='queen'?a.city.urbanBuildings:a.city.districts.urbanBuildings;
+     if(!towers?.length||towers.some(t=>t.front<28||t.height<25||a.route.crossings.some(c=>Math.abs(t.z-c.z)<t.width/2+23)))throw Error('Built-up blocks are missing or enter a side-street corridor');
+     if(a.route.id==='dundas'&&(!counts.brickheader||!counts.quoin||d.stats.corniceBuildings<12))throw Error('Dundas lacks broad modeled masonry and roofline treatment: '+JSON.stringify(d.stats));
+     const old=a.view.update;a.view.update=()=>{};a.view.transition=null;a.camera.clearViewOffset();window.__buildingRestore=()=>{a.view.update=old;};window.__buildingCapture=kind=>{
+      if(kind==='skyline'){const t=[...towers].sort((p,q)=>Math.abs(p.z+50)-Math.abs(q.z+50))[0];a.camera.fov=68;a.camera.position.set(-t.side*5,8,t.z-48);a.camera.lookAt(t.side*(t.front+t.depth/2),t.height*.36,t.z);}
+      else{const f=d.surfaces.filter(s=>s.kind===kind&&s.details>0&&(s.bottom??3.4)<4).sort((p,q)=>Math.abs(p.origin[2]+124)-Math.abs(q.origin[2]+124))[0];if(!f)throw Error('No visible '+kind+' detail');const n=[Math.sin(f.rotation),Math.cos(f.rotation)],t=[Math.cos(f.rotation),-Math.sin(f.rotation)];a.camera.fov=62;a.camera.position.set(f.origin[0]+n[0]*7-t[0]*5,6.4,f.origin[2]+n[1]*7-t[1]*5);a.camera.lookAt(f.origin[0],Math.min(6,f.height-.8),f.origin[2]);}
+      a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);
+     };
+     return {route:a.route.id,coverage,counts:Object.fromEntries(kinds.map(k=>[k,counts[k]])),urbanTowers:towers.length,sourceTriangles:a.city.architecture.sourceTriangles,geometryBytes:a.city.architecture.geometryBytes};})()`);
     console.log('PASS: Modeled masonry reliefs cover both routes, corners and side streets: '+JSON.stringify(report));
-    for(const kind of ['shop','corner','side-street']){await evaluate('window.__buildingCapture('+JSON.stringify(kind)+')');const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'building-'+id+'-'+kind+'.png'),Buffer.from(shot.data,'base64'));}
+    for(const kind of ['shop','corner','side-street','skyline']){await evaluate('window.__buildingCapture('+JSON.stringify(kind)+')');const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'building-'+id+'-'+kind+'.png'),Buffer.from(shot.data,'base64'));}
     await evaluate('window.__buildingRestore()');
    }
   }
@@ -290,7 +297,9 @@ try{
    const signPanels=d.signPanels.map(p=>({...p,region:[...p.region]})),frontageStyles=d.frontages.map(f=>({kind:f.kind,index:f.index,district:f.district,shopStyle:f.shopStyle,windowStyle:f.windowStyle}));
    const featured=d.frontages.flatMap(f=>(f.windows||[]).filter(w=>w.feature).map(w=>({f,w})));
    for(const {f,w} of featured){
-    if(!d.facades.placements.some(p=>p.kind===w.feature&&p.side===f.side&&Math.abs(p.z-w.z)<.002&&Math.abs(p.y-w.y)<.002))throw Error('Missing authored replacement window');
+    const placement=d.facades.placements.find(p=>p.kind===w.feature&&p.side===f.side&&Math.abs(p.z-w.z)<.002&&Math.abs(p.y-w.y)<.002);
+    if(!placement)throw Error('Missing authored replacement window');
+    if(placement.bounds.min[1]<3.91||placement.bounds.max[1]>f.height+.05)throw Error('A projecting window crosses the shop fascia or roofline');
     if(d.facadeWindows.some(p=>Math.abs(p.x-f.side*f.front)<.002&&Math.abs(p.z-w.z)<.002&&Math.abs(p.y-w.y)<.002))throw Error('Old glazing overlaps a bay or balcony');
    }
    if(d.retail.stats.rooms!==d.retail.stats.fixtureRooms)throw Error('An interior recess has no stocked rear shelving');
@@ -300,7 +309,8 @@ try{
     if(Math.min(Math.abs(p.minX),Math.abs(p.maxX))<9.7||p.minZ<door+.6&&p.maxZ>door-.6||a.route.crossings.some(c=>p.minZ<c.z+16&&p.maxZ>c.z-16)||a.route.stops.some(s=>p.minZ<s.z+8&&p.maxZ>s.z-8))throw Error('New shopfront prop blocks a walking line, doorway or boarding zone');
    }
    for(let i=0;i<ground.length;i++)for(let j=i+1;j<ground.length;j++)if(ground[i].minX<ground[j].maxX-.025&&ground[i].maxX>ground[j].minX+.025&&ground[i].minZ<ground[j].maxZ-.025&&ground[i].maxZ>ground[j].minZ+.025)throw Error('Shopfront props overlap');
-   return {offset,hash,resources,objects,geometries:a.renderer.info.memory.geometries,textures:a.renderer.info.memory.textures,stats:JSON.parse(JSON.stringify(d.stats)),retail:JSON.parse(JSON.stringify(d.retail.stats)),facades:JSON.parse(JSON.stringify(d.facades.stats)),facadePlacementKinds,reliefCoverage,frontageStyles,signPanels,signAtlasSize:[signAtlas.width,signAtlas.height],rooms,mappedGlazing,roomMaterials,masonryMaterials,glazingCount:glazing.count,zones:d.zones,landmarks:d.landmarks,windowSources:a.city.scenery.windowLighting.windows.length};
+   if(d.urbanBuildings.some(t=>t.front<28||a.route.crossings.some(c=>Math.abs(t.z-c.z)<t.width/2+23)||t.district==='don'||t.district==='riverdale'))throw Error('A new tower enters a road or protected park sightline');
+   return {offset,hash,resources,objects,geometries:a.renderer.info.memory.geometries,textures:a.renderer.info.memory.textures,stats:JSON.parse(JSON.stringify(d.stats)),retail:JSON.parse(JSON.stringify(d.retail.stats)),facades:JSON.parse(JSON.stringify(d.facades.stats)),facadePlacementKinds,reliefCoverage,frontageStyles,signPanels,signAtlasSize:[signAtlas.width,signAtlas.height],rooms,mappedGlazing,roomMaterials,masonryMaterials,glazingCount:glazing.count,urbanBuildings:d.urbanBuildings,zones:d.zones,landmarks:d.landmarks,windowSources:a.city.scenery.windowLighting.windows.length};
   };window.__districtClose=(offset,night=false)=>{
    window.__districtStage(offset,night);
    const d=a.city.districts,candidates=d.frontages.filter(f=>f.room&&f.side===-1).sort((x,y)=>Math.abs(x.z+124)-Math.abs(y.z+124));

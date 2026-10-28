@@ -5,7 +5,7 @@ import {architectureMaterial} from './architecture.js';
 // The same authored architectural kit used on Queen, with a bounded resident
 // pool. Section changes only replace instance matrices; they never make new
 // meshes, geometries, materials, textures, lights, or shader programs.
-const CAPACITIES=Object.freeze({cornice:168,firelanding:12,escapeladder:8,rooflantern:12,chimneypots:16,baywindow:8,balcony:6,pediment:4,flathead:480,spandrel:160,frieze:240,wallvent:120,downpipe:160,pilaster:100,stringcourse:100,cornerblock:100,roundel:100,shutters:100});
+const CAPACITIES=Object.freeze({cornice:400,firelanding:12,escapeladder:8,rooflantern:12,chimneypots:16,baywindow:8,balcony:6,pediment:8,flathead:480,spandrel:160,frieze:400,wallvent:120,downpipe:160,pilaster:180,stringcourse:160,cornerblock:100,roundel:100,shutters:100,brickheader:360,quoin:700});
 const HERITAGE=new Set(['west','portugal','bellwoods','chinatown','garden','riverside','riverdale','terminal']);
 const MAX_TRIANGLES=145000;
 const round=n=>Math.round(n*1000)/1000;
@@ -56,9 +56,13 @@ export function createDundasFacades({group,mats,assets}){
    p.count++;stats.instances++;stats.triangles+=model.triangles;stats.counts[kind]=(stats.counts[kind]??0)+1;return true;
  }
  function surface(b){
-   const f=b.origin?b:reliefFacade({...b,height:b.reliefHeight??b.height}),layout=facadeReliefs(f),cos=Math.cos(f.rotation),sin=Math.sin(f.rotation);
+   const f=b.origin?b:reliefFacade({...b,height:b.reliefHeight??b.height,enriched:true}),layout=facadeReliefs(f),cos=Math.cos(f.rotation),sin=Math.sin(f.rotation);
    const record={...f,style:layout.style,details:0};surfaces.push(record);
-   for(const d of layout.details){const origin=[f.origin[0]+cos*d.u,0,f.origin[2]-sin*d.u];if(place(d.kind,b,d.y,origin[2],{origin,rotation:f.rotation,sx:d.sx,sy:d.sy,relief:true}))record.details++;}
+   // Alternate treatments within an elevation too: a factory's many lintels
+   // must not push every quoin, parapet panel and drain to the end of the queue.
+   const families=['flathead','quoin','frieze','spandrel','downpipe','wallvent','brickheader','pilaster','stringcourse','shutters','roundel'].map(kind=>layout.details.filter(d=>d.kind===kind)),details=[];
+   for(let row=0;families.some(list=>list[row]);row++)for(const list of families)if(list[row])details.push(list[row]);
+   return {details,emit(d){const origin=[f.origin[0]+cos*d.u,0,f.origin[2]-sin*d.u];if(place(d.kind,b,d.y,origin[2],{origin,rotation:f.rotation,sx:d.sx,sy:d.sy,relief:true}))record.details++;}};
  }
 
  function upperWindows(b){
@@ -84,36 +88,40 @@ export function createDundasFacades({group,mats,assets}){
      for(const b of frontages)for(const w of b.windows||[])if(w.feature)place(w.feature,b,w.y,w.z);
      stats.infill=infill.length;stats.infillMissing=0;
      for(const b of infill)if(!place('cornerblock',b,.18,b.z,{sx:b.width/6}))stats.infillMissing++;
-     // Reliefs get a bounded share before expensive ornamental cornices. This
-     // spreads useful wall detail across buildings and street orientations.
-     const savedLimit=triangleLimit,reliefBudget=Math.min(29000,Math.max(0,triangleLimit-stats.triangles-6000));
-     const near=(a,b)=>Math.abs(a.z+65)-Math.abs(b.z+65);
-     const reliefBuildings=frontages.filter(b=>['shop','house','loft','modern'].includes(b.kind)&&b.z>-230&&b.z<380).sort(near).slice(0,28);
+     const savedLimit=triangleLimit,near=(a,b)=>Math.abs(a.z+90)-Math.abs(b.z+90);
+     const eligible=frontages.filter(b=>HERITAGE.has(b.district)&&['shop','house','loft'].includes(b.kind)&&b.z>-230&&b.z<380&&b.width>3&&b.height>5).sort(near);
+     // The Blender cornice keeps its ogee profile, dentils and corbels at 196
+     // triangles instead of 484. Give nearby buildings complete rooflines
+     // before spending the remaining allowance on individual fancy ornaments.
+     triangleLimit=Math.min(savedLimit,stats.triangles+Math.max(0,(savedLimit-stats.triangles)*.48));
+     let corniceModules=0;stats.corniceBuildings=0;
+     for(const b of eligible.slice(0,36)){
+       const modules=Math.ceil(b.width/1.35),span=(b.width-.05)/modules,cost=modules*models.get('cornice').triangles;
+       if(corniceModules+modules>CAPACITIES.cornice||stats.triangles+cost>triangleLimit)continue;
+       for(let i=0;i<modules;i++)place('cornice',b,b.height+.22,b.z-b.width/2+(i+.5)*b.width/modules,{sx:span});
+       corniceModules+=modules;stats.corniceBuildings++;
+     }
+     triangleLimit=savedLimit;
+     const reliefBudget=Math.min(47000,Math.max(0,triangleLimit-stats.triangles-6000));
+     const reliefBuildings=frontages.filter(b=>['shop','house','loft','modern'].includes(b.kind)&&b.z>-230&&b.z<380).sort(near).slice(0,42);
      const corners=returns.filter(b=>b.kind==='corner').sort(near),sides=returns.filter(b=>b.kind!=='corner').sort(near);
      // Separate shares prevent a long industrial frontage, or dozens of party
      // walls, from using up all the relief before side streets are reached.
-     for(const [list,share] of [[reliefBuildings,.50],[sides,.28],[corners,.22]]){
+     for(const [list,share] of [[reliefBuildings,.70],[sides,.16],[corners,.14]]){
        triangleLimit=Math.min(savedLimit,stats.triangles+Math.floor(reliefBudget*share));
-       for(const b of list)surface(b);
+       // Round-robin the apertures: one large factory must not consume the
+       // entire street's window treatment before the neighbouring shops start.
+       const queues=list.map(surface);
+       for(let row=0;queues.some(q=>q.details[row]);row++)for(const q of queues)if(q.details[row])q.emit(q.details[row]);
      }
      triangleLimit=savedLimit;
-     const eligible=frontages.filter(b=>HERITAGE.has(b.district)&&['shop','house','loft'].includes(b.kind)&&b.z>-230&&b.z<380&&b.width>3&&b.height>5)
-       .sort((a,b)=>Math.abs(a.z+45)-Math.abs(b.z+45)||a.side-b.side);
      // Keep most modelling detail around the useful sidewalk/ride view. Distal
      // blocks retain the district builder's cheaper roof and window profiles.
-     const detailed=eligible.slice(0,30),corniceFrontages=new Set();let corniceModules=0;
-     for(const b of detailed.filter(b=>b.kind!=='loft'&&Math.abs(b.index)%3===0).slice(0,8)){
-       const modules=Math.ceil(b.width);
-       if(corniceModules+modules<=CAPACITIES.cornice){corniceFrontages.add(b);corniceModules+=modules;}
-     }
+     const detailed=eligible.slice(0,36);
      for(const [order,b] of detailed.entries()){
        stats.frontages++;
-       if(corniceFrontages.has(b)){
-         const modules=Math.ceil(b.width),span=(b.width-.05)/modules;
-         for(let i=0;i<modules;i++)place('cornice',b,b.height+.22,b.z-b.width/2+(i+.5)*b.width/modules,{sx:span});
-       }
        const ordinal=Math.abs(Math.floor(b.index??order)),windows=upperWindows(b);
-       if(order<20&&b.kind==='shop'&&ordinal%9===2)place('pediment',b,b.height+.28,b.z);
+       if(order<24&&b.kind==='shop'&&ordinal%5===2)place('pediment',b,b.height+.28,b.z);
        // Rectangular street windows use the builder's straight lintels and
        // sills. Decorative arches belong to specific buildings, never a kit
        // detail repeated across unrelated shops, houses and factory windows.

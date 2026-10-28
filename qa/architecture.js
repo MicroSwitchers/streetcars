@@ -2,7 +2,7 @@ import * as THREE from '../dist/vendor/three.module.js';
 
 export function checkArchitecture(api,check,w){
  const a=api.city.architecture,models=['cornice','archedhood','baywindow','balcony','pediment','firelanding','escapeladder','rooflantern','chimneypots','cupola','flathead','spandrel','frieze','wallvent','downpipe','pilaster','stringcourse','cornerblock','roundel','shutters'];
- check('Twenty original Blender architectural prototypes are loaded',a.models.size===20&&models.every(n=>a.models.has(n)&&a.counts[n]>0));
+ check('Twenty-two original Blender architectural prototypes are loaded',a.models.size===22&&models.every(n=>a.models.has(n)&&a.counts[n]>0)&&['brickheader','quoin'].every(n=>a.models.has(n)));
  check('Architecture stays within its shared geometry budget',a.sourceTriangles<11000&&a.geometryBytes<400000);
  const block=a.models.get('cornerblock'),shellParts=block.parts.filter(p=>!p.material.name.includes('Glass')).map(p=>new THREE.Mesh(p.geometry,new THREE.MeshBasicMaterial()));
  shellParts.forEach(m=>m.updateMatrixWorld(true));

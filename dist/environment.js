@@ -127,7 +127,7 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
  const shopNames=['PAPER & INK','QUEEN RECORDS','THE CORNER CAFE','WEST END BOOKS','BELLWOODS CYCLE','STUDIO 501','GOLDEN PHO','THREAD & NEEDLE','CITY FLOWERS','NIGHT OWL','VINYL EXCHANGE','QUEEN HARDWARE','PARKDALE MARKET','SILVER SCREEN','GOOD NEIGHBOUR','THE LITTLE BAKERY'];
  const signColours=['#283e37','#883e31','#303f52','#d1bc83','#344548','#6c513d'];
  let shop=0,awningCount=0,upperWindowCount=0,facadeDetailCount=0,rooflineDetailCount=0,shopfrontCount=0,shopfrontFeatureCount=0;
- const mainFrontages=[];
+ const mainFrontages=[],urbanBuildings=[];
  setSceneryLayer(true);
  for(const side of [-1,1]){
    for(let z=-518;z<675;){const width=7.5+rnd()*4.4,mid=z+width/2;z+=width+.12;if(route.crossings.some(c=>Math.abs(mid-c.z)<width/2+20.6)||(side===-1&&mid+width/2>-179&&mid-width/2<-142))continue;
@@ -330,6 +330,23 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
    cylinder('dark',-3.2,.015,z+10,.24,.009);cylinder('steel',-3.2,.021,z+10,.21,.006);
  }
  setSceneryLayer(true);
+ // Mid-block office/residential clusters sit behind the shop roofs. The
+ // setbacks preserve heritage frontages and every side-street sightline.
+ for(const side of [-1,1])for(const [i,anchor] of [-360,-180,30,235,455,610].entries()){
+   const width=16+i%3*2,depth=16,front=31+(i%3)*4,height=32+(i%4)*9+(side>0?5:0);
+   const b=mainFrontages.filter(b=>b.side===side&&Math.abs(b.mid-anchor)<68&&!route.crossings.some(c=>Math.abs(b.mid-c.z)<width/2+24)).sort((a,b)=>Math.abs(a.mid-anchor)-Math.abs(b.mid-anchor))[0];
+   if(!b)continue;const z=b.mid,x=side*(front+depth/2);
+   box('warmStone',x,3.9,z,depth,7.8,width);
+   box('officeFacade',x,4.0,z,depth+.04,6.8,width+.04);
+   box('warmStone',x,7.9,z,depth+.3,.30,width+.3);
+   box('officeFacade',x,(height+8.1)/2,z,depth-2.2,height-8.1,width-2.2);
+   for(const edge of [-1,1])box('warmStone',side*(front+1.0),(height+8.1)/2,z+edge*(width/2-1.05),.25,height-8.1,.25);
+   for(let y=14.7;y<height-.5;y+=6.6)box('steel',side*(front+.98),y,z,.18,.14,width-2.0);
+   box('roof',x,height+.12,z,depth-1.9,.24,width-1.9);
+   box('officeFacade',x,height+2.0,z,depth-5.4,3.6,width-5.4);
+   box('roof',x,height+3.92,z,depth-5.1,.24,width-5.1);
+   urbanBuildings.push({side,z,front,depth,width,height:height+4,district:'queen-mixed-use'});
+ }
  // Distant skyline and a restrained CN Tower silhouette south-east of the corridor.
   for(const side of [-1,1])for(let z=-510;z<730;z+=34){const h=16+rnd()*35;const x=side*(65+rnd()*50),w=12+rnd()*14,d=15+rnd()*16;if(route.crossings.some(c=>Math.abs(z-c.z)<d/2+9))continue;box('officeFacade',x,h/2,z,w,h,d);box('roof',x,h+.13,z,w+.3,.26,d+.3); }
  cylinder('skyline',78,48,190,1.4,96);cylinder('skyline',78,78,190,5.8,4);cylinder('dark',78,80,190,4.5,1.5);cylinder('skyline',78,96,190,.38,31);cylinder('skyline',78,112,190,.12,9);
@@ -376,5 +393,5 @@ export function buildEnvironment(scene,trafficCars,streetProps,architecturalAsse
    const props=route.id==='dundas'?districts.retail.placements:scenery.placements;
    return cameraObstacles.concat(props.filter(p=>!p.interior&&p.y<2).map(p=>p.bounds?{minX:p.bounds.min.x,maxX:p.bounds.max.x,minZ:p.bounds.min.z,maxZ:p.bounds.max.z,maxY:p.bounds.max.y}:{...p,maxY:p.y+streetProps.models.get(p.kind).bounds.max.y*(p.scale??1)}));
  }
- return {trees,foliage,setRoute,sidewalkObstacles,facadeWindows,queenScenery,districts,routeSigns,routeTexture,signals,materials:mats,actors,neighbourhood,scenery,architecture:architecturalDetails,buildingCount:shop,awningCount,upperWindowCount,facadeDetailCount,rooflineDetailCount,shopfrontCount,shopfrontFeatureCount,storeGlazingCount,storeGlazing,signCount:signIndex,update(time,dt,alwaysGreen=false){actors.update(time,dt,alwaysGreen);},setNight(amount){const night=THREE.MathUtils.clamp(amount,0,1);cityNight=night;actors.setNight(night);streetscape.setNight(night);districts.setNight(night);mats.officeFacade.emissiveIntensity=.58*night;mats.glass.emissive.setHex(0xffffff);mats.glass.emissiveIntensity=.42*night;signMat.emissive.copy(windowGlow);signMat.emissiveIntensity=.10*night;routeSignMat.emissive.copy(windowGlow);routeSignMat.emissiveIntensity=.10*night;for(let i=0;i<4;i++){mats['display'+i].emissive.copy(windowGlow);mats['display'+i].emissiveIntensity=.18*night;}},updateSignals(time,alwaysGreen=false){const phase=time%42,state=alwaysGreen||phase<23?'green':phase<27?'amber':'red';signals.forEach(({group})=>group.children.forEach((lamp,i)=>lamp.material.color.setHex(i===(state==='red'?0:state==='amber'?1:2)?[0xff6c46,0xffc76c,0x9edb89][i]:0x29352c)));return state;}};
+ return {trees,foliage,setRoute,sidewalkObstacles,facadeWindows,queenScenery,districts,urbanBuildings,routeSigns,routeTexture,signals,materials:mats,actors,neighbourhood,scenery,architecture:architecturalDetails,buildingCount:shop,awningCount,upperWindowCount,facadeDetailCount,rooflineDetailCount,shopfrontCount,shopfrontFeatureCount,storeGlazingCount,storeGlazing,signCount:signIndex,update(time,dt,alwaysGreen=false){actors.update(time,dt,alwaysGreen);},setNight(amount){const night=THREE.MathUtils.clamp(amount,0,1);cityNight=night;actors.setNight(night);streetscape.setNight(night);districts.setNight(night);mats.officeFacade.emissiveIntensity=.58*night;mats.glass.emissive.setHex(0xffffff);mats.glass.emissiveIntensity=.42*night;signMat.emissive.copy(windowGlow);signMat.emissiveIntensity=.10*night;routeSignMat.emissive.copy(windowGlow);routeSignMat.emissiveIntensity=.10*night;for(let i=0;i<4;i++){mats['display'+i].emissive.copy(windowGlow);mats['display'+i].emissiveIntensity=.18*night;}},updateSignals(time,alwaysGreen=false){const phase=time%42,state=alwaysGreen||phase<23?'green':phase<27?'amber':'red';signals.forEach(({group})=>group.children.forEach((lamp,i)=>lamp.material.color.setHex(i===(state==='red'?0:state==='amber'?1:2)?[0xff6c46,0xffc76c,0x9edb89][i]:0x29352c)));return state;}};
 }

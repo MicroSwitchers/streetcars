@@ -47,8 +47,24 @@ replaces its original glazing instead of being layered over it. Flower boxes,
 produce in crates and cafe cups use the resident primitive/foliage pools.
 Detailed counters have a separate allowance from inexpensive stocked shelving,
 so every active furnished recess receives shelf contents. Architectural dressings
-use whatever remains of the shared 380,000-triangle budget after the base and
-retail batches; no section can silently exceed the limit by adding decoration.
+receive a reserved share of the shared 380,000-triangle budget alongside the base
+and retail batches; no section can silently exceed the limit by adding decoration.
+
+The Blender architecture kit includes projecting soldier-brick headers with
+limestone keystones and alternating corner quoins. Its cornice retains the ogee
+profile, dentils and corbels at 196 triangles per module (previously 484), allowing
+complete cornices on many more Dundas frontages. A round-robin allocation spreads
+heads, parapet panels, corner stones and drainage across buildings and street
+orientations before adding secondary ornaments. Shopfronts step back by different
+amounts; their roofs, apertures, signs and authored details follow the actual wall
+plane. Bays and balconies have separate quotas on each side, replace the original
+glazing, and keep their supports above the shop fascia.
+
+Selected mid-block sites behind the heritage frontages on both routes now have
+stepped office buildings, glazed podiums, floor bands and smaller crowns. Dundas
+concentrates taller massing in its downtown, cultural and Regent Park regions.
+The towers avoid cross-street corridors and protected park/valley openings, reuse
+the existing office material and geometry buffers, and add no real-time lights.
 
 The shared road is already a 3D mesh. Its asphalt uses independent 512-pixel
 colour, aggregate-height and roughness maps at a 1.8-metre world scale. The three

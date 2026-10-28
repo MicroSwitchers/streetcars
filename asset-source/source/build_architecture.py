@@ -69,7 +69,7 @@ def pane(name,a,b,y,h,mat,parent):
 # One-metre module: profiled stone courses, shadow recess, dentils and corbels.
 p=root('cornice')
 profile('Ogee crown',[(-.46,0),(-.46,.18),(-.34,.18),(-.30,.25),(-.24,.27),(-.18,.34),(-.14,.43),(-.08,.47),(-.08,.55),(.04,.55),(.04,-.025)],.992,stone,p)
-for y,z,h,d in [(-.45,.22,.055,.42),(-.17,.38,.045,.42),(.045,.28,.055,.60)]:box('Crisp moulding',(0,y,z),(.992,h,d),edge,p,.004)
+for y,z,h,d in [(-.45,.22,.055,.42),(-.17,.38,.045,.42),(.045,.28,.055,.60)]:box('Crisp moulding',(0,y,z),(.992,h,d),edge,p,0)
 for x in [-.36,-.12,.12,.36]:box('Dentil block',(x,-.37,.31),(.105,.13,.22),edge,p,0)
 for x in [-.34,.34]:
     for y,z,w,d in [(-.65,.11,.13,.17),(-.56,.16,.11,.20),(-.49,.23,.16,.29)]:box('Console bracket',(x,y,z),(w,.09,d),stone,p,0)

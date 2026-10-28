@@ -307,8 +307,8 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
      }
      // Central shops receive the detailed original assets; far facade silhouettes
      // retain the cheaper pooled geometry. The cap is independent of route size.
-     const eligible=active.filter(f=>f.room).sort((a,b)=>Math.abs(a.z-60)-Math.abs(b.z-60)).slice(0,maxRooms);
-     triangleLimit=110000;
+     const eligible=active.filter(f=>f.room).sort((a,b)=>Math.abs(a.z+90)-Math.abs(b.z+90)).slice(0,maxRooms);
+     triangleLimit=96000;
      for(const f of eligible)interior(f);
      triangleLimit=132000;
      for(const room of rooms)backShelves(room);
@@ -317,17 +317,19 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
      for(let row=0;row<2;row++)for(const room of rooms)backContents(room,row);
      for(const room of rooms)rearDisplay(room);
      triangleLimit=Math.min(maxTriangles,Math.max(150000,budget));
-     const plantedFronts=active.filter(f=>!['tree','valley'].includes(f.kind)),plantStride=Math.max(1,Math.ceil(plantedFronts.length/8));
-     for(let j=0;j<plantedFronts.length;j+=plantStride){const f=plantedFronts[j],kind=['core','regent','culture'].includes(f.district)?'stoneplanter':j%2?'stoneplanter':'timberplanter',z=f.z+f.width*(f.kind==='house'?.24:-.22);for(const dz of [0,-3,3])if(furniture(route,kind,f.side,z+dz))break;}
-     let supportedBikes=0;for(const f of [...plantedFronts].sort((a,b)=>Math.abs(a.z+100)-Math.abs(b.z+100))){if(supportedBikes>=2)break;for(const dz of [0,-3.2,3.2])if(furniture(route,'parkedbike',f.side,f.z+dz)){supportedBikes++;break;}}
-     storefrontDressing(route,active);
-     sidePlanting(sideStreets);
-     const sideBudget=stats.triangles+14000;
+     // Protect the side streets' essential furniture before optional window
+     // gardens or rooftop equipment spend the rest of the dressing allowance.
+     const sideBudget=stats.triangles+9000;
      for(const [i,arm] of sideStreets.entries()){
        const f=arm.furniture[i%arm.furniture.length],p=pools.get(f?.kind);
        if(!p||stats.triangles+p.model.triangles>sideBudget)continue;
        if(prop(f.kind,f.x,.18,f.z,f.yaw)){placements.at(-1).sideStreet=true;stats.furniture++;}
      }
+     const plantedFronts=active.filter(f=>!['tree','valley'].includes(f.kind)),plantStride=Math.max(1,Math.ceil(plantedFronts.length/8));
+     for(let j=0;j<plantedFronts.length;j+=plantStride){const f=plantedFronts[j],kind=['core','regent','culture'].includes(f.district)?'stoneplanter':j%2?'stoneplanter':'timberplanter',z=f.z+f.width*(f.kind==='house'?.24:-.22);for(const dz of [0,-3,3])if(furniture(route,kind,f.side,z+dz))break;}
+     let supportedBikes=0;for(const f of [...plantedFronts].sort((a,b)=>Math.abs(a.z+100)-Math.abs(b.z+100))){if(supportedBikes>=2)break;for(const dz of [0,-3.2,3.2])if(furniture(route,'parkedbike',f.side,f.z+dz)){supportedBikes++;break;}}
+     storefrontDressing(route,active);
+     sidePlanting(sideStreets);
      for(const f of active.filter(f=>f.kind==='tree'))prop('treegrate',f.side*9.3,.18,f.z);
      for(let z=-224;z<380;z+=29)if(clear(route,z,.5))for(const side of [-1,1])prop('stormdrain',side*7.2,.008,z);
      const kinds=['bench','timberplanter','bins','hydrant','stoneplanter','newsbox','meter','bikestand','parkedbike','utilitycabinet','planter','timberplanter'];
