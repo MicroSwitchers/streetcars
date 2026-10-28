@@ -8,6 +8,17 @@ checks=[]
 def check(label,value):
     assert value,label
     checks.append(label)
+if bpy.data.objects['Streetcar_Root'].get('door_interior_revision')=='red-enamel-inner-seals-v1':
+    bpy.context.view_layer.update();dg=bpy.context.evaluated_depsgraph_get()
+    def V(p):return Vector((p[0],-p[2],p[1]))
+    for door in ['Front','Rear']:
+        for part,sign in [('A',1),('B',-1)]:
+            for suffix in ['', '_Fold']:
+                pivot=bpy.data.objects['Door_'+door+'_'+part+suffix];c=-sign*.18
+                for label,y,z,material in [('waist',1.36,c,'TTC_Vermilion'),('upper frame',2.15,c+.145,'TTC_Vermilion'),('window seal',2.15,c+.122,'Window_Rubber'),('glazing',2.15,c,'Tinted_Glass'),('kick plate',.39,c,'Brushed_Skirt')]:
+                    origin=pivot.matrix_world@V((-.30,y,z));direction=(pivot.matrix_world.to_3x3()@V((1,0,0))).normalized()
+                    hit,point,normal,index,obj,matrix=bpy.context.scene.ray_cast(dg,origin,direction,distance=.5)
+                    check(pivot.name+' cabin '+label,hit and obj.active_material.name==material)
 for name,z in [('Front',5.90),('Rear',-2.68)]:
     group=bpy.data.objects['Door_'+name]
     check(name+' group position',(group.location-Vector((0,-z,0))).length<.00001)

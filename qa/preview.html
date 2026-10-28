@@ -335,6 +335,14 @@ try{
    }
    ctx.putImageData(image,0,0);doc.body.append(canvas);
  }
+ if(['model-door-inside','model-door-open','model-door-front','model-door-through-glass'].includes(scenario)){
+   api.setPaused(true);api.view.transition=null;api.view.update=()=>{};
+   api.rig.setDoor('both',scenario==='model-door-open'?1:0,true);api.rig.setLights({interior:true});
+   api.camera.clearViewOffset();api.camera.fov=scenario==='model-door-through-glass'?35:70;api.camera.updateProjectionMatrix();
+   const front=scenario==='model-door-front',z=api.state.z+(front?5.9:-2.68);
+   api.camera.position.set(api.route.trackX+(scenario==='model-door-through-glass'?4.4:front?.75:.55),front?2.45:scenario==='model-door-through-glass'?2.5:2.05,z);
+   api.camera.lookAt(api.route.trackX-1.28,scenario==='model-door-through-glass'?1.7:1.5,z);
+ }
  if(scenario==='model-interior'){
    api.setPaused(true);api.view.transition=null;api.view.update=()=>{};
    api.rig.setLights({interior:true});api.camera.clearViewOffset();api.camera.fov=70;api.camera.updateProjectionMatrix();

@@ -159,7 +159,7 @@ def rounded_loop(width,height,radius,steps=5):
             points.append((cx+r*math.cos(a),cy+r*math.sin(a)))
     return points
 
-def glazed_aperture(name,x,y,z,width,height,radius,parent=static,outer=None):
+def glazed_aperture(name,x,y,z,width,height,radius,parent=static,outer=None,back_depth=None):
     # The opaque surround and its rounded aperture share an exact boundary.
     # Points are in the Y/Z side plane, so all door parts follow their pivots.
     inner=rounded_loop(width,height,radius)
@@ -170,9 +170,38 @@ def glazed_aperture(name,x,y,z,width,height,radius,parent=static,outer=None):
         mesh=bpy.data.meshes.new(name+'_surround');mesh.from_pydata([V(v) for v in vertices],[],faces);mesh.update()
         obj=bpy.data.objects.new(name+'_surround',mesh);bpy.context.collection.objects.link(obj);finish(obj,obj.name,metal,parent)
         # A thin returned edge is enough at game distance; no subdivision.
-        mod=obj.modifiers.new('Aperture return','SOLIDIFY');mod.thickness=.022
+        mod=obj.modifiers.new('Aperture return','SOLIDIFY');mod.thickness=back_depth if back_depth is not None else .022
+        if back_depth is not None:
+            # A door surround returns to the cabin face of the same metal leaf,
+            # rather than floating in front of a separate silver back surface.
+            mod.offset=1 if mesh.polygons[0].normal.x<0 else -1
         bpy.context.view_layer.objects.active=obj;bpy.ops.object.modifier_apply(modifier=mod.name)
+        if back_depth is not None:
+            bm=bmesh.new();bm.from_mesh(obj.data);bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces));bm.to_mesh(obj.data);bm.free()
     return panel(name+'_glass',[(x+.003,y+v,z+u) for u,v in inner],glass,parent)
+
+def paint_door_cabin_faces(obj):
+    """Assign real inward-facing metal polygons to the existing red batch.
+
+    Splitting the faces before material batching preserves the exterior silver,
+    custom normals and leaf pivots without overlay planes or extra draw calls.
+    """
+    source=obj.data;normal_matrix=obj.matrix_basis.to_3x3().inverted().transposed()
+    inside=[p for p in source.polygons if (normal_matrix@p.normal).normalized().x<-.5]
+    if not inside:return
+    ids={p.index for p in inside};outside=[p for p in source.polygons if p.index not in ids]
+    normals=[n.vector.copy() for n in source.corner_normals]
+    def subset(polygons,name):
+        mesh=bpy.data.meshes.new(name);mesh.from_pydata([v.co[:] for v in source.vertices],[],[p.vertices[:] for p in polygons]);mesh.update()
+        for face,old in zip(mesh.polygons,polygons):face.use_smooth=old.use_smooth
+        mesh.normals_split_custom_set([normals[i] for p in polygons for i in p.loop_indices]);return mesh
+    inner_mesh=subset(inside,obj.name+'_cabin');inner_mesh.materials.append(red)
+    painted=bpy.data.objects.new(obj.name+'_Cabin_Enamel',inner_mesh);bpy.context.collection.objects.link(painted)
+    painted.parent=obj.parent;painted.matrix_parent_inverse=obj.matrix_parent_inverse.copy();painted.matrix_basis=obj.matrix_basis.copy()
+    if outside:
+        obj.data=subset(outside,obj.name+'_exterior');obj.data.materials.append(silver)
+    else:bpy.data.objects.remove(obj,do_unlink=True)
+    if source.users==0:bpy.data.meshes.remove(source)
 
 def rounded_bead(name,x,y,z,width,height,radius,thickness,mat,parent=static):
     outer=rounded_loop(width,height,radius,4);inner=rounded_loop(width-2*thickness,height-2*thickness,max(.005,radius-thickness),4);n=len(outer)
@@ -340,6 +369,7 @@ for name,z in doors:
         inner=empty('Door_'+name+('_A_Fold' if sign==1 else '_B_Fold'),(0,0,-sign*.36),outer)
         door_rigs.append((outer,inner,sign))
         for pivot in (outer,inner):
+            leaf_before=set(bpy.data.objects)
             c=-sign*.18
             # A complete metal leaf with two glazed holes. Every pane overlaps its gasket.
             for zz in (c-.155,c+.155):box('Door_leaf_stile',(0,1.50,zz),(.064,2.40,.048),silver,pivot,.010)
@@ -350,11 +380,17 @@ for name,z in doors:
             box('Door_ivory_belt',(.040,1.655,c),(.016,.09,.350),cream,pivot,.004)
             for low,high,width in ((.49,1.10,.235),(1.70,2.61,.235)):
                 mid=(low+high)/2
-                glazed_aperture('Capsule_door_pane',.044,mid,c,width,high-low-.045,.112,pivot,outer=(.358,high-low+.015,.008,silver))
+                glazed_aperture('Capsule_door_pane',.044,mid,c,width,high-low-.045,.112,pivot,outer=(.358,high-low+.015,.008,silver),back_depth=.076)
                 rounded_bead('Door_capsule_gasket',.052,mid,c,width+.025,high-low-.02,.123,.018,charcoal,pivot)
+                rounded_bead('Door_inner_window_seal',-.034,mid,c,width+.025,high-low-.02,.123,.018,charcoal,pivot)
             decal('Door_waist_stop',(.058,1.36,c),.19,.20,(400,335,540,480),1,pivot)
-            for zz in (c-.179,c+.179):rod('Door_compression_seal',(.025,.30,zz),(.025,2.70,zz),.009,charcoal,pivot)
+            for zz in (c-.179,c+.179):box('Door_compression_seal',(0,1.50,zz),(.074,2.40,.012),charcoal,pivot,bevel=0)
             decal('Door_stop',(.058,.39,c),.15,.15,(400,335,540,480),1,pivot)
+            for part in set(bpy.data.objects)-leaf_before:
+                if part.type!='MESH' or part.active_material!=silver:continue
+                # The low kick plate remains brushed metal on both sides.
+                if part.name.startswith('Door_leaf_crosspanel') and part.location.z<.5:continue
+                paint_door_cabin_faces(part)
     # door header and steps remain attached to car body.
     box('Door_header',(1.28,2.85,z),(.08,.25,1.52),charcoal)
     box('Door_top_compression_seal',(1.28,2.713,z),(.09,.055,1.49),charcoal,bevel=.012)
@@ -367,6 +403,7 @@ for name,z in doors:
         box('Solid_entry_step',(x,(.19+top)/2,z),(.22,top-.19,1.43),silver,bevel=.006)
         rod('Yellow_step_nosing',(x+.102,top+.006,z-.70),(x+.102,top+.006,z+.70),.012,yellow)
     for s in (-1,1):rod('Entry_handrail',(.86,1.10,z+s*.63),(.86,2.58,z+s*.63),.020,silver)
+root['door_interior_revision']='red-enamel-inner-seals-v1'
 # Passenger saloon: high floor, transverse red vinyl pairs, narrow aisle,
 # stainless stanchions, curved ceiling and the rear bench visible in references.
 seat_count=0

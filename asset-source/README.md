@@ -35,6 +35,31 @@ offices also continue their glazed upper floors above the masonry podium.
 
 # Photo-refined TTC CLRV game asset
 
+## Door interior finish
+
+All eight folding leaves now have red enamel on their cabin-facing metal frames
+and waist panels, black inner window gaskets and compression seals, and brushed
+metal kick plates. The capsule-window surrounds return through the complete leaf
+depth, so their backs no longer appear as a floating silver panel. The original
+outside finish, glazing apertures, parent pivots and animation clips are retained.
+Real inward-facing polygons are reassigned to the existing red material batches;
+there are no painted overlay planes, new textures, materials or draw calls.
+
+Native Blender and in-game ray checks sample the waist, upper frame, rubber seal,
+glazing and kick plate of every leaf. The saved native file passes 91 checks,
+including open entry clearance and level rear seating. The export remains at
+106 primitives, 22 materials and 15 embedded images, with **154,318 triangles**
+and **7,488,336 bytes**. The door changes add 512 triangles (0.33%) to the previous
+cabin revision.
+
+`door-review/index.html` compares four matching Blender views and four in-game
+views, with the doors closed, folded open and seen through the opposite passenger
+windows. Reproduce the Blender images with `source/render_streetcar_progress.py
+-- --review door-review --stage after --views rear-door-inside rear-door-open
+front-door-inside doors-through-windows`. Generate the local comparison page with
+`source/make_streetcar_review.py --doors --before-game <before-screenshots>
+--after-game <after-screenshots>`. The screenshot files remain outside the app cache.
+
 ## 28 October 2026: cabin clearance and manufactured fittings
 
 The editable `../../ttc-clrv-game-ready.blend` and game export now contain the
@@ -61,7 +86,7 @@ materials. Supplied photos remain the visual references; the
 [Illinois Railway Museum's 4034 entry](https://www.irm.org/player/ttc4034/)
 supports the 42-seat CLRV configuration.
 
-The revised export has **153,806 triangles** (198 more than the preceding
+That cabin revision's export had **153,806 triangles** (198 more than the preceding
 153,608), **106 primitives**, **22 materials**, **15 embedded images** and
 **7,453,012 bytes**. No new textures, materials, real-time lights or render passes
 are required. Existing door, wheel and trolley pivots and four animation clips
@@ -140,8 +165,8 @@ export is preserved as `ttc-clrv-pre-refinement.glb`.
 
 ## Game budget and compatibility
 
-The validated export has **153,806 triangles**, **106 material primitives** and a
-**7.45 MB** GLB with 15 embedded images and no decoder dependency. The previous
+The validated export has **154,318 triangles**, **106 material primitives** and a
+**7.49 MB** GLB with 15 embedded images and no decoder dependency. The previous
 rounded-front revision had 135,632 triangles, 106 primitives and a 7.56 MB GLB.
 All 19 controller pivots and all four animation clips are
 preserved. Wheel radius, rigid trolley reach, folding-door controls and lamp

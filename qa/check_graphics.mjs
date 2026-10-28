@@ -55,6 +55,7 @@ try{
  Object.assign(cases,{ambientOcclusion:[1440,960,'ambient-occlusion'],ambientOcclusionPhone:[391,845,'ambient-occlusion']});
  Object.assign(cases,{modelInterior:[1440,960,'scene=model-interior'],modelRear:[1440,960,'scene=model-rear'],offlineModel:[1440,960,'offline&asset&scene=streetcar']});
  Object.assign(cases,{modelLounge:[1440,960,'scene=model-lounge'],modelRoof:[1440,960,'scene=model-roof']});
+ Object.assign(cases,{doorInside:[1440,960,'scene=model-door-inside'],doorOpen:[1440,960,'scene=model-door-open'],doorFront:[1440,960,'scene=model-door-front'],doorThroughGlass:[1440,960,'scene=model-door-through-glass']});
  Object.assign(cases,{oncoming:[1440,960,'streetcar-traffic&scene=passing-streetcar'],oncomingPhone:[390,844,'streetcar-traffic&camera=sidewalk&at=-181'],offlineOncoming:[1440,960,'offline&streetcar-traffic&scene=passing-streetcar']});
  Object.assign(cases,{
    surfaceLines:[1600,1000,'scene=surface-lines'],

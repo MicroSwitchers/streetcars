@@ -74,6 +74,17 @@ export async function checkStreetcarAsset(api,check){
      }
    }
  }
+ if(rig.root.userData.door_interior_revision==='red-enamel-inner-seals-v1'){
+   rig.setDoor('both',0,true);rig.model.updateMatrixWorld(true);
+   for(const door of ['Front','Rear'])for(const [part,sign] of [['A',1],['B',-1]])for(const suffix of ['','_Fold']){
+     const pivot=rig.nodes['Door_'+door+'_'+part+suffix],c=-sign*.18;
+     for(const [label,y,z,material] of [['waist',1.36,c,'TTC_Vermilion'],['upper frame',2.15,c+.145,'TTC_Vermilion'],['window seal',2.15,c+.122,'Window_Rubber'],['glazing',2.15,c,'Tinted_Glass'],['kick plate',.39,c,'Brushed_Skirt']]){
+       const origin=pivot.localToWorld(new THREE.Vector3(-.30,y,z)),direction=new THREE.Vector3(1,0,0).transformDirection(pivot.matrixWorld);
+       const hit=new THREE.Raycaster(origin,direction,0,.5).intersectObject(api.car,true)[0];
+       check(pivot.name+' cabin '+label+' has the proper material',hit?.object.material.name===material);
+     }
+   }
+ }
  for(const which of ['front','rear']){
    const name=which==='front'?'Front':'Rear';
    rig.setDoor(which,0,true);

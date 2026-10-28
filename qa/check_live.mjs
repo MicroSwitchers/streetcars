@@ -135,9 +135,13 @@ try{
  if(model){
   const source=(await readFile(join(qa,'asset-checks.js'),'utf8')).replace("'../dist/vendor/three.module.js'","'three'");
   const moduleURL='data:text/javascript;base64,'+Buffer.from(source).toString('base64');
-  const report=await evaluate(`(async()=>{const a=queenStreet,checks=[];a.updateSettings({volume:0,weatherMode:'fixed',weather:'overcast',night:false,dayNightCycle:false});a.restart();a.setPaused(true);if(a.rig.root.userData.interior_revision!=='clearance-and-fittings-v5')throw Error('Stale streetcar model');const {checkStreetcarAsset}=await import(${JSON.stringify(moduleURL)});await checkStreetcarAsset(a,(label,pass)=>{if(!pass)throw Error(label);checks.push(label);});return {revision:a.rig.root.userData.interior_revision,checks:checks.length,compatibility:a.graphics.compatibility};})()`);
+  const report=await evaluate(`(async()=>{const a=queenStreet,checks=[];a.updateSettings({volume:0,weatherMode:'fixed',weather:'overcast',night:false,dayNightCycle:false});a.restart();a.setPaused(true);if(a.rig.root.userData.interior_revision!=='clearance-and-fittings-v5'||a.rig.root.userData.door_interior_revision!=='red-enamel-inner-seals-v1')throw Error('Stale streetcar model');const {checkStreetcarAsset}=await import(${JSON.stringify(moduleURL)});await checkStreetcarAsset(a,(label,pass)=>{if(!pass)throw Error(label);checks.push(label);});return {revision:a.rig.root.userData.interior_revision,doors:a.rig.root.userData.door_interior_revision,checks:checks.length,compatibility:a.graphics.compatibility};})()`);
   await evaluate(`(()=>{const a=queenStreet;a.view.transition=null;a.view.update=()=>{};a.camera.clearViewOffset();a.camera.fov=70;a.camera.updateProjectionMatrix();a.camera.position.set(a.route.trackX,2.35,a.state.z-4.35);a.camera.lookAt(a.route.trackX,2.1,a.state.z-7.1);a.graphics.render(a.scene,a.camera);})()`);
   const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'streetcar-rear-seats.png'),Buffer.from(shot.data,'base64'));
+  for(const open of [false,true]){
+   await evaluate(`(()=>{const a=queenStreet;a.rig.setDoor('both',${open?1:0},true);a.camera.position.set(a.route.trackX+.55,2.05,a.state.z-2.68);a.camera.lookAt(a.route.trackX-1.28,1.5,a.state.z-2.68);a.graphics.render(a.scene,a.camera);})()`);
+   const doorShot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'streetcar-door-'+(open?'open':'inside')+'.png'),Buffer.from(doorShot.data,'base64'));
+  }
   console.log('PASS: Revised Blender streetcar geometry, level seats, clear wood liners and functional rig: '+JSON.stringify(report));
  }
  if(paint){

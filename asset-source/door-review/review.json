@@ -1,0 +1,66 @@
+{
+  "before": {
+    "triangles": 153806,
+    "materials": 22,
+    "primitives": 106,
+    "images": 15,
+    "bytes": 7453012
+  },
+  "after": {
+    "triangles": 154318,
+    "materials": 22,
+    "primitives": 106,
+    "images": 15,
+    "bytes": 7488336
+  },
+  "views": [
+    {
+      "key": "rear-door-inside",
+      "title": "Rear door interior",
+      "note": "Red enamel cabin faces, black inner window seals, metal kick plates and full-depth window returns.",
+      "kind": "Blender Cycles render"
+    },
+    {
+      "key": "rear-door-open",
+      "title": "Rear door folded open",
+      "note": "The inside is red and the outside retains the existing livery. Both faces move on the original folding pivots.",
+      "kind": "Blender Cycles render"
+    },
+    {
+      "key": "front-door-inside",
+      "title": "Front door interior",
+      "note": "The same finish is applied consistently to all four front leaves.",
+      "kind": "Blender Cycles render"
+    },
+    {
+      "key": "doors-through-windows",
+      "title": "Through the opposite windows",
+      "note": "The red inside surfaces remain visible from outside through the passenger glazing.",
+      "kind": "Blender Cycles render"
+    },
+    {
+      "key": "game-doorInside",
+      "title": "In-game door interior",
+      "kind": "Actual game screenshot \u00b7 desktop",
+      "note": "Captured in Chrome using the same camera setup before and after the model revision."
+    },
+    {
+      "key": "game-doorOpen",
+      "title": "In-game door open",
+      "kind": "Actual game screenshot \u00b7 desktop",
+      "note": "Captured in Chrome using the same camera setup before and after the model revision."
+    },
+    {
+      "key": "game-doorFront",
+      "title": "In-game front door",
+      "kind": "Actual game screenshot \u00b7 desktop",
+      "note": "Captured in Chrome using the same camera setup before and after the model revision."
+    },
+    {
+      "key": "game-doorThroughGlass",
+      "title": "In-game through windows",
+      "kind": "Actual game screenshot \u00b7 desktop",
+      "note": "Captured in Chrome using the same camera setup before and after the model revision."
+    }
+  ]
+}
