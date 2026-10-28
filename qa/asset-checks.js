@@ -53,7 +53,8 @@ export async function checkStreetcarAsset(api,check){
      return hit?.object.material.name==='Burgundy_Seats'?rig.root.worldToLocal(hit.point.clone()).y:null;
    };
    const reference=cushionHeight(-.49,3.55);
-   const rearSeats=[[-.46,-7.055],[0,-7.055],[.46,-7.055],[-.925,-5.68],[-.925,-6.29],[.925,-5.68],[.925,-6.29]];
+   const sideCentre=rig.root.userData.rear_side_seat_centre_m??.925;
+   const rearSeats=[[-.46,-7.055],[0,-7.055],[.46,-7.055],[-sideCentre,-5.68],[-sideCentre,-6.29],[sideCentre,-5.68],[sideCentre,-6.29]];
    for(const [x,z] of rearSeats){
      const height=cushionHeight(x,z);
      check('Rear seat is at normal passenger-seat height '+x+', '+z,reference!==null&&height!==null&&Math.abs(height-reference)<.02);
@@ -61,6 +62,16 @@ export async function checkStreetcarAsset(api,check){
    for(const name of ['Burgundy_Seats','Interior_Laminate']){
      const mat=rig.materials.get(name);
      check(name+' has embedded albedo, roughness and normal detail',mat?.map&&mat?.roughnessMap&&mat?.normalMap);
+   }
+   if(rig.root.userData.interior_revision==='clearance-and-fittings-v5'){
+     for(const side of [-1,1])for(const z of [-5.68,-6.29]){
+       const origin=rig.root.localToWorld(new THREE.Vector3(side*.60,1.76,z));
+       const outward=new THREE.Vector3(side,0,0).transformDirection(rig.root.matrixWorld);
+       const hits=new THREE.Raycaster(origin,outward,0,.8).intersectObject(api.car,true);
+       const upholstery=hits.find(h=>h.object.material.name==='Burgundy_Seats');
+       const wood=hits.find(h=>h.object.material.name==='Interior_Laminate');
+       check('Rear side backrest clears the wood liner '+side+', '+z,upholstery&&wood&&wood.distance-upholstery.distance>.04);
+     }
    }
  }
  for(const which of ['front','rear']){

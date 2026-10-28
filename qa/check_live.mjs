@@ -16,6 +16,7 @@ const facadeDepth=process.argv.includes('--facades');
 const pavement=process.argv.includes('--pavement');
 const paint=process.argv.includes('--paint');
 const streetlights=process.argv.includes('--streetlights');
+const model=process.argv.includes('--model');
 const greenery=process.argv.includes('--greenery');
 const buildings=process.argv.includes('--buildings');
 const intersections=process.argv.includes('--intersections');
@@ -130,6 +131,14 @@ try{
   await wait(1500);
   if(await evaluate('queenStreet.performance.level')!=='balanced')throw Error('Saved High bypassed the iPad safety ceiling');
   console.log('PASS: iPad desktop-mode detection, bounded textures/pixels/shadows, night rain and High safety ceiling');
+ }
+ if(model){
+  const source=(await readFile(join(qa,'asset-checks.js'),'utf8')).replace("'../dist/vendor/three.module.js'","'three'");
+  const moduleURL='data:text/javascript;base64,'+Buffer.from(source).toString('base64');
+  const report=await evaluate(`(async()=>{const a=queenStreet,checks=[];a.updateSettings({volume:0,weatherMode:'fixed',weather:'overcast',night:false,dayNightCycle:false});a.restart();a.setPaused(true);if(a.rig.root.userData.interior_revision!=='clearance-and-fittings-v5')throw Error('Stale streetcar model');const {checkStreetcarAsset}=await import(${JSON.stringify(moduleURL)});await checkStreetcarAsset(a,(label,pass)=>{if(!pass)throw Error(label);checks.push(label);});return {revision:a.rig.root.userData.interior_revision,checks:checks.length,compatibility:a.graphics.compatibility};})()`);
+  await evaluate(`(()=>{const a=queenStreet;a.view.transition=null;a.view.update=()=>{};a.camera.clearViewOffset();a.camera.fov=70;a.camera.updateProjectionMatrix();a.camera.position.set(a.route.trackX,2.35,a.state.z-4.35);a.camera.lookAt(a.route.trackX,2.1,a.state.z-7.1);a.graphics.render(a.scene,a.camera);})()`);
+  const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'streetcar-rear-seats.png'),Buffer.from(shot.data,'base64'));
+  console.log('PASS: Revised Blender streetcar geometry, level seats, clear wood liners and functional rig: '+JSON.stringify(report));
  }
  if(paint){
   await evaluate(`(()=>{const a=queenStreet;a.updateSettings({camera:'sidewalk',quality:'balanced',volume:0,dayNightCycle:true,night:false,weatherMode:'fixed',weather:'overcast'});a.restart();a.setPaused(true);a.view.transition=null;window.__paintView=a.view.update;a.view.update=()=>{};a.camera.clearViewOffset();a.camera.fov=48;a.camera.position.set(a.route.trackX-7,3.1,a.state.z+11);a.camera.lookAt(a.route.trackX,1.7,a.state.z-1);a.camera.updateProjectionMatrix();a.camera.updateMatrixWorld(true);

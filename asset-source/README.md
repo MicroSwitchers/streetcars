@@ -35,6 +35,39 @@ offices also continue their glazed upper floors above the masonry podium.
 
 # Photo-refined TTC CLRV game asset
 
+## 28 October 2026: cabin clearance and manufactured fittings
+
+The editable `../../ttc-clrv-game-ready.blend` and game export now contain the
+same revised model. `streetcar-review/index.html` provides a draggable comparison
+of seven matching Blender Cycles views and four matching real-time game views.
+The `before/` folder preserves the original native file and export as well as
+the screenshots. `source/render_streetcar_progress.py` reproduces the cameras;
+`source/make_streetcar_review.py` assembles the local review page. Review images
+are separate from the app and its offline cache.
+
+The duplicate rear wood liners have been removed, the inward-facing seats moved
+clear of the wall, and the main saloon liners/sills recessed behind the seat
+frames. A pre-export BVH check tests all 126 seat cushion/frame parts against
+14 wood panels: zero triangle intersections. Runtime rays independently check
+all four rear side backrests, and all seven rear cushions retain normal saloon
+height. Doorway baffles remain beside the entrance rather than crossing seats.
+
+Continuous stainless surrounds replace the detached/pinched seat handholds.
+The rear bench has a shallow heater grille, support beam and two legs, with no
+raised passenger floor. Higher window transoms and catches, a longer trolley
+tray with conduit/retainers, walkway edging, articulated wiper links, washer
+jets and concentric floor access-cover fittings add detail using existing
+materials. Supplied photos remain the visual references; the
+[Illinois Railway Museum's 4034 entry](https://www.irm.org/player/ttc4034/)
+supports the 42-seat CLRV configuration.
+
+The revised export has **153,806 triangles** (198 more than the preceding
+153,608), **106 primitives**, **22 materials**, **15 embedded images** and
+**7,453,012 bytes**. No new textures, materials, real-time lights or render passes
+are required. Existing door, wheel and trolley pivots and four animation clips
+are preserved. Native Blender checks and real-time Chrome checks cover
+clearance, seat/floor height, doors, wheels, overhead contact and lighting.
+
 The shared street-furniture kit now has 33 original prototypes. New planting
 assets include a slatted cedar trough, cast-stone planter, wall flower box,
 climbing trellis and wall lantern. The `parkedbike` prototype contains its bicycle,
@@ -107,8 +140,8 @@ export is preserved as `ttc-clrv-pre-refinement.glb`.
 
 ## Game budget and compatibility
 
-The validated export has **153,608 triangles**, **106 material primitives** and a
-**7.41 MB** GLB with 15 embedded images and no decoder dependency. The previous
+The validated export has **153,806 triangles**, **106 material primitives** and a
+**7.45 MB** GLB with 15 embedded images and no decoder dependency. The previous
 rounded-front revision had 135,632 triangles, 106 primitives and a 7.56 MB GLB.
 All 19 controller pivots and all four animation clips are
 preserved. Wheel radius, rigid trolley reach, folding-door controls and lamp
@@ -150,14 +183,13 @@ are embedded, so the game makes no external image requests.
 
 ## Rebuild
 
-Use Blender 4.5 LTS and Python with Pillow. From the workspace root:
+Use Blender 4.5 LTS. The compact source PNG maps are now versioned alongside the
+builder, so rebuilding the mesh does not require regenerating the texture atlas.
+From the workspace root:
 
 ```powershell
-python .\Queen-Street\asset-source\source\make_refined_markings.py
-python .\Queen-Street\asset-source\source\make_refined_materials.py
-python .\Queen-Street\asset-source\source\make_cabin_details.py
 & 'C:\Program Files\Blender Foundation\Blender 4.5\blender.exe' --background --factory-startup --disable-autoexec --python .\Queen-Street\asset-source\source\build_refined_streetcar.py -- --skip-render
-python .\Queen-Street\asset-source\validate_refined.py
+& 'C:\Program Files\Blender Foundation\Blender 4.5\blender.exe' --background --factory-startup --disable-autoexec --python .\Queen-Street\asset-source\source\verify_native_asset.py
 Copy-Item .\Queen-Street\asset-source\ttc-clrv-refined.glb .\Queen-Street\dist\ttc-clrv.glb
 python .\Queen-Street\build_offline.py
 ```
@@ -169,6 +201,10 @@ editable file. To review the saved file:
 ```powershell
 & 'C:\Program Files\Blender Foundation\Blender 4.5\blender.exe' --background --factory-startup --disable-autoexec --python .\Queen-Street\asset-source\source\render_refined.py -- front rear interior lounge roof
 ```
+
+The versioned progress renderer can also create these views without the older
+review helper: `source/render_streetcar_progress.py -- --stage after --views
+front rear interior lounge roof partition nose`.
 
 The previous model and export are also preserved as `ttc-clrv-before-rounded.blend`
 and `ttc-clrv-before-rounded.glb`. The earlier procedural source, export and preview

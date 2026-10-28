@@ -12,7 +12,9 @@ export async function checkStreetcarTraffic(api,check,gameWindow){
  }
  check('Sidewalk camera is on the passenger-door side',route.sidewalkX<route.trackX);
  const mainMesh=api.car.getObjectByName('Body_Static__Markings_Atlas'),oppositeMesh=car.getObjectByName('Body_Static__Markings_Atlas');
- check('Streetcars share geometry and embedded textures',mainMesh&&oppositeMesh&&mainMesh.geometry===oppositeMesh.geometry&&mainMesh.material.map===oppositeMesh.material.map);
+ const mainSeats=api.car.getObjectByName('Body_Static__Burgundy_Seats'),oppositeSeats=car.getObjectByName('Body_Static__Burgundy_Seats');
+ check('Streetcars share static geometry and upholstery textures',mainMesh&&oppositeMesh&&mainMesh.geometry===oppositeMesh.geometry&&mainSeats.geometry===oppositeSeats.geometry&&mainSeats.material.map===oppositeSeats.material.map);
+ check('Opposite destination boards have independent texture sources',mainMesh.material.map!==oppositeMesh.material.map&&mainMesh.material.map.source!==oppositeMesh.material.map.source);
  check('Oncoming car has one headlamp and no duplicated cabin or marker lights',actor.rig.emitters.length===1&&actor.rig.exteriorEmitters.length===0);
  const lamp=rig.exteriorEmitters.find(l=>l.userData.lightRole==='markers'&&l.position.x>0&&l.position.z>4);
  check('Door-side forward marker sits on the fixed body panel',lamp&&Math.abs(lamp.position.z-4.95)<1e-6);
@@ -49,6 +51,9 @@ export async function checkStreetcarTraffic(api,check,gameWindow){
  const pausedZ=actor.z;api.step(.1);
  check('Pausing holds opposing traffic as well',actor.z===pausedZ);
  api.setPaused(false);api.updateSettings({dayNightCycle:true,night:false});
+ // The app now holds morning until its first departure. This clock fixture
+ // represents a vehicle that has travelled, rather than one waiting to start.
+ api.state.metres=Math.max(1,api.state.metres);
  api.step(240);check('Daylight lasts 240 seconds',api.nightAmount===0);
  api.step(30);check('Dusk reaches its midpoint in thirty seconds',Math.abs(api.nightAmount-.5)<1e-8);
  api.step(30);check('Full night begins after a sixty-second dusk',api.nightAmount===1);
@@ -56,7 +61,7 @@ export async function checkStreetcarTraffic(api,check,gameWindow){
  api.step(.1);api.step(30);check('Dawn follows the short night',Math.abs(api.nightAmount-.5)<1e-8);
  api.step(30);check('Day returns after the sixty-second dawn',api.nightAmount===0);
  api.toggleDayNight();api.step(8);check('Night button also lights the approaching car after its fade',api.nightAmount===1&&actor.rig.materials.get('Amber_Indicators').emissiveIntensity>3);
- api.step(64);check('Manually selected night also ends after its gradual dawn',api.nightAmount===0);
+ api.step(72);check('Manually selected night also ends after its twelve-second hold and sixty-second dawn',api.nightAmount===0);
  api.updateSettings({dayNightCycle:false});api.restart();api.setPaused(true);
  api.view.transition=null;api.view.instant=true;api.view.update(api.state.z,0);
 }

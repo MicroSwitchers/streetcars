@@ -1,0 +1,84 @@
+{
+  "triangles_before": 153608,
+  "triangles_after": 153806,
+  "materials": 22,
+  "primitives": 106,
+  "images": 15,
+  "bytes": 7453012,
+  "clearance": {
+    "pass": true,
+    "seat_parts": 126,
+    "wood_panels": 14,
+    "triangle_intersections": [],
+    "rear_seat_rise_m": 0,
+    "side_seat_centre_m": 0.855
+  },
+  "views": [
+    {
+      "key": "lounge",
+      "title": "Rear seating",
+      "note": "Duplicate wood liners removed. Seats and rolled frames clear the wall. The rear bench stays at the normal saloon height.",
+      "kind": "Blender Cycles render"
+    },
+    {
+      "key": "partition",
+      "title": "Rear entrance",
+      "note": "Wood entrance baffles remain beside the stairwell, with a clear aisle and clear seat frames.",
+      "kind": "Blender Cycles render"
+    },
+    {
+      "key": "front",
+      "title": "Front exterior",
+      "note": "Higher passenger-window transoms and aligned sash catches. The rounded cab, readable markings and body finish are retained.",
+      "kind": "Blender Cycles render"
+    },
+    {
+      "key": "rear",
+      "title": "Rear exterior",
+      "note": "Rounded rear, seven-seat nook, ventilation panels and lamp clusters.",
+      "kind": "Blender Cycles render"
+    },
+    {
+      "key": "roof",
+      "title": "Roof equipment",
+      "note": "Longer trolley equipment tray, porcelain supports, guard rails, cable conduit and walkway edges.",
+      "kind": "Blender Cycles render"
+    },
+    {
+      "key": "interior",
+      "title": "Full cabin",
+      "note": "Continuous stainless seat surrounds, corrected wall/sill clearance and detailed floor access covers.",
+      "kind": "Blender Cycles render"
+    },
+    {
+      "key": "nose",
+      "title": "Cab fittings",
+      "note": "Sprung wiper links, blade backing and washer jets on the curved windshield.",
+      "kind": "Blender Cycles render"
+    },
+    {
+      "key": "game-modelLounge",
+      "title": "In-game rear seating",
+      "kind": "Actual game screenshot \u00b7 desktop",
+      "note": "Captured in Chrome using the same camera setup before and after the model revision."
+    },
+    {
+      "key": "game-modelInterior",
+      "title": "In-game cabin",
+      "kind": "Actual game screenshot \u00b7 desktop",
+      "note": "Captured in Chrome using the same camera setup before and after the model revision."
+    },
+    {
+      "key": "game-modelRear",
+      "title": "In-game exterior",
+      "kind": "Actual game screenshot \u00b7 desktop",
+      "note": "Captured in Chrome using the same camera setup before and after the model revision."
+    },
+    {
+      "key": "game-modelRoof",
+      "title": "In-game roof",
+      "kind": "Actual game screenshot \u00b7 desktop",
+      "note": "Captured in Chrome using the same camera setup before and after the model revision."
+    }
+  ]
+}
