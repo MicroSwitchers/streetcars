@@ -1,6 +1,27 @@
 import * as THREE from 'three';
 import {stabilizeSceneShadows} from './shadow-bias.js';
 
+function finishStreetcarPaint(paint){
+ if(paint.userData.streetcarPaint)return;
+ paint.roughness=.58;paint.clearcoat=1;paint.clearcoatRoughness=.13;
+ paint.envMapIntensity=2.2;
+ const boost={value:paint.envMapIntensity},compile=paint.onBeforeCompile,key=paint.customProgramCacheKey();
+ // Three uses scene.environmentIntensity in place of the material's setting
+ // when the environment comes from the scene. Boost only reflected radiance,
+ // after weather-map blending, rather than brightening the whole neighbourhood.
+ paint.onBeforeCompile=function(shader,renderer){
+  compile.call(this,shader,renderer);shader.uniforms.streetcarPaintReflection=boost;
+  shader.fragmentShader='uniform float streetcarPaintReflection;\n'+shader.fragmentShader;
+  shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_maps>',`#include <lights_fragment_maps>
+   radiance*=streetcarPaintReflection;
+   #ifdef USE_CLEARCOAT
+    clearcoatRadiance*=streetcarPaintReflection;
+   #endif`);
+ };
+ paint.customProgramCacheKey=()=>key+'-streetcar-paint-reflections-v1';
+ paint.userData.streetcarPaint={reflection:boost};paint.needsUpdate=true;
+}
+
 function contactShadow(){
  const canvas=document.createElement('canvas');canvas.width=256;canvas.height=1024;
  const ctx=canvas.getContext('2d');ctx.filter='blur(16px)';
@@ -186,10 +207,9 @@ export function createDaylight(renderer,scene){
    streetcarRigs.add(rig);rig.setNight(nightAmount);
    car.add(contactShadow());
    stabilizeBumperTrim(car,rig);
-   // A slightly smoother clear top coat catches the existing sky and street
-   // reflections while retaining the original paint texture and livery.
+   // Gloss enamel keeps its surface texture and gains a visible clear top coat.
    for(const name of ['TTC_Vermilion','Warm_Ivory']){
-     const paint=rig.materials.get(name);if(paint){paint.envMapIntensity=1.2;paint.roughness=.92;paint.clearcoat=.9;paint.clearcoatRoughness=.18;}
+     const paint=rig.materials.get(name);if(paint)finishStreetcarPaint(paint);
    }
    const glass=rig.materials.get('Tinted_Glass');
    if(glass){glass.color.setHex(0x79949b);glass.opacity=.23;glass.roughness=.12;glass.envMapIntensity=1.3;glass.depthWrite=false;}

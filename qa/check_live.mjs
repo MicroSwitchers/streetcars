@@ -14,6 +14,7 @@ const districts=process.argv.includes('--districts')||authored;
 const sidewalk=process.argv.includes('--sidewalk');
 const facadeDepth=process.argv.includes('--facades');
 const pavement=process.argv.includes('--pavement');
+const paint=process.argv.includes('--paint');
 const greenery=process.argv.includes('--greenery');
 const buildings=process.argv.includes('--buildings');
 const intersections=process.argv.includes('--intersections');
@@ -128,6 +129,30 @@ try{
   await wait(1500);
   if(await evaluate('queenStreet.performance.level')!=='balanced')throw Error('Saved High bypassed the iPad safety ceiling');
   console.log('PASS: iPad desktop-mode detection, bounded textures/pixels/shadows, night rain and High safety ceiling');
+ }
+ if(paint){
+  await evaluate(`(()=>{const a=queenStreet;a.updateSettings({camera:'sidewalk',quality:'balanced',volume:0,dayNightCycle:true,night:false,weatherMode:'fixed',weather:'overcast'});a.restart();a.setPaused(true);a.view.transition=null;window.__paintView=a.view.update;a.view.update=()=>{};a.camera.clearViewOffset();a.camera.fov=48;a.camera.position.set(a.route.trackX-7,3.1,a.state.z+11);a.camera.lookAt(a.route.trackX,1.7,a.state.z-1);a.camera.updateProjectionMatrix();a.camera.updateMatrixWorld(true);
+   const gl=a.renderer.getContext(),pixels=()=>{const p=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,p);return p;};
+   const paints=['TTC_Vermilion','Warm_Ivory'].map(n=>a.rig.materials.get(n)),saved=paints.map(m=>({roughness:m.roughness,clearcoat:m.clearcoat,clearcoatRoughness:m.clearcoatRoughness,reflection:m.userData.streetcarPaint.reflection.value}));
+   window.__paintFinish=after=>paints.forEach((m,i)=>{Object.assign(m,after?saved[i]:{roughness:.92,clearcoat:.9,clearcoatRoughness:.18});m.userData.streetcarPaint.reflection.value=after?saved[i].reflection:1;});
+   window.__paintRead=()=>{a.graphics.render(a.scene,a.camera);return pixels();};
+   window.__paintBefore=()=>{window.__paintFinish(false);window.__paintReference=window.__paintRead();};
+   window.__paintMask=()=>{const hidden=[],replaced=[],bg=a.scene.background,fog=a.scene.fog,shadow=a.renderer.shadowMap.enabled,white=paints[0].clone();white.onBeforeCompile=()=>{};white.customProgramCacheKey=()=>'';white.color.setHex(0xffffff);white.metalness=0;white.roughness=1;white.clearcoat=0;white.map=white.roughnessMap=white.normalMap=null;white.emissive.setHex(0xffffff);white.emissiveIntensity=1;white.toneMapped=false;
+    a.scene.traverse(o=>{if(!o.isMesh&&!o.isLine&&!o.isPoints)return;if(paints.includes(o.material)){replaced.push([o,o.material]);o.material=white;}else{hidden.push([o,o.visible]);o.visible=false;}});a.scene.background=new a.scene.fog.color.constructor(0);a.scene.fog=null;a.renderer.shadowMap.enabled=false;a.renderer.setRenderTarget(null);a.renderer.render(a.scene,a.camera);const mask=pixels();
+    for(const [o,m] of replaced)o.material=m;for(const [o,v] of hidden)o.visible=v;a.scene.background=bg;a.scene.fog=fog;a.renderer.shadowMap.enabled=shadow;white.dispose();window.__paintPixels=[];for(let i=0;i<mask.length;i+=4)if(mask[i]>245&&mask[i+1]>245&&mask[i+2]>245)window.__paintPixels.push(i);
+   };
+   window.__paintAfter=()=>{window.__paintFinish(true);const after=window.__paintRead(),before=window.__paintReference;let difference=0,lift=0,changed=0;for(const i of window.__paintPixels){let d=0;for(let c=0;c<3;c++){d+=Math.abs(after[i+c]-before[i+c]);lift+=after[i+c]-before[i+c];}difference+=d;if(d>9)changed++;}const samples=window.__paintPixels.length;return {samples,meanDifference:difference/(samples*3),meanLift:lift/(samples*3),changedFraction:changed/samples,compatibility:!!a.graphics.compatibility};};
+  })()`);
+  const reports=[];
+  for(const [name,weather,night] of [['day','overcast',false],['rain','rain',false],['night','rain',true]]){
+   await evaluate(`(()=>{const a=queenStreet;a.updateSettings({weather:${JSON.stringify(weather)},night:${night}});for(let i=0;i<81;i++)a.weather.update(.1,a.state.z,a.nightAmount,a.renderer.getPixelRatio(),false);window.__paintMask();window.__paintBefore();})()`);
+   let frame=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'paint-'+name+'-before.png'),Buffer.from(frame.data,'base64'));
+   const result=await evaluate('window.__paintAfter()');reports.push({name,...result});
+   frame=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'paint-'+name+'-after.png'),Buffer.from(frame.data,'base64'));
+   if(result.samples<1000||result.meanDifference<(night?2:5)||result.changedFraction<(night?.25:.45))throw Error('Paint reflection change is not clearly visible: '+JSON.stringify(reports));
+  }
+  await writeFile(join(output,'paint.json'),JSON.stringify(reports,null,2));console.log('PASS: Clearly visible paint reflections in day, rain and night: '+JSON.stringify(reports));
+  await evaluate('queenStreet.view.update=window.__paintView');
  }
  if(routeInput){
   const checkRoute=async(id,selector='.route-switch-glyph')=>{
