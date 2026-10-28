@@ -186,9 +186,10 @@ export function createDaylight(renderer,scene){
    streetcarRigs.add(rig);rig.setNight(nightAmount);
    car.add(contactShadow());
    stabilizeBumperTrim(car,rig);
-   // Keep the original paint textures and livery, with readable glass and metal.
+   // A slightly smoother clear top coat catches the existing sky and street
+   // reflections while retaining the original paint texture and livery.
    for(const name of ['TTC_Vermilion','Warm_Ivory']){
-     const paint=rig.materials.get(name);if(paint){paint.envMapIntensity=1.2;paint.clearcoat=.8;paint.clearcoatRoughness=.21;}
+     const paint=rig.materials.get(name);if(paint){paint.envMapIntensity=1.2;paint.roughness=.92;paint.clearcoat=.9;paint.clearcoatRoughness=.18;}
    }
    const glass=rig.materials.get('Tinted_Glass');
    if(glass){glass.color.setHex(0x79949b);glass.opacity=.23;glass.roughness=.12;glass.envMapIntensity=1.3;glass.depthWrite=false;}
