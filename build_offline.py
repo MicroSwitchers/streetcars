@@ -12,6 +12,10 @@ for key,file in [('three','vendor/three.module.js'),('gltf-loader','vendor/GLTFL
     source=source.replace("'./routes-data.js'","'queen-routes-data'").replace("'./routes.js'","'queen-routes'").replace("'./route-signs.js'","'queen-route-signs'")
     source=source.replace("'./sensory-controls.js'","'queen-sensory-controls'").replace("'./night-windows.js'","'queen-night-windows'").replace("'./traffic-flow.js'","'queen-traffic-flow'").replace("'./shadow-bias.js'","'queen-shadow-bias'").replace("'./car-assets.js'","'queen-car-assets'").replace("'./streetscape.js'","'queen-streetscape'").replace("'./architecture.js'","'queen-architecture'").replace("'./weather.js'","'queen-weather'")
     source=source.replace("'./performance.js'","'queen-performance'").replace("'./loading.js'","'queen-loading'").replace("'./weather-cycle.js'","'queen-weather-cycle'").replace("'./day-night.js'","'queen-day-night'").replace("'./streetcar-asset.js'","'queen-streetcar-asset'").replace("'./streetcar-traffic.js'","'queen-streetcar-traffic'")
+    source=source.replace("'./contact-shading.js'","'queen-contact-shading'").replace("'./authored-buildings.js'","'queen-authored-buildings'")
+    imports[key]=module(source)
+for key,file in [('queen-contact-shading','contact-shading.js'),('queen-authored-buildings','authored-buildings.js')]:
+    source=(d/file).read_text(encoding='utf8').replace("'./contact-shading.js'","'queen-contact-shading'")
     imports[key]=module(source)
 html=(d/'index.html').read_text(encoding='utf8')
 html=html.replace('<link rel="stylesheet" href="style.css">','<style>'+(d/'style.css').read_text(encoding='utf8')+'</style>')
@@ -20,6 +24,7 @@ main=(d/'main.js').read_text(encoding='utf8').replace("'./performance.js'","'que
 main=main.replace("'./routes.js'","'queen-routes'")
 html=html.replace('<script type="module" src="main.js"></script>','<script id="embedded-car" type="application/octet-stream">'+base64.b64encode((d/'ttc-clrv.glb').read_bytes()).decode()+'</script><script id="embedded-traffic-cars" type="application/octet-stream">'+base64.b64encode((d/'traffic-cars.glb').read_bytes()).decode()+'</script><script id="embedded-street-props" type="application/octet-stream">'+base64.b64encode((d/'street-props.glb').read_bytes()).decode()+'</script><script type="module">'+main+'</script>')
 html=html.replace('</body>','<script id="embedded-architecture" type="application/octet-stream">'+base64.b64encode((d/'architecture.glb').read_bytes()).decode()+'</script></body>')
+html=html.replace('</body>','<script id="embedded-dundas-buildings" type="application/octet-stream">'+base64.b64encode((d/'dundas-buildings.glb').read_bytes()).decode()+'</script></body>')
 for name,file in [('bell','streetcar-bell.wav'),('horn','streetcar-horn.wav'),('streetcar-pass','streetcar-pass.wav'),('door','streetcar-door.wav')]:
     html=html.replace('</body>','<script id="audio-'+name+'" type="application/octet-stream">'+base64.b64encode((d/'audio'/file).read_bytes()).decode()+'</script></body>')
 (p/'Queen-Street-Drive.html').write_text(html,encoding='utf8')

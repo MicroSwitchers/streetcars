@@ -4,6 +4,7 @@ export function checkArchitecture(api,check,w){
  const a=api.city.architecture,models=['cornice','archedhood','baywindow','balcony','pediment','firelanding','escapeladder','rooflantern','chimneypots','cupola','flathead','spandrel','frieze','wallvent','downpipe','pilaster','stringcourse','cornerblock','roundel','shutters'];
  check('Twenty-two original Blender architectural prototypes are loaded',a.models.size===22&&models.every(n=>a.models.has(n)&&a.counts[n]>0)&&['brickheader','quoin'].every(n=>a.models.has(n)));
  check('Architecture stays within its shared geometry budget',a.sourceTriangles<11000&&a.geometryBytes<400000);
+ check('Five complete authored buildings include baked contact shading',api.city.districts.authored.models.size===5&&api.city.districts.authored.stats.sourceTriangles<8500&&api.city.districts.authored.stats.geometryBytes<700000&&api.city.districts.authored.stats.contacts>1000);
  const block=a.models.get('cornerblock'),shellParts=block.parts.filter(p=>!p.material.name.includes('Glass')).map(p=>new THREE.Mesh(p.geometry,new THREE.MeshBasicMaterial()));
  shellParts.forEach(m=>m.updateMatrixWorld(true));
  const shellRay=new THREE.Raycaster();
@@ -60,7 +61,7 @@ export function checkArchitecture(api,check,w){
    if(layers.length!==1)duplicates.push(p.index+'/'+p.kind+'/'+layers.length);
  }
  check('Installed bays and French doors replace the old glazing without overlap: '+duplicates.join(','),duplicates.length===0);
- if(w.document.getElementById('embedded-car'))check('Portable game loads the embedded architecture without fetching its GLB',!!w.document.getElementById('embedded-architecture')&&!w.performance.getEntriesByType('resource').some(e=>e.name.endsWith('/architecture.glb')));
+ if(w.document.getElementById('embedded-car'))check('Portable game loads both embedded architecture kits without fetching GLBs',!!w.document.getElementById('embedded-architecture')&&!!w.document.getElementById('embedded-dundas-buildings')&&!w.performance.getEntriesByType('resource').some(e=>e.name.endsWith('/architecture.glb')||e.name.endsWith('/dundas-buildings.glb')));
  // Check the exported face winding: roof panes must be visible from above,
  // and each new front opening must have exactly one layer of glazing.
  const ray=new THREE.Raycaster(),hits=[];

@@ -5,7 +5,7 @@ Uses plain glTF buffers, no decoder extension. Does not modify geometry or anima
 import json,struct
 from pathlib import Path
 
-def optimize(path,base_colors=None):
+def optimize(path,base_colors=None,keep_uv_materials=()):
     path=Path(path);data=path.read_bytes();length=struct.unpack_from('<I',data,12)[0]
     doc=json.loads(data[20:20+length]);offset=20+length
     bin_length=struct.unpack_from('<I',data,offset)[0];binary=data[offset+8:offset+8+bin_length]
@@ -22,7 +22,7 @@ def optimize(path,base_colors=None):
             assert not primitive.get('targets'),'Morph targets need explicit handling'
             mat=doc['materials'][primitive['material']]
             if 'normalTexture' not in mat:primitive['attributes'].pop('TANGENT',None)
-            if not textured(mat):
+            if not textured(mat) and mat['name'] not in keep_uv_materials:
                 for key in list(primitive['attributes']):
                     if key.startswith('TEXCOORD_'):primitive['attributes'].pop(key)
             refs.extend((primitive['attributes'],key) for key in primitive['attributes'])

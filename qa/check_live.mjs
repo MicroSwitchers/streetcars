@@ -8,7 +8,8 @@ const ipad=process.argv.includes('--ipad'),loss=process.argv.includes('--loss'),
 const sensory=process.argv.includes('--sensory'),phone=process.argv.includes('--phone');let sensoryExpected;
 const auto=process.argv.includes('--auto');
 const routes=process.argv.includes('--routes');
-const districts=process.argv.includes('--districts');
+const authored=process.argv.includes('--authored');
+const districts=process.argv.includes('--districts')||authored;
 const sidewalk=process.argv.includes('--sidewalk');
 const facadeDepth=process.argv.includes('--facades');
 const pavement=process.argv.includes('--pavement');
@@ -305,12 +306,13 @@ try{
    if(d.retail.stats.rooms!==d.retail.stats.fixtureRooms)throw Error('An interior recess has no stocked rear shelving');
    const ground=d.retail.placements.filter(p=>p.shopfront);
    for(const p of ground){
-    const b=d.frontages.find(f=>f.index===p.frontageIndex&&f.side===p.side),door=b.z+b.width*(b.kind==='modern'?.24:b.kind==='loft'?.36:.34);
+    const b=d.frontages.find(f=>f.index===p.frontageIndex&&f.side===p.side),door=b.doorZ??b.z+b.width*(b.kind==='modern'?.24:b.kind==='loft'?.36:.34);
     if(Math.min(Math.abs(p.minX),Math.abs(p.maxX))<9.7||p.minZ<door+.6&&p.maxZ>door-.6||a.route.crossings.some(c=>p.minZ<c.z+16&&p.maxZ>c.z-16)||a.route.stops.some(s=>p.minZ<s.z+8&&p.maxZ>s.z-8))throw Error('New shopfront prop blocks a walking line, doorway or boarding zone');
    }
    for(let i=0;i<ground.length;i++)for(let j=i+1;j<ground.length;j++)if(ground[i].minX<ground[j].maxX-.025&&ground[i].maxX>ground[j].minX+.025&&ground[i].minZ<ground[j].maxZ-.025&&ground[i].maxZ>ground[j].minZ+.025)throw Error('Shopfront props overlap');
    if(d.urbanBuildings.some(t=>t.front<28||a.route.crossings.some(c=>Math.abs(t.z-c.z)<t.width/2+23)||t.district==='don'||t.district==='riverdale'))throw Error('A new tower enters a road or protected park sightline');
-   return {offset,hash,resources,objects,geometries:a.renderer.info.memory.geometries,textures:a.renderer.info.memory.textures,stats:JSON.parse(JSON.stringify(d.stats)),retail:JSON.parse(JSON.stringify(d.retail.stats)),facades:JSON.parse(JSON.stringify(d.facades.stats)),facadePlacementKinds,reliefCoverage,frontageStyles,signPanels,signAtlasSize:[signAtlas.width,signAtlas.height],rooms,mappedGlazing,roomMaterials,masonryMaterials,glazingCount:glazing.count,urbanBuildings:d.urbanBuildings,zones:d.zones,landmarks:d.landmarks,windowSources:a.city.scenery.windowLighting.windows.length};
+   if(d.authored.stats.overflow||d.contacts.stats.overflow||d.authored.stats.models!==5||d.authored.stats.contacts<1000)throw Error('Missing authored building designs or baked contact visibility');
+   return {offset,hash,resources,objects,geometries:a.renderer.info.memory.geometries,textures:a.renderer.info.memory.textures,stats:JSON.parse(JSON.stringify(d.stats)),authored:JSON.parse(JSON.stringify(d.authored.stats)),authoredPlacements:d.authored.placements,contacts:JSON.parse(JSON.stringify(d.contacts.stats)),retail:JSON.parse(JSON.stringify(d.retail.stats)),facades:JSON.parse(JSON.stringify(d.facades.stats)),facadePlacementKinds,reliefCoverage,frontageStyles,signPanels,signAtlasSize:[signAtlas.width,signAtlas.height],rooms,mappedGlazing,roomMaterials,masonryMaterials,glazingCount:glazing.count+d.authored.stats.rooms,urbanBuildings:d.urbanBuildings,zones:d.zones,landmarks:d.landmarks,windowSources:a.city.scenery.windowLighting.windows.length};
   };window.__districtClose=(offset,night=false)=>{
    window.__districtStage(offset,night);
    const d=a.city.districts,candidates=d.frontages.filter(f=>f.room&&f.side===-1).sort((x,y)=>Math.abs(x.z+124)-Math.abs(y.z+124));
@@ -364,6 +366,22 @@ try{
    if(offset===36&&(!sample.retail.furniture||!sample.facades.counts.cornice))throw Error('Residential approach lacks furnished sidewalks and heritage house details');
    await photo('dundas-'+offset);
    if([0,6,16].includes(offset)){closeUps.push(await evaluate('window.__districtClose('+offset+')'));await photo('dundas-close-'+offset);}
+  }
+  if(authored){
+   const reports=[];
+   for(const name of ['victorian','cornercafe','factory','apartment','office']){
+    const section=samples.find(s=>s.authoredPlacements.some(p=>p.name===name));if(!section)throw Error('No placed '+name+' building across the route');
+    await evaluate(`(()=>{const a=queenStreet;window.__districtStage(${section.offset});const d=a.city.districts,p=d.authored.placements.filter(p=>p.name===${JSON.stringify(name)}).sort((a,b)=>Math.abs(a.z+124)-Math.abs(b.z+124))[0],distance=Math.max(10,p.width*.90,p.height*.80);a.camera.fov=62;a.camera.position.set(p.side*3,Math.max(4,p.height*.32),p.z-distance);a.camera.lookAt(p.side*(p.front+1),p.height*.43,p.z);a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);})()`);
+    await photo('authored-'+name);
+    const probe=await evaluate(`(async()=>{const a=queenStreet,d=a.city.districts,THREE=await import(new URL('./vendor/three.module.js',document.querySelector('script[src$="main.js"]').src).href),model=d.authored.models.get(${JSON.stringify(name)}),meshes=model.parts.map(p=>{const m=new THREE.Mesh(p.geometry,p.material);m.updateMatrixWorld(true);return m;}),ray=new THREE.Raycaster();let rays=0;
+     for(const w of model.layout.windows.filter(w=>w.point[1]>3.8)){const n=new THREE.Vector3(...w.normal),t=new THREE.Vector3(-n.z,0,n.x),origin=new THREE.Vector3(...w.point).addScaledVector(n,.08).addScaledVector(t,.22*w.width);origin.y+=.12*w.height;ray.set(origin,n.clone().negate());ray.far=.4;const hit=ray.intersectObjects(meshes,false)[0];if(!hit||hit.object.material.name!=='Architecture_WindowGlass'||Math.abs(hit.distance-.315)>.012)throw Error('Authored window opening is blocked: '+${JSON.stringify(name)}+' '+JSON.stringify(w)+' '+hit?.object.material.name);rays++;}
+     return {name:${JSON.stringify(name)},triangles:model.triangles,windows:rays};})()`);reports.push(probe);
+    const contact=await evaluate(`(()=>{const a=queenStreet,d=a.city.districts,copy=document.createElement('canvas');copy.width=a.renderer.domElement.width;copy.height=a.renderer.domElement.height;const c=copy.getContext('2d',{willReadFrequently:true}),read=()=>{a.graphics.render(a.scene,a.camera);c.drawImage(a.renderer.domElement,0,0);return c.getImageData(0,0,copy.width,copy.height).data;};d.contacts.shading.value=0;d.contacts.mesh.visible=false;const off=read(),calls=a.renderer.info.render.calls;d.contacts.shading.value=1;d.contacts.mesh.visible=true;const on=read();let drop=0,darker=0;for(let i=0;i<on.length;i+=4){const delta=(off[i]+off[i+1]+off[i+2]-on[i]-on[i+1]-on[i+2])/3;drop+=delta;if(delta>=1)darker++;}return {meanDrop:drop/(on.length/4),darkerFraction:darker/(on.length/4),extraDraws:a.renderer.info.render.calls-calls,compatibility:!!a.graphics.compatibility};})()`);
+    if(contact.meanDrop<.03||contact.darkerFraction<.005||ipad&&(!contact.compatibility||contact.extraDraws>1))throw Error('Soft contacts are absent or add rendering passes: '+JSON.stringify({name,contact}));
+    reports.at(-1).contact=contact;
+   }
+   console.log('PASS: Five complete buildings have open inset glazing and measurable contact shading without a tablet post-processing pass: '+JSON.stringify(reports));
+   await writeFile(join(output,'authored-buildings.json'),JSON.stringify(reports,null,2));
   }
   const sideStreetReports=[];
   for(const offset of [0,6,16,23,26,29,34,36]){

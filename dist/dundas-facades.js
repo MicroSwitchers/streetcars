@@ -89,7 +89,7 @@ export function createDundasFacades({group,mats,assets}){
      stats.infill=infill.length;stats.infillMissing=0;
      for(const b of infill)if(!place('cornerblock',b,.18,b.z,{sx:b.width/6}))stats.infillMissing++;
      const savedLimit=triangleLimit,near=(a,b)=>Math.abs(a.z+90)-Math.abs(b.z+90);
-     const eligible=frontages.filter(b=>HERITAGE.has(b.district)&&['shop','house','loft'].includes(b.kind)&&b.z>-230&&b.z<380&&b.width>3&&b.height>5).sort(near);
+     const eligible=frontages.filter(b=>!b.authored&&HERITAGE.has(b.district)&&['shop','house','loft'].includes(b.kind)&&b.z>-230&&b.z<380&&b.width>3&&b.height>5).sort(near);
      // The Blender cornice keeps its ogee profile, dentils and corbels at 196
      // triangles instead of 484. Give nearby buildings complete rooflines
      // before spending the remaining allowance on individual fancy ornaments.
@@ -103,7 +103,7 @@ export function createDundasFacades({group,mats,assets}){
      }
      triangleLimit=savedLimit;
      const reliefBudget=Math.min(47000,Math.max(0,triangleLimit-stats.triangles-6000));
-     const reliefBuildings=frontages.filter(b=>['shop','house','loft','modern'].includes(b.kind)&&b.z>-230&&b.z<380).sort(near).slice(0,42);
+     const reliefBuildings=frontages.filter(b=>!b.authored&&['shop','house','loft','modern'].includes(b.kind)&&b.z>-230&&b.z<380).sort(near).slice(0,42);
      const corners=returns.filter(b=>b.kind==='corner').sort(near),sides=returns.filter(b=>b.kind!=='corner').sort(near);
      // Separate shares prevent a long industrial frontage, or dozens of party
      // walls, from using up all the relief before side streets are reached.

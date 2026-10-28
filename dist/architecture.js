@@ -3,8 +3,9 @@ import {GLTFLoader} from 'gltf-loader';
 import {facadeReliefs,reliefFacade,FACADE_RELIEFS} from './facade-details.js';
 
 export async function loadArchitecture(){
- const loader=new GLTFLoader(),embedded=document.getElementById('embedded-architecture');
- const asset=embedded?await loader.parseAsync(Uint8Array.from(atob(embedded.textContent.trim()),c=>c.charCodeAt(0)).buffer,''):await loader.loadAsync(new URL('./architecture.glb',import.meta.url).href);
+ const loader=new GLTFLoader();
+ const load=async(id,file)=>{const e=document.getElementById(id);return e?loader.parseAsync(Uint8Array.from(atob(e.textContent.trim()),c=>c.charCodeAt(0)).buffer,''):loader.loadAsync(new URL(file,import.meta.url).href);};
+ const [asset,buildingAsset]=await Promise.all([load('embedded-architecture','./architecture.glb'),load('embedded-dundas-buildings','./dundas-buildings.glb')]);
  asset.scene.updateMatrixWorld(true);
  const models=new Map(),materials=new Map();
  for(const root of asset.scene.children){
@@ -23,7 +24,24 @@ export async function loadArchitecture(){
  }
  const geometries=new Set(),sourceMaterials=new Set();asset.scene.traverse(o=>{if(o.isMesh){geometries.add(o.geometry);sourceMaterials.add(o.material);}});
  geometries.forEach(g=>g.dispose());sourceMaterials.forEach(m=>m.dispose());
- return {models,materials,revision:'blender-queen-architecture-v1'};
+ buildingAsset.scene.updateMatrixWorld(true);const buildings=new Map();
+ for(const root of buildingAsset.scene.children){
+  if(!root.name.startsWith('Building_'))continue;
+  const parts=[],bounds=new THREE.Box3(),layout=JSON.parse(root.userData.layout);
+  root.traverse(mesh=>{
+   if(!mesh.isMesh)return;
+   const geometry=mesh.geometry.clone().applyMatrix4(mesh.matrixWorld),colour=geometry.attributes.color,values=new Float32Array(geometry.attributes.position.count);
+   if(colour)for(let i=0;i<values.length;i++)values[i]=Math.min(1,Math.max(0,(1-colour.getX(i))/.35));
+   geometry.setAttribute('contactOcclusion',new THREE.BufferAttribute(values,1));geometry.deleteAttribute('color');
+   if(!geometry.attributes.uv)geometry.setAttribute('uv',new THREE.Float32BufferAttribute(new Float32Array(values.length*2),2));
+   geometry.computeBoundingBox();geometry.computeBoundingSphere();bounds.union(geometry.boundingBox);
+   const material=mesh.material.clone();material.vertexColors=false;
+   parts.push({geometry,material});
+  });
+  buildings.set(root.name.slice(9),{parts,bounds,layout,triangles:parts.reduce((n,p)=>n+p.geometry.index.count/3,0)});
+ }
+ const buildingGeometries=new Set(),buildingMaterials=new Set();buildingAsset.scene.traverse(o=>{if(o.isMesh){buildingGeometries.add(o.geometry);buildingMaterials.add(o.material);}});buildingGeometries.forEach(g=>g.dispose());buildingMaterials.forEach(m=>m.dispose());
+ return {models,materials,buildings,revision:'blender-queen-architecture-v1'};
 }
 
 export function architectureMaterial(part,mats){

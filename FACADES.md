@@ -66,6 +66,34 @@ concentrates taller massing in its downtown, cultural and Regent Park regions.
 The towers avoid cross-street corridors and protected park/valley openings, reuse
 the existing office material and geometry buffers, and add no real-time lights.
 
+Dundas also has five complete Blender building designs: a pedimented Victorian
+shop, a clipped-corner cafe, a converted factory with northlight roofs, a balcony
+apartment building and a stepped modern office. These replace selected procedural
+buildings at their native widths. Each has its own apertures, side elevations,
+entrance, roof and furnished shop recess; no duplicate wall or glazing is left
+behind. District placement preserves parks and valleys. The reproducible source
+is `asset-source/source/build_dundas_buildings.py`; running it in Blender saves
+`../dundas-buildings-game-ready.blend` and exports `dist/dundas-buildings.glb`.
+The five source models total 8,086 triangles in a 652 KB download.
+
+Soft contact shading works in the iPad forward renderer. Blender bakes local
+ambient visibility into vertices using 20 deterministic rays per vertex. The app
+applies this only to indirect light, leaving direct sunlight and window emission
+intact. Procedural window returns darken toward the glass, and wall materials add
+short, soft gradients at their bases and beneath rooflines. A single fixed
+instance batch, using a 32 by 64 pixel gradient, anchors walls to the pavement.
+Stone entrance aprons bridge the setback to the sidewalk before this shading is
+placed. This adds no full-screen pass, render target or real-time light. The
+buildings and contact strips count toward the existing Dundas triangle ceilings;
+all section changes reuse resident buffers.
+
+`qa/check_live.mjs --ipad --authored --facades --buildings --intersections`
+checks all 37 Dundas sections, the new models' actual window openings, buffer
+stability and both triangle ceilings. It captures each design and compares
+contact shading on/off in rendered pixels. The ground shading adds at most one
+draw call. `qa/check_graphics.mjs architecture offlineArchitecture` also checks
+the desktop renderer and both embedded Blender kits in the portable HTML.
+
 The shared road is already a 3D mesh. Its asphalt uses independent 512-pixel
 colour, aggregate-height and roughness maps at a 1.8-metre world scale. The three
 maps replace the previous three maps and are generated once. Dry aggregate stays

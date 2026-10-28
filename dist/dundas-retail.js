@@ -254,7 +254,7 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
      const p=pools.get(kind);if(!p||stats.triangles+p.model.triangles>spent+22000)return false;
      dummy.position.set(f.side*x,.18,z);dummy.rotation.set(0,yaw,0);dummy.scale.setScalar(1);dummy.updateMatrix();footprint.copy(p.model.bounds).applyMatrix4(dummy.matrix);
      const b={minX:footprint.min.x-.10,maxX:footprint.max.x+.10,minZ:footprint.min.z-.12,maxZ:footprint.max.z+.12};
-     const radius=(b.maxZ-b.minZ)/2,door=f.z+f.width*(f.kind==='house'?-.27:f.kind==='modern'?.24:f.kind==='loft'?.36:.34);
+     const radius=(b.maxZ-b.minZ)/2,door=f.doorZ??f.z+f.width*(f.kind==='house'?-.27:f.kind==='modern'?.24:f.kind==='loft'?.36:.34);
      if(!clear(route,z,radius)||Math.abs(z-door)<radius+.65||Math.min(Math.abs(b.minX),Math.abs(b.maxX))<9.7||Math.max(Math.abs(b.minX),Math.abs(b.maxX))>f.front-.25)return false;
      if(reserved.some(r=>b.minX<r.maxX&&b.maxX>r.minX&&b.minZ<r.maxZ&&b.maxZ>r.minZ))return false;
      if(!prop(kind,f.side*x,.18,z,yaw))return false;Object.assign(placements.at(-1),{shopfront:true,frontageIndex:f.index,side:f.side});reserved.push(b);stats.shopfrontDetails++;return true;
@@ -287,10 +287,10 @@ export function createDundasRetail({group,mats,assets,foliageGeometry}){
          fixture('vessel',room,f.side*10.35,1.025,z,.055,.13,.055,0xd2c6a7);
        }
      }
-     if(ordinal%7===1&&ordinal%3!==0&&(stats.types.aircon||0)<4&&w&&stats.triangles+1052<spent+22000){
+     if(!f.authored&&ordinal%7===1&&ordinal%3!==0&&(stats.types.aircon||0)<4&&w&&stats.triangles+1052<spent+22000){
        if(prop('aircon',f.side*(f.front-.16),w.y-w.height/2-.70,w.z,-f.side*Math.PI/2)){Object.assign(placements.at(-1),{facade:true,frontageIndex:f.index,side:f.side});stats.roofDetails++;}
      }
-     if(ordinal%8===2&&(stats.types.hvac||0)<3&&stats.triangles+2768<spent+22000){
+     if(!f.authored&&ordinal%8===2&&(stats.types.hvac||0)<3&&stats.triangles+2768<spent+22000){
        if(prop('hvac',f.side*(f.front+f.depth*.45),f.height+.30,f.z)){Object.assign(placements.at(-1),{roof:true,frontageIndex:f.index,side:f.side});stats.roofDetails++;}
      }
    }
