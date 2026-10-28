@@ -60,27 +60,39 @@ const parked=Array.from({length:25},(_,i)=>({x:-6.6,z:-240+i*29,length:4.7,movin
 view.rideContext.traffic={actors:[...parked,{x:6.6,z:-181,length:4.7,moving:false},{x:-1.8,z:-181,length:4.7,moving:true}]};
 const fixtures=Array.from({length:18},(_,i)=>({minX:-8.18,maxX:-8.02,minZ:-230+i*34-.08,maxZ:-230+i*34+.08,maxY:7}));
 view.rideContext.obstacles=()=>fixtures;
-for(const [width,height] of [[1440,960],[390,844],[844,390]])for(const reduceMotion of [false,true])for(const speed of [10/3.6,20/3.6,30/3.6]){
+for(const [width,height] of [[1440,960],[390,844],[844,390],[320,568],[430,932],[768,1024]])for(const reduceMotion of [false,true])for(const speed of [10/3.6,20/3.6,30/3.6]){
  globalThis.innerWidth=width;globalThis.innerHeight=height;
  dock=height<540?{top:height*.18,left:width-220}:{top:height*.78,left:width*.3};
  camera.aspect=width/height;settings.reduceMotion=reduceMotion;view.reset();
- let lastAnchor=null,changes=0;
+ let lastAnchor=null,changes=0,passMin=Infinity,passMax=-Infinity,fullPans=0;
  for(let z=route.start;z<=route.end;z+=speed/30){
    view.update(z,1/30);camera.updateMatrixWorld(true);
-   if(camera.position.z!==lastAnchor){changes++;lastAnchor=camera.position.z;}
+   if(camera.position.z!==lastAnchor){
+     if(lastAnchor!==null){
+       assert.ok(z-lastAnchor>=17.5,'The observer follows until the car has passed, including portrait');
+       if(passMax-passMin>THREE.MathUtils.degToRad(110))fullPans++;
+     }
+     changes++;lastAnchor=camera.position.z;passMin=Infinity;passMax=-Infinity;
+   }
+   const pan=Math.atan2(view.target.z-camera.position.z,Math.abs(camera.position.x-route.trackX));
+   passMin=Math.min(passMin,pan);passMax=Math.max(passMax,pan);
    assert.equal(camera.position.x,-8.1,'Observer stays behind the curb and parked mirrors');
    assert.equal(camera.position.y,1.65,'Observer stays at eye height');
    for(const car of parked)assert.ok(Math.abs(camera.position.z-car.z)-car.length/2>=3.2-1e-8,'Observer uses a clear parking gap, including near-plane clearance');
    for(const o of fixtures)assert.ok(camera.position.z<=o.minZ-.85||camera.position.z>=o.maxZ+.85,'Observer also avoids sidewalk poles');
    for(const x of [-1.3,1.3])for(const y of [.08,3.65])for(const end of [-8.1,8.1]){
      const point=new THREE.Vector3(route.trackX+x,y,z+end).project(camera);
-     assert.ok(Math.abs(point.x)<.98&&Math.abs(point.y)<.98,
+     const closePortrait=width/height<.8&&Math.abs(z-camera.position.z)<14;
+     assert.ok((closePortrait||Math.abs(point.x)<.98)&&Math.abs(point.y)<.98,
        `Entire streetcar stays in frame ${width}x${height}, reduced motion ${reduceMotion}, z ${z.toFixed(2)}, projection ${point.toArray()}, fov ${camera.fov}`);
      if(height>=540)assert.ok((1-point.y)*height/2<dock.top-7,'Streetcar stays above the bottom controls');
      framingChecks++;
    }
+   const centre=new THREE.Vector3(route.trackX,1.72,z).project(camera);
+   assert.ok(Math.abs(centre.x)<(width/height<.8?.55:.98)&&Math.abs(centre.y)<.9,`Streetcar remains visible through the pass: ${width}x${height}, z ${z}, observer ${camera.position.z}, centre ${centre.toArray()}`);
  }
  assert.ok(changes>=8,'Sidewalk viewpoints cover the full route');
+ assert.ok(fullPans>=5,'Sidewalk follows through broad approach-to-departure pans on every screen shape');
  const beforePosition=camera.position.clone(),beforeOrientation=camera.quaternion.clone(),beforeFov=camera.fov;
  for(let i=0;i<60;i++)view.update(view.lastZ,1/30,true);
  assert.ok(camera.position.distanceTo(beforePosition)<1e-8&&camera.quaternion.angleTo(beforeOrientation)<1e-7&&camera.fov===beforeFov,'Pause freezes sidewalk framing');
@@ -107,5 +119,5 @@ assert.equal(loops,2,'Just watch repeats without input');assert.equal(arrivals,6
 ride.state.paused=true;const z=ride.state.z,time=ride.state.time;for(let i=0;i<20;i++)ride.step(.1);
 assert.equal(ride.state.z,z);assert.equal(ride.state.time,time,'Pause freezes watch timer');
 ride.setMode('one');ride.restart();for(let i=0;i<200;i++)ride.step(.1);assert.equal(ride.state.phase,'ready','One button still waits for Go');
-console.log(`PASS: ${framingChecks} full-route sidewalk body projections across screen sizes, speeds and reduced motion.`);
+console.log(`PASS: ${framingChecks} sidewalk framing projections and complete approach-to-departure pans across screen sizes, speeds and reduced motion.`);
 console.log('PASS: five views, calm drift, fixed sidewalk passes, live outgoing tracking, dissolves, pause, reduced motion and two complete automatic watch rides.');

@@ -5,7 +5,8 @@ import {dirname,join,relative,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 const qa=dirname(fileURLToPath(import.meta.url)),url=process.argv[2]||'https://microswitchers.github.io/streetcars/';
 const ipad=process.argv.includes('--ipad'),loss=process.argv.includes('--loss'),startupLoss=process.argv.includes('--startup-loss');
-const sensory=process.argv.includes('--sensory'),phone=process.argv.includes('--phone');let sensoryExpected;
+const iphone=process.argv.includes('--iphone');
+const sensory=process.argv.includes('--sensory'),phone=process.argv.includes('--phone')||iphone;let sensoryExpected;
 const auto=process.argv.includes('--auto');
 const routes=process.argv.includes('--routes');
 const authored=process.argv.includes('--authored');
@@ -40,6 +41,7 @@ try{
   await send('Page.addScriptToEvaluateOnNewDocument',{source:'Object.defineProperty(navigator,"platform",{get:()=>"MacIntel"});Object.defineProperty(navigator,"maxTouchPoints",{get:()=>5});Object.defineProperty(navigator,"deviceMemory",{get:()=>undefined});'});
  }
  if(phone){await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:2,mobile:true});await send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});}
+ if(iphone)await send('Page.addScriptToEvaluateOnNewDocument',{source:'Object.defineProperty(navigator,"userAgent",{get:()=>"Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 Version/27.0 Mobile/15E148 Safari/604.1"});Object.defineProperty(navigator,"platform",{get:()=>"iPhone"});Object.defineProperty(navigator,"maxTouchPoints",{get:()=>5});Object.defineProperty(navigator,"deviceMemory",{get:()=>undefined});'});
  if(auto)await send('Page.addScriptToEvaluateOnNewDocument',{source:'try{if(!sessionStorage.getItem("auto-test-seeded")){localStorage.setItem("queen-street-ride-settings-v1",JSON.stringify({mode:"watch",volume:.2,atmosphereVersion:3}));sessionStorage.setItem("auto-test-seeded","1");}}catch{}'});
  if(morning)await send('Page.addScriptToEvaluateOnNewDocument',{source:'try{if(!sessionStorage.getItem("morning-test-seeded")){localStorage.setItem("queen-street-ride-settings-v1",JSON.stringify({mode:"one",playModeVersion:1,night:true,dayNightCycle:true,doorDwell:10,alwaysGreen:false,volume:.2,atmosphereVersion:3}));sessionStorage.setItem("morning-test-seeded","1");}}catch{}'});
  if(startupLoss)await send('Page.addScriptToEvaluateOnNewDocument',{source:'try{if(localStorage.getItem("queen-street-safe-graphics-v1")!=="1"){const original=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){const gl=original.call(this,type,...args);if(type==="webgl2"&&gl)setTimeout(()=>gl.getExtension("WEBGL_lose_context").loseContext(),0);return gl;};}}catch{}'});
@@ -112,6 +114,11 @@ try{
   await check('Glow and street names are optional; preferences save immediately','!document.body.classList.contains("ready-cues")&&document.getElementById("stop-line").hidden&&JSON.parse(localStorage.getItem("queen-street-ride-settings-v1")).stopAtLights===true');
   sensoryExpected=await evaluate('JSON.stringify(queenStreet.settings)');
  }
+ if(iphone){
+  const budget=await evaluate('({simple:queenStreet.graphics.compatibility,appleMobile:queenStreet.renderer.userData.device.appleMobile,tablet:queenStreet.renderer.userData.device.appleTablet,pixels:queenStreet.renderer.domElement.width*queenStreet.renderer.domElement.height,shadow:queenStreet.lighting.sun.shadow.mapSize.x,initial:queenStreet.performance.initial,level:queenStreet.performance.level,mode:queenStreet.settings.quality})');
+  if(!budget.simple||!budget.appleMobile||budget.tablet||budget.initial!=='balanced'||budget.level!=='balanced'||budget.mode!=='auto'||budget.shadow!==1536||budget.pixels<=400000||budget.pixels>1100000)throw Error('iPhone default budget: '+JSON.stringify(budget));
+  console.log('PASS: Fresh iPhone launch starts at Balanced within Auto: '+JSON.stringify(budget));
+ }
  if(ipad){
   const budget=await evaluate('({simple:queenStreet.graphics.compatibility,pixels:queenStreet.renderer.domElement.width*queenStreet.renderer.domElement.height,shadow:queenStreet.lighting.sun.shadow.mapSize.x,level:queenStreet.performance.level,savedPixels:queenStreet.graphics.stats.texturePixelsSaved})');
   if(!budget.simple||budget.pixels>1100000||budget.pixels<=1000000||budget.shadow!==1536||budget.level!=='balanced'||budget.savedPixels<3000000)throw Error('iPad budget: '+JSON.stringify(budget));
@@ -171,10 +178,17 @@ try{
     const report=await evaluate(`(()=>{
      const a=queenStreet;a.updateSettings({mode:'one',camera:'sidewalk',quality:'balanced',weatherMode:'off',night:false,volume:0});a.restart();a.setPaused(true);
      a.view.hasPose=false;a.view.transition=null;a.view.sidewalkIndex=null;
-     let minimumGap=Infinity,anchors=new Set(),samples=0;
+     let minimumGap=Infinity,anchors=new Set(),samples=0,lastAnchor=null,panMin=Infinity,panMax=-Infinity,fullPans=0,maxCentreX=0;
      const parked=a.city.actors.actors.filter(c=>!c.moving&&c.x<0);
      for(let z=a.route.start;z<=a.route.end;z+=.5){
       a.view.update(z,1/30,false);a.camera.updateMatrixWorld(true);anchors.add(a.camera.position.z);
+      if(lastAnchor!==a.camera.position.z){
+       if(lastAnchor!==null){if(z-lastAnchor<17.5)throw Error('Sidewalk cuts away before completing the pass');if(panMax-panMin>110*Math.PI/180)fullPans++;}
+       lastAnchor=a.camera.position.z;panMin=Infinity;panMax=-Infinity;
+      }
+      const pan=Math.atan2(a.view.target.z-a.camera.position.z,Math.abs(a.camera.position.x-a.route.trackX));panMin=Math.min(panMin,pan);panMax=Math.max(panMax,pan);
+      const centre=a.camera.position.clone().set(a.route.trackX,1.72,z).project(a.camera);maxCentreX=Math.max(maxCentreX,Math.abs(centre.x));
+      if(Math.abs(centre.x)>.9||Math.abs(centre.y)>.9)throw Error('Sidewalk loses the streetcar during its pan');
       for(const car of parked){
        const gap=Math.abs(a.camera.position.z-car.z)-car.length/2;minimumGap=Math.min(gap,minimumGap);
        if(gap<3.2-1e-6)throw Error('Sidewalk viewpoint intersects a parked car foreground');
@@ -185,12 +199,22 @@ try{
       for(const o of a.city.sidewalkObstacles())if(o.maxY>.8&&o.minX<a.camera.position.x+.85&&o.maxX>a.camera.position.x-.85&&a.camera.position.z>o.minZ-.85&&a.camera.position.z<o.maxZ+.85)throw Error('Sidewalk observer clips a pole or street fitting');
       samples++;
      }
+     if(fullPans<5)throw Error('Sidewalk does not complete broad approach-to-departure pans');
      a.state.z=-60;a.car.position.z=-60;a.city.actors.setFocus(-60);a.view.hasPose=false;a.view.lastZ=null;a.view.transition=null;a.view.sidewalkIndex=null;a.view.instant=true;a.view.update(-60,0,false);
      window.__sidewalkUpdate=a.view.update;a.view.update=()=>{};a.graphics.render(a.scene,a.camera);
-     return {route:a.route.id,minimumGap,anchors:anchors.size,samples};
+     return {route:a.route.id,minimumGap,anchors:anchors.size,samples,fullPans,maxCentreX};
     })()`);
     console.log('PASS: Sidewalk observers and near planes avoid actual parked car bounds: '+JSON.stringify(report));
     const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'sidewalk-clear-'+id+'.png'),Buffer.from(shot.data,'base64'));
+    if(phone){
+     await evaluate(`(()=>{const a=queenStreet;a.view.update=window.__sidewalkUpdate;a.view.hasPose=false;a.view.lastZ=null;a.view.transition=null;a.view.sidewalkIndex=0;a.view.sidewalkAnchor=null;a.view.instant=true;window.__passObserver=a.view.chooseSidewalkAnchor(a.view.sidewalkStops[0]);window.__passZ=window.__passObserver.z-24;})()`);
+     for(const [name,delta] of [['approach',-24],['alongside',0],['departure',17]]){
+      await evaluate(`(()=>{const a=queenStreet,end=window.__passObserver.z+${delta};for(let z=window.__passZ;z<end;z+=20/3.6/30)a.view.update(z,1/30,false);a.state.z=end;a.car.position.z=end;a.city.actors.setFocus(end);a.view.update(end,1/30,false);window.__passZ=end;window.__sidewalkUpdate=a.view.update;a.view.update=()=>{};a.graphics.render(a.scene,a.camera);})()`);
+      const frame=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'sidewalk-'+id+'-'+name+'.png'),Buffer.from(frame.data,'base64'));
+      await evaluate('queenStreet.view.update=window.__sidewalkUpdate');
+     }
+     await evaluate('queenStreet.view.update=()=>{}');
+    }
     if(id==='queen'){
      for(const kind of ['utilitycabinet','newsbox','bikestand','treegrate','stormdrain']){
       if(!await evaluate(`(()=>{const a=queenStreet,p=a.city.scenery.placements.filter(p=>p.kind===${JSON.stringify(kind)}&&p.x<0).sort((p,q)=>Math.abs(p.z+160)-Math.abs(q.z+160))[0];if(!p)return false;a.camera.clearViewOffset();a.camera.fov=46;a.camera.position.set(p.x+2.4,1.8,p.z+2.8);a.camera.lookAt(p.x,(p.kind==='treegrate'||p.kind==='stormdrain')?.2:.7,p.z);a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);return true;})()`))throw Error('New Blender street fitting is absent: '+kind);

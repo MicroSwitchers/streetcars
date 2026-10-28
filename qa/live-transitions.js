@@ -43,7 +43,7 @@ export async function checkLiveTransitions(api,check,gameWindow,reduceMotion=fal
 
  // Exercise the actual ride through a sidewalk station change, including wheels.
  api.updateSettings({camera:'sidewalk',mode:'watch',reduceMotion,alwaysGreen:true,stopAtLights:false,cruise:20});api.restart();
- const passEnd=api.camera.aspect<.8?-15:18;
+ const passEnd=18;
  api.state.z=api.view.sidewalkStops[0]+passEnd-.6;api.state.speed=20/3.6;api.state.phase='travelling';
  api.step(0);api.view.reset();api.view.update(api.state.z,0);api.view.transition=null;
  graphics.render(api.scene,api.camera);

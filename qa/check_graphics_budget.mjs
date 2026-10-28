@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import {deviceGraphics,initialQuality,AdaptiveQuality,qualityProfile,renderRatio,GRAPHICS_RECOVERY_KEY} from '../dist/performance.js';
 for(const nav of [{userAgent:'Mozilla/5.0 (iPad; CPU OS 27_0_1 like Mac OS X)'},{userAgent:'Mozilla/5.0 (Macintosh; Intel Mac OS X)',platform:'MacIntel',maxTouchPoints:5},{userAgent:'iPhone'}]){
- const device=deviceGraphics(nav,true);assert.ok(device.compatibility);assert.equal(initialQuality(device),device.appleTablet?'balanced':'low');
+ const device=deviceGraphics(nav,true);assert.ok(device.compatibility);assert.equal(initialQuality(device),'balanced');
 }
 assert.equal(deviceGraphics({platform:'MacIntel',maxTouchPoints:0}).compatibility,false);
 assert.equal(deviceGraphics({userAgent:'Android',deviceMemory:8},true).compatibility,false);
+assert.equal(initialQuality(deviceGraphics({userAgent:'Android',deviceMemory:8},true)),'balanced','portable devices start at the middle graphics level');
+assert.equal(initialQuality(deviceGraphics({userAgent:'Android',deviceMemory:2},true)),'low','very small memory budgets retain the fallback');
 assert.ok(deviceGraphics({},false,{getItem:key=>key===GRAPHICS_RECOVERY_KEY?'1':null}).compatibility);
 assert.doesNotThrow(()=>deviceGraphics({},false,{getItem(){throw Error('Storage denied');}}));
 const budget=new AdaptiveQuality('low','low');

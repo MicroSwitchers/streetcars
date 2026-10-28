@@ -15,7 +15,7 @@ export const COMPATIBILITY_QUALITY={...QUALITY.low,label:'Safe graphics',pixels:
 // Leave headroom for moving traffic and night rain on older iPads.
 export const TABLET_QUALITY={...COMPATIBILITY_QUALITY,label:'Balanced tablet graphics',maxDpr:1.25,pixels:1100000,shadow:1536,spots:6,points:3,probe:128};
 export function qualityProfile(level,compatibility=false){return compatibility?(level==='low'?COMPATIBILITY_QUALITY:TABLET_QUALITY):QUALITY[level];}
-export function initialQuality(device={}){return device.recovering||device.memory&&device.memory<=2?'low':device.compatibility?(device.appleTablet?'balanced':'low'):device.coarse||device.memory&&device.memory<=4?'balanced':'high';}
+export function initialQuality(device={}){return device.recovering||device.memory&&device.memory<=2?'low':device.compatibility||device.coarse||device.memory&&device.memory<=4?'balanced':'high';}
 export function renderRatio(profile,width,height,dpr=1){return Math.max(.1,Math.min(dpr,profile.maxDpr,Math.sqrt(profile.pixels/Math.max(1,width*height))));}
 
 // Register before renderer creation, including failures during shader startup.

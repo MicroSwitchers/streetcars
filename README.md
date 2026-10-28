@@ -35,7 +35,12 @@ the timer expires; other modes still wait for your command. Every two stops
 serves Bathurst and Spadina on this route; the final stop is always included.
 
 **Auto / Low / Balanced / High** graphics adapts resolution, shadows and effect
-budgets. Touch devices start with a smaller budget. Models load in parallel,
+budgets. Portable devices, including iPhones, start at Balanced within Auto;
+saved choices still apply, and graphics recovery retains its Low fallback.
+Portrait sidewalk views follow the car through a complete pass before
+dissolving to the next observer. The close pass shows a section of the body
+instead of switching away early to keep both ends inside the narrow screen.
+Models load in parallel,
 audio loading is deferred, scenery uses local culling cells, and paused scenes
 reuse their rendered frame. Startup prepares the HDR shaders asynchronously
 without generating a redundant sky/reflection map.

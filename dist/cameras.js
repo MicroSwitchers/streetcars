@@ -163,7 +163,7 @@ export class StreetcarCamera {
    return {x,z:best};
  }
  updateSidewalk(z,dt,paused){
-   const portrait=this.camera.aspect<.8,passEnd=portrait?-15:18;
+   const portrait=this.camera.aspect<.8,passEnd=18;
    if(this.sidewalkIndex===null){
      this.sidewalkAnchor=null;
      this.sidewalkIndex=this.sidewalkStops.findIndex(point=>z<=point+passEnd);
@@ -183,8 +183,9 @@ export class StreetcarCamera {
    }
    const observer=this.sidewalkAnchor;
    const trackX=this.rideContext?.route.trackX??-1.8;
-   // Stay at standing eye height on the sidewalk. Portrait views change
-   // stations before the car passes too close to fit in their narrow frame.
+   // Stay at standing eye height and watch the car pass before changing spots.
+   // Portrait naturally shows a closer section of the body as it passes the
+   // observer; do not cut its pan short or stretch the lens to fit every end.
    // Stand on the curb side of the path, ahead of trees and pole furniture.
    this.goal.set(observer.x,1.65,observer.z);
    if(!paused||this.instant){
@@ -194,17 +195,19 @@ export class StreetcarCamera {
        const angle=Math.atan2(z+end-observer.z,gap-side*x);
        low=Math.min(low,angle);high=Math.max(high,angle);
      }
-     // Centre the visible silhouette, rather than lagging behind its midpoint.
+     // Landscape centres the full silhouette. Portrait follows the body centre
+     // through its close pass instead of biasing toward the nearer end.
      // Essential subject tracking also stays enabled with reduced motion.
-     const pan=(low+high)*.5;
+     const pan=portrait?Math.atan2(z-observer.z,gap):(low+high)*.5;
      const swipe=this.userView?this.yaw*.07:0;
      this.target.set(trackX,1.72,observer.z+Math.tan(pan+swipe)*gap);
    }
    this.camera.position.copy(this.goal);this.camera.lookAt(this.target);
    this.camera.updateMatrixWorld(true);
-   // Fit the entire body in the usable part of the screen, including the
+   // Fit the body in the usable part of the screen, including the
    // view offset that leaves room for the controls. Widen immediately when
-   // required; ease back in as the car moves away from this observer.
+   // required; ease back in as the car moves away from this observer. Retain
+   // the lens limit during the close portrait pass, keeping the subject centred.
    this.frameWatching(66);
    const projection=this.camera.projectionMatrix.elements;
    const centreX=-projection[8],centreY=-projection[9];
