@@ -1,5 +1,24 @@
 # Window and facade construction
 
+Dundas now has a 460,000-triangle combined resident allowance, up from 380,000.
+Its facade ceiling rises from 145,000 to 205,000, with a 180,000-triangle reserve
+before optional retail dressing. Base buildings retain 135,000 and retail keeps
+190,000 as its individual maximum. `dist/dundas-budget.js` is the common source
+for these limits and the browser checks. These are code limits for resident
+geometry; Queen's spatially batched architecture has no equivalent combined cap.
+
+The extra allowance uses the existing Blender kit: up to 48 complete corniced
+frontages, 12 projecting bays, 10 iron balconies, and a 72,000-triangle relief
+allowance spread across up to 56 frontages plus the side streets and corners.
+Fixed instance capacities have increased, with the same 50 facade draw batches
+and shared geometry/materials. Section changes continue to replace matrices.
+The iPad pixel, texture, shadow and real-time light limits are unchanged.
+
+The before/after check across all 37 resident offsets found an average of 1,146
+architectural pieces instead of 661, and complete cornices on 30.9 buildings
+instead of 17.9. The maximum combined count was 459,965 triangles, with no pool
+overflows and stable object, geometry and texture identities after warm-up.
+
 Queen's main street, side streets and exposed end elevations use wall openings,
 24 cm stone reveals, inset glazing and thin sash geometry. Existing furnished
 storefront recesses, projecting Blender bays, balconies and roof lanterns remain.
@@ -12,7 +31,7 @@ Glazing is 23.5 cm behind the outer reveal, just in front of the backing wall.
 covering a solid wall with window stickers. Queen batches the static geometry;
 Dundas reuses fixed instance buffers. Seven inexpensive wall-plane batches avoid
 rendering the hidden faces of a box for every patch of brickwork. The existing
-135,000-triangle base and 380,000-triangle combined Dundas ceilings remain.
+135,000-triangle base ceiling remains; the combined Dundas ceiling is now 460,000.
 
 Glass and tower curtain walls also use analytic ray/box room mapping. The visible
 side walls, ceiling and floor change with viewing angle. Subtle roller blinds,
@@ -47,7 +66,7 @@ replaces its original glazing instead of being layered over it. Flower boxes,
 produce in crates and cafe cups use the resident primitive/foliage pools.
 Detailed counters have a separate allowance from inexpensive stocked shelving,
 so every active furnished recess receives shelf contents. Architectural dressings
-receive a reserved share of the shared 380,000-triangle budget alongside the base
+receive a reserved share of the shared 460,000-triangle budget alongside the base
 and retail batches; no section can silently exceed the limit by adding decoration.
 
 The Blender architecture kit includes projecting soldier-brick headers with

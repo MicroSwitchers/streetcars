@@ -3,6 +3,7 @@ import {spawn} from 'node:child_process';
 import {mkdtemp,readFile,mkdir,writeFile,rm} from 'node:fs/promises';
 import {dirname,join,relative,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {DUNDAS_BUDGET} from '../dist/dundas-budget.js';
 const qa=dirname(fileURLToPath(import.meta.url)),url=process.argv[2]||'https://microswitchers.github.io/streetcars/';
 const ipad=process.argv.includes('--ipad'),loss=process.argv.includes('--loss'),startupLoss=process.argv.includes('--startup-loss');
 const iphone=process.argv.includes('--iphone');
@@ -411,7 +412,7 @@ try{
   };})()`);
   // Diagnose every fixed-pool capacity in one run before the first staged
   // screenshot can stop at an early failure and conceal later sections.
-  const poolDiagnostics=await evaluate(`(()=>{const result=[];for(let offset=0;offset<=36;offset++){const s=window.__districtStage(offset);result.push({offset,base:{overflow:s.stats.overflow,overflows:s.stats.overflows||{},triangles:s.stats.triangles},retail:{overflow:s.retail.overflow,overflows:s.retail.overflows||{},triangles:s.retail.triangles},facades:{overflow:s.facades.overflow,overflows:s.facades.overflows||{},triangles:s.facades.triangles,archedhood:s.facadePlacementKinds.archedhood||0}});}return result;})()`);
+  const poolDiagnostics=await evaluate(`(()=>{const result=[];for(let offset=0;offset<=36;offset++){const s=window.__districtStage(offset);result.push({offset,base:{overflow:s.stats.overflow,overflows:s.stats.overflows||{},triangles:s.stats.triangles},retail:{overflow:s.retail.overflow,overflows:s.retail.overflows||{},triangles:s.retail.triangles},facades:{overflow:s.facades.overflow,overflows:s.facades.overflows||{},triangles:s.facades.triangles,archedhood:s.facadePlacementKinds.archedhood||0,omissions:s.facades.budgetOmissions,corniceBuildings:s.facades.corniceBuildings,counts:s.facades.counts}});}return result;})()`);
   await writeFile(join(output,'dundas-pool-diagnostics.json'),JSON.stringify(poolDiagnostics,null,2));
   const overflowingSections=poolDiagnostics.filter(s=>s.base.overflow||s.retail.overflow||s.facades.overflow);
   if(overflowingSections.length)throw Error('Dundas pool capacity failures across all 37 offsets: '+JSON.stringify(overflowingSections));
@@ -426,11 +427,13 @@ try{
   await changeComparisonRoute('queen');
   await evaluate(`(()=>{const a=queenStreet,s=a.captureSession();s.ride.state.z=-150;a.restoreSession(s);a.updateSettings({quality:'balanced',weatherMode:'off',night:false});for(let i=0;i<81;i++)a.weather.update(.1,a.state.z,0,a.renderer.getPixelRatio(),false);a.camera.clearViewOffset();a.camera.fov=58;a.camera.position.set(5,7,-172);a.camera.lookAt(-16,5,-124);a.camera.updateProjectionMatrix();a.graphics.render(a.scene,a.camera);})()`);
   await photo('queen-comparison-day');
+  const queenDetail=await evaluate(`(()=>{const a=queenStreet;let residentTriangles=0;a.city.queenScenery.traverse(o=>{if(o.isMesh)residentTriangles+=(o.geometry.index?.count??o.geometry.attributes.position.count)/3*(o.isInstancedMesh?o.count:1);});const q=a.city.architecture;return {residentTriangles,architectureTriangles:q.placements.reduce((n,p)=>n+q.models.get(p.kind).triangles,0),counts:q.counts};})()`);
+  await writeFile(join(output,'queen-detail-budget.json'),JSON.stringify(queenDetail,null,2));
   await changeComparisonRoute('dundas');
   const assertBudget=sample=>{
-   if(sample.stats.overflow||sample.stats.meshes>60||sample.stats.triangles>135000)throw Error('Dundas exceeds its fixed base scenery budget: '+JSON.stringify(sample.stats));
-   for(const [name,limit] of [['retail',190000],['facades',145000]])if(!sample[name]||sample[name].overflow||sample[name].triangles>limit)throw Error('Dundas '+name+' exceeds its authored asset budget: '+JSON.stringify(sample[name]));
-   if(sample.stats.triangles+sample.retail.triangles+sample.facades.triangles>380000)throw Error('Dundas combined scenery exceeds the shared asset budget: '+JSON.stringify({offset:sample.offset,base:sample.stats.triangles,retail:sample.retail.triangles,facades:sample.facades.triangles}));
+   if(sample.stats.overflow||sample.stats.meshes>60||sample.stats.triangles>DUNDAS_BUDGET.base)throw Error('Dundas exceeds its fixed base scenery budget: '+JSON.stringify(sample.stats));
+   for(const name of ['retail','facades'])if(!sample[name]||sample[name].overflow||sample[name].triangles>DUNDAS_BUDGET[name])throw Error('Dundas '+name+' exceeds its authored asset budget: '+JSON.stringify(sample[name]));
+   if(sample.stats.triangles+sample.retail.triangles+sample.facades.triangles>DUNDAS_BUDGET.combined)throw Error('Dundas combined scenery exceeds the shared asset budget: '+JSON.stringify({offset:sample.offset,base:sample.stats.triangles,retail:sample.retail.triangles,facades:sample.facades.triangles}));
    if(sample.facadePlacementKinds.archedhood||sample.facades.counts.archedhood)throw Error('Dundas restores generic arches over its district windows: '+JSON.stringify({offset:sample.offset,kinds:sample.facadePlacementKinds}));
    if(!sample.facades.counts.flathead||!sample.facades.counts.downpipe||!(sample.facades.counts.spandrel||sample.facades.counts.stringcourse))throw Error('Dundas lost its modeled window heads, wall panels or drainage detail at '+sample.offset);
    if(sample.facades.infillMissing)throw Error('Intersection building shells were omitted by the asset budget at '+sample.offset);
@@ -502,6 +505,8 @@ try{
    if(!visible)throw Error('No new Dundas detail available for review: '+kind);
    await photo('dundas-detail-'+kind);
   }
+  const expanded=samples.find(s=>s.offset===6);
+  if(expanded.facades.corniceBuildings<30||expanded.facades.counts.baywindow<10||expanded.facades.counts.balcony<8)throw Error('Expanded Dundas allowance did not reach the heritage rooflines, bays and balconies: '+JSON.stringify(expanded.facades));
   const landmarks=samples.flatMap(s=>s.landmarks);
   for(const [id,side] of [['ago',-1],['hospital',1],['square',-1],['spectrum',-1],['regent-park',1],['library',1],['station',-1]])if(!landmarks.some(f=>f.id===id&&f.side===side))throw Error('Missing or misplaced '+id);
   if(!landmarks.some(f=>f.id==='library'&&f.index>33.12)||!landmarks.some(f=>f.id==='spectrum'&&f.index<29.12))throw Error('Landmark occupies the wrong intersection corner');

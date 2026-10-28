@@ -13,8 +13,10 @@ for key,file in [('three','vendor/three.module.js'),('gltf-loader','vendor/GLTFL
     source=source.replace("'./sensory-controls.js'","'queen-sensory-controls'").replace("'./night-windows.js'","'queen-night-windows'").replace("'./traffic-flow.js'","'queen-traffic-flow'").replace("'./shadow-bias.js'","'queen-shadow-bias'").replace("'./car-assets.js'","'queen-car-assets'").replace("'./streetscape.js'","'queen-streetscape'").replace("'./architecture.js'","'queen-architecture'").replace("'./weather.js'","'queen-weather'")
     source=source.replace("'./performance.js'","'queen-performance'").replace("'./loading.js'","'queen-loading'").replace("'./weather-cycle.js'","'queen-weather-cycle'").replace("'./day-night.js'","'queen-day-night'").replace("'./streetcar-asset.js'","'queen-streetcar-asset'").replace("'./streetcar-traffic.js'","'queen-streetcar-traffic'")
     source=source.replace("'./contact-shading.js'","'queen-contact-shading'").replace("'./authored-buildings.js'","'queen-authored-buildings'")
+    source=source.replace("'./dundas-budget.js'","'queen-dundas-budget'")
+    assert not re.search(r"\bfrom\s*['\"]\.\.?/",source),f'Unbundled relative module import in {file}'
     imports[key]=module(source)
-for key,file in [('queen-contact-shading','contact-shading.js'),('queen-authored-buildings','authored-buildings.js')]:
+for key,file in [('queen-contact-shading','contact-shading.js'),('queen-authored-buildings','authored-buildings.js'),('queen-dundas-budget','dundas-budget.js')]:
     source=(d/file).read_text(encoding='utf8').replace("'./contact-shading.js'","'queen-contact-shading'")
     imports[key]=module(source)
 html=(d/'index.html').read_text(encoding='utf8')

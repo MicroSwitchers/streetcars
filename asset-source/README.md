@@ -11,7 +11,7 @@ bytes, without new image textures or decoders. Rebuild a dedicated preview with
 plots and crossing clearances before closing unintended gaps. The same planner
 serves both routes. Queen reserves complete side-street corner footprints first;
 Dundas allocates structural shells before optional facade ornaments, retaining
-its 380,000-triangle combined resident ceiling. Side streets continue to another
+its bounded combined resident ceiling (now 460,000 triangles). Side streets continue to another
 junction and an occupied block; skyline towers no longer stand in Queen's
 side-street corridors. Fixed sign matrices grew by 80 entries (about 6 KB), while
 new plaques reuse the existing atlas and existing sign proportions.
@@ -28,9 +28,10 @@ GLB. The complete kit remains below its original 11,000-triangle source budget.
 `dist/facade-details.js` plans reliefs around actual window apertures, with four
 masonry styles and a separate modern podium treatment. Queen and Dundas reuse
 the same prototypes on their main frontages, exposed upper party walls, corner
-returns and side streets. Dundas reserves at most 29,000 of its existing facade
-triangles for these reliefs; the overall 380,000-triangle resident budget remains
-unchanged. No lights, shadow maps or texture atlases were added. Side-street
+returns and side streets. Dundas now allows up to 72,000 facade triangles for
+these reliefs within a 460,000-triangle combined resident budget. Its expanded
+cornice, bay and balcony instance pools reuse the same source meshes and materials.
+No lights, shadow maps or texture atlases were added. Side-street
 offices also continue their glazed upper floors above the masonry podium.
 
 # Photo-refined TTC CLRV game asset

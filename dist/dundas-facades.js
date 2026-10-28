@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import {facadeReliefs,reliefFacade,FACADE_RELIEFS} from './facade-details.js';
 import {architectureMaterial} from './architecture.js';
+import {DUNDAS_BUDGET,DUNDAS_FEATURE_LIMITS} from './dundas-budget.js';
 
 // The same authored architectural kit used on Queen, with a bounded resident
 // pool. Section changes only replace instance matrices; they never make new
 // meshes, geometries, materials, textures, lights, or shader programs.
-const CAPACITIES=Object.freeze({cornice:400,firelanding:12,escapeladder:8,rooflantern:12,chimneypots:16,baywindow:8,balcony:6,pediment:8,flathead:480,spandrel:160,frieze:400,wallvent:120,downpipe:160,pilaster:180,stringcourse:160,cornerblock:100,roundel:100,shutters:100,brickheader:360,quoin:700});
+const CAPACITIES=Object.freeze({cornice:560,firelanding:12,escapeladder:8,rooflantern:12,chimneypots:24,...DUNDAS_FEATURE_LIMITS,pediment:12,flathead:640,spandrel:240,frieze:560,wallvent:160,downpipe:224,pilaster:240,stringcourse:224,cornerblock:100,roundel:140,shutters:140,brickheader:480,quoin:1000});
 const HERITAGE=new Set(['west','portugal','bellwoods','chinatown','garden','riverside','riverdale','terminal']);
-const MAX_TRIANGLES=145000;
+const MAX_TRIANGLES=DUNDAS_BUDGET.facades;
 const round=n=>Math.round(n*1000)/1000;
 
 export function createDundasFacades({group,mats,assets}){
@@ -95,15 +96,15 @@ export function createDundasFacades({group,mats,assets}){
      // before spending the remaining allowance on individual fancy ornaments.
      triangleLimit=Math.min(savedLimit,stats.triangles+Math.max(0,(savedLimit-stats.triangles)*.48));
      let corniceModules=0;stats.corniceBuildings=0;
-     for(const b of eligible.slice(0,36)){
+     for(const b of eligible.slice(0,48)){
        const modules=Math.ceil(b.width/1.35),span=(b.width-.05)/modules,cost=modules*models.get('cornice').triangles;
        if(corniceModules+modules>CAPACITIES.cornice||stats.triangles+cost>triangleLimit)continue;
        for(let i=0;i<modules;i++)place('cornice',b,b.height+.22,b.z-b.width/2+(i+.5)*b.width/modules,{sx:span});
        corniceModules+=modules;stats.corniceBuildings++;
      }
      triangleLimit=savedLimit;
-     const reliefBudget=Math.min(47000,Math.max(0,triangleLimit-stats.triangles-6000));
-     const reliefBuildings=frontages.filter(b=>!b.authored&&['shop','house','loft','modern'].includes(b.kind)&&b.z>-230&&b.z<380).sort(near).slice(0,42);
+     const reliefBudget=Math.min(DUNDAS_BUDGET.relief,Math.max(0,triangleLimit-stats.triangles-9000));
+     const reliefBuildings=frontages.filter(b=>!b.authored&&['shop','house','loft','modern'].includes(b.kind)&&b.z>-230&&b.z<380).sort(near).slice(0,56);
      const corners=returns.filter(b=>b.kind==='corner').sort(near),sides=returns.filter(b=>b.kind!=='corner').sort(near);
      // Separate shares prevent a long industrial frontage, or dozens of party
      // walls, from using up all the relief before side streets are reached.
@@ -117,11 +118,11 @@ export function createDundasFacades({group,mats,assets}){
      triangleLimit=savedLimit;
      // Keep most modelling detail around the useful sidewalk/ride view. Distal
      // blocks retain the district builder's cheaper roof and window profiles.
-     const detailed=eligible.slice(0,36);
+     const detailed=eligible.slice(0,48);
      for(const [order,b] of detailed.entries()){
        stats.frontages++;
        const ordinal=Math.abs(Math.floor(b.index??order)),windows=upperWindows(b);
-       if(order<24&&b.kind==='shop'&&ordinal%5===2)place('pediment',b,b.height+.28,b.z);
+       if(order<32&&b.kind==='shop'&&ordinal%5===2)place('pediment',b,b.height+.28,b.z);
        // Rectangular street windows use the builder's straight lintels and
        // sills. Decorative arches belong to specific buildings, never a kit
        // detail repeated across unrelated shops, houses and factory windows.
@@ -137,7 +138,7 @@ export function createDundasFacades({group,mats,assets}){
        // a finely modelled cornice rather than identical classical pediments.
        // Features sit within the roof footprint, clear of shop entrances,
        // sidewalks, catenary, the track and the district's awnings.
-       if(order<24&&(b.kind==='house'||ordinal%3===0))place('chimneypots',b,b.height+.28,b.z-b.width*.30,{x:b.front+b.depth*.70,roof:true});
+       if(order<32&&(b.kind==='house'||ordinal%3===0))place('chimneypots',b,b.height+.28,b.z-b.width*.30,{x:b.front+b.depth*.70,roof:true});
        if(b.kind==='loft'&&order<22&&ordinal%7===1)place('rooflantern',b,b.height+.29,b.z+b.width*.23,{x:b.front+b.depth*.65,roof:true});
 
      }

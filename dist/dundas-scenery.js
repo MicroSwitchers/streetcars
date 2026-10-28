@@ -8,6 +8,7 @@ import {treeShape} from './surfaces.js';
 import {intersectionInfill} from './intersection-blocks.js';
 import {contactShading,shadeWindowReveals,createBuildingContacts} from './contact-shading.js';
 import {createAuthoredBuildings} from './authored-buildings.js';
+import {DUNDAS_BUDGET,DUNDAS_FEATURE_LIMITS} from './dundas-budget.js';
 
 // A complete resident 505 streetscape, reusing the same GPU buffers at every
 // section change. Districts change both massing and street-level objects.
@@ -302,8 +303,8 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
        let feature=null;
        if(serial>=0&&level===0&&col===Math.floor(count/2)&&z>-210&&z<250&&y+1.4<height){
          const choice=hash(serial*29+side*7),lane=side>0?1:0;
-         if(choice<.34&&featuredBays<8&&baySides[lane]<4&&pitch>2.3){feature='baywindow';featuredBays++;baySides[lane]++;}
-         else if(choice<.56&&featuredBalconies<6&&balconySides[lane]<3){feature='balcony';featuredBalconies++;balconySides[lane]++;}
+         if(choice<.34&&featuredBays<DUNDAS_FEATURE_LIMITS.baywindow&&baySides[lane]<DUNDAS_FEATURE_LIMITS.baywindow/2&&pitch>2.3){feature='baywindow';featuredBays++;baySides[lane]++;}
+         else if(choice<.56&&featuredBalconies<DUNDAS_FEATURE_LIMITS.balcony&&balconySides[lane]<DUNDAS_FEATURE_LIMITS.balcony/2){feature='balcony';featuredBalconies++;balconySides[lane]++;}
        }
        if(feature)openings.push({y,z:zz,width:feature==='baywindow'?2.04:1.30,height:2.16,feature});
        else openings.push(recessedWindow(side,front,y,zz,paneWidth+.14,paneHeight+.14));
@@ -803,10 +804,10 @@ export function createDundasScenery({scene,route,mats,foliage,streetProps,archit
    stats.authoredTriangles=authored.stats.triangles;stats.contactTriangles=contacts.stats.triangles;stats.triangles+=stats.authoredTriangles+stats.contactTriangles;
    const replacements=frontages.flatMap(b=>(b.windows||[]).filter(w=>w.feature)).reduce((n,w)=>n+architecturalAssets.models.get(w.feature).triangles,0);
    const structural=infill.length*architecturalAssets.models.get('cornerblock').triangles+replacements;
-   // Keep furnished interiors, but reserve enough of the existing total budget
-   // for the architectural detail visible from the street and sidewalk.
-   retail.setRoute(route,frontages,sideStreets,380000-stats.triangles-Math.max(structural+76000,110000));
-   facades.setRoute(route,frontages,380000-stats.triangles-retail.stats.triangles,reliefSurfaces,infill);
+   // Protect furnished shops and give the additional geometry allowance to
+   // facade depth and ornament, using the same resident assets and draw batches.
+   retail.setRoute(route,frontages,sideStreets,DUNDAS_BUDGET.combined-stats.triangles-Math.max(structural+130000,DUNDAS_BUDGET.facadeReserve));
+   facades.setRoute(route,frontages,DUNDAS_BUDGET.combined-stats.triangles-retail.stats.triangles,reliefSurfaces,infill);
    signRegions.needsUpdate=true;signTexture.needsUpdate=true;stats.meshes=pools.size;stats.sources=displays.length;
    stats.activeZones=[...new Set(zones.map(z=>z.id))];stats.landmarks=landmarks.map(f=>f.id);
  }

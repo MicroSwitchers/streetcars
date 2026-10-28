@@ -1,0 +1,25 @@
+"""Compare matching real-time screenshots and measured section detail counts."""
+from pathlib import Path
+import argparse,json,shutil
+parser=argparse.ArgumentParser();parser.add_argument('before',type=Path);parser.add_argument('after',type=Path)
+args=parser.parse_args();out=Path(__file__).resolve().parent.parent/'dundas-detail-review';out.mkdir(exist_ok=True)
+def diagnostics(path):return json.loads((path/'dundas-pool-diagnostics.json').read_text(encoding='utf-8'))
+before,after=diagnostics(args.before),diagnostics(args.after)
+def summary(rows):return {'sections':len(rows),'averageFacadeTriangles':round(sum(s['facades']['triangles'] for s in rows)/len(rows)),'averageCornicedBuildings':round(sum(s['facades']['corniceBuildings'] for s in rows)/len(rows),1),'averageArchitecturalPieces':round(sum(sum(s['facades']['counts'].values()) for s in rows)/len(rows)),'maximumCombinedTriangles':max(sum(s[k]['triangles'] for k in ['base','retail','facades']) for s in rows),'overflows':sum(s[k]['overflow'] for s in rows for k in ['base','retail','facades'])}
+report={'before':summary(before),'after':summary(after),'sections':[]}
+for a,b in zip(before,after):report['sections'].append({'offset':a['offset'],'before':a['facades'],'after':b['facades']})
+(out/'report.json').write_text(json.dumps(report,indent=2)+'\n')
+views=[('dundas-0','Western approach'),('dundas-6','Heritage shops'),('dundas-16','Chinatown'),('dundas-23','Downtown'),('dundas-36','Eastern neighbourhoods'),('dundas-close-6-night','Shopfronts at night')]
+for stage,path in [('before',args.before),('after',args.after)]:
+ (out/stage).mkdir(exist_ok=True)
+ for name,_ in views:shutil.copy2(path/(name+'.png'),out/stage/(name+'.png'))
+html='''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dundas detail: before and after</title>
+<style>*{box-sizing:border-box}body{background:#15232a;color:#eef3ed;font:16px/1.5 system-ui;margin:0}main{max-width:1250px;margin:auto;padding:24px}h1{font-size:30px;margin:0}p{color:#c4d1d1}table{border-collapse:collapse;margin:20px 0}td,th{padding:8px 18px 8px 0;text-align:left;border-bottom:1px solid #466069}select,input{font:inherit;accent-color:#e9c789}select{background:#263f48;color:#fff;padding:8px;margin:12px 0;border:1px solid #8aa1a7;border-radius:6px}.photo{position:relative;width:100%;aspect-ratio:3/4;overflow:hidden;background:#0d151b;border-radius:12px}.photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}#before{clip-path:inset(0 50% 0 0)}#line{position:absolute;left:50%;top:0;bottom:0;border-left:2px solid #fff4d6}.tag{position:absolute;top:12px;background:#15232ae6;padding:5px 12px;border-radius:5px}.before{left:12px}.after{right:12px}label{display:flex;align-items:center;gap:12px;margin:12px 0}input{width:100%}a{color:#f5d692}</style>
+<main><h1>Dundas: more architectural detail</h1><p>Matching screenshots from the iPad graphics profile. Drag the divider to compare.</p>
+<table><thead><tr><th>Resident section allowance</th><th>Before</th><th>After</th></tr></thead><tbody><tr><td>Combined scenery triangles</td><td>380,000</td><td>460,000</td></tr><tr><td>Facade triangle ceiling</td><td>145,000</td><td>205,000</td></tr><tr><td>Average architectural pieces</td><td>__BEFORE_PIECES__</td><td>__AFTER_PIECES__</td></tr><tr><td>Average complete corniced buildings</td><td>__BEFORE_CORNICES__</td><td>__AFTER_CORNICES__</td></tr></tbody></table>
+<select id="views" aria-label="Screenshot view"></select><div class="photo"><img id="after" alt="Dundas with the increased facade allowance"><img id="before" alt="Dundas with the former allowance"><div id="line"></div><span class="tag before">Before</span><span class="tag after">After</span></div>
+<label>Compare <input id="slider" type="range" min="0" max="100" value="50" aria-label="Comparison divider"></label><p><a id="full-before">Open before image</a> · <a id="full-after">Open after image</a> · <a href="report.json">All 37 section measurements</a></p><p>The same 50 facade batches and existing Blender assets are reused. Portable resolution, texture, light and shadow limits are unchanged.</p>
+<script>const views=__VIEWS__,select=document.querySelector('#views');for(const [name,title] of views){const o=document.createElement('option');o.value=name;o.textContent=title;select.append(o)}function show(){for(const s of ['before','after']){const path=s+'/'+select.value+'.png';document.querySelector('#'+s).src=path;document.querySelector('#full-'+s).href=path}}select.onchange=show;show();document.querySelector('#slider').oninput=e=>{document.querySelector('#before').style.clipPath='inset(0 '+(100-e.target.value)+'% 0 0)';document.querySelector('#line').style.left=e.target.value+'%'};</script></main></html>'''
+for stage in ['before','after']:
+ html=html.replace('__'+stage.upper()+'_PIECES__',str(report[stage]['averageArchitecturalPieces'])).replace('__'+stage.upper()+'_CORNICES__',str(report[stage]['averageCornicedBuildings']))
+(out/'index.html').write_text(html.replace('__VIEWS__',json.dumps(views)),encoding='utf-8');print(out/'index.html')

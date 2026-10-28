@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {DUNDAS_BUDGET} from './dundas-budget.js';
 import {retailMaterial,shopLighting} from './night-windows.js';
 
  const shopTypes={
@@ -24,7 +25,7 @@ export function dundasShopType(district,index,side){
 // changes only its matrices, illumination and active count, never GPU resources.
 export function createDundasRetail({group,mats,assets,foliageGeometry}){
  const dummy=new THREE.Object3D(),footprint=new THREE.Box3(),pools=new Map(),materials=new Map();
- const placements=[],rooms=[],fixtures=[],reserved=[],maxTriangles=190000,maxRooms=48,maxFurniture=32;
+ const placements=[],rooms=[],fixtures=[],reserved=[],maxTriangles=DUNDAS_BUDGET.retail,maxRooms=48,maxFurniture=32;
  const stats={objects:0,meshes:0,instances:0,triangles:0,capacityTriangles:0,overflow:0,budgetSkipped:0,rooms:0,furniture:0,plants:0,fixtureInstances:0,fixtureTriangles:0,fixtureRooms:0,windowGardens:0,roofDetails:0,shopfrontDetails:0,dressingTriangles:0,rebuilds:0,types:{},roomIndices:[]};
  let night=0,triangleLimit=maxTriangles;
  // The tiny matrix buffers accommodate even a section containing only one
