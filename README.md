@@ -4,6 +4,10 @@ The default sensory view uses a single Go press. Go becomes bright green with a 
 
 Hold the Settings control continuously for **3 seconds** with touch, mouse, pen, Space or Enter. A filling bar and countdown show progress; releasing early, dragging away, losing focus or hiding the page cancels the hold. The menu pauses the ride and restores its prior pause state on close.
 
+In supported browser tabs, **Full screen** expands the scene and all ride controls; the same button exits fullscreen. It stays hidden when opened as an installed PWA, including iOS Home Screen apps, and in browsers without document fullscreen support. Run `node qa/check_live.mjs <PWA URL> --fullscreen` to check native entry/exit, keyboard use, installed display modes, unsupported browsers and phone layouts.
+
+Settings has separate **Bell cooldown** and **Horn cooldown** sliders, from no cooldown to one minute in one-second steps. Both default to no cooldown and persist with other preferences. Cooling buttons dim and display the remaining seconds; keyboard shortcuts and Settings sound previews respect the same limits. Automatic departure bells also respect the bell limit and are skipped during cooldown, never queued to play later. Timers use elapsed real time and begin only when a sound actually plays.
+
 The weather control cycles through slow cycling, Random, all eight fixed types and Off. Random follows a saved shuffled sequence with the same three-minute phases and gentle 75-second blends. Day/night works separately. Signal stopping defaults to off and remains optional; new installations default to Single press, with older saved play modes reset to Single press once for this update; later explicit mode choices persist. Validated preferences?including the ready cue, street names, mode, weather, sound, camera, stop options and night-light switch?persist in local storage across reloads and PWA updates.
 
 Play online: **https://microswitchers.github.io/streetcars/**

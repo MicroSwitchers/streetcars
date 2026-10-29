@@ -18,6 +18,8 @@ const pavement=process.argv.includes('--pavement');
 const paint=process.argv.includes('--paint');
 const streetlights=process.argv.includes('--streetlights');
 const model=process.argv.includes('--model');
+const fullscreen=process.argv.includes('--fullscreen');
+const cooldowns=process.argv.includes('--cooldowns');
 const greenery=process.argv.includes('--greenery');
 const buildings=process.argv.includes('--buildings');
 const intersections=process.argv.includes('--intersections');
@@ -66,6 +68,68 @@ try{
  if(!cache)throw Error('Live offline cache did not complete');
  const game=await evaluate('({release:document.querySelector("meta[name=queen-street-release]").content,loadingHidden:document.querySelector("#loading").hidden,triangles:queenStreet.renderer.info.render.triangles,serviceWorker:!!navigator.serviceWorker.controller,manifest:document.querySelector("link[rel=manifest]").href,credits:document.querySelector(".sound-credits").textContent.includes("craigsmith")&&document.querySelector(".sound-credits").textContent.includes("mcpable")})');
  if(!game.loadingHidden||game.triangles<=0||!game.serviceWorker||!game.credits||errors.length)throw Error(JSON.stringify({game,errors}));
+ if(fullscreen){
+  const check=async(label,expression)=>{if(!await evaluate(expression))throw Error(label+': '+JSON.stringify(await evaluate('({fullscreen:!!document.fullscreenElement,phase:queenStreet.state.phase,button:document.getElementById("fullscreen").outerHTML,status:document.querySelector("[role=status]").textContent})')));console.log('PASS: '+label);};
+  const click=async()=>{const point=await evaluate('(()=>{const r=document.getElementById("fullscreen").getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()');await send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...point});await send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point});await wait(300);};
+  await check('Browser shows a fullscreen control','!document.getElementById("fullscreen").hidden&&document.getElementById("fullscreen").getAttribute("aria-pressed")==="false"');
+  await click();
+  await check('Full screen includes the whole interface and retains an exit button','document.fullscreenElement===document.documentElement&&!document.getElementById("fullscreen").hidden&&document.getElementById("fullscreen").getAttribute("aria-label")==="Exit full screen"&&document.getElementById("fullscreen").getAttribute("aria-pressed")==="true"&&document.getElementById("go").getBoundingClientRect().width>0');
+  await click();await check('Button exits fullscreen','!document.fullscreenElement&&document.getElementById("fullscreen").getAttribute("aria-pressed")==="false"');
+  await evaluate('document.getElementById("fullscreen").focus()');
+  await send('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});await send('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});await wait(300);
+  await check('Keyboard activation enters fullscreen without starting the ride','!!document.fullscreenElement&&queenStreet.state.phase==="ready"');
+  await evaluate('document.exitFullscreen()');await wait(300);
+  await check('Browser-initiated exit restores the control','!document.fullscreenElement&&document.getElementById("fullscreen").getAttribute("aria-label")==="Full screen"');
+  // iOS exposes standalone separately from the display-mode media feature.
+  await evaluate('Object.defineProperty(navigator,"standalone",{configurable:true,value:true});window.dispatchEvent(new Event("pageshow"))');
+  await check('Installed iOS app hides the browser-only button','document.getElementById("fullscreen").hidden');
+  await evaluate('delete navigator.standalone;window.dispatchEvent(new Event("pageshow"))');
+  // Exercise all installed display modes using the real module and real DOM.
+  await evaluate(`(async()=>{
+   const source=new URL(document.querySelector('script[type="module"][src$="main.js"]').src),{installFullscreenButton}=await import(new URL('./sensory-controls.js',source));
+   const original=window.matchMedia;
+   try{for(const mode of ['standalone','minimal-ui','window-controls-overlay']){
+    window.matchMedia=query=>({matches:query==='(display-mode: '+mode+')',addEventListener(){}});
+    const button=document.getElementById('fullscreen').cloneNode(true);installFullscreenButton(button);
+    if(!button.hidden)throw Error('Installed mode still shows button: '+mode);
+   }}finally{window.matchMedia=original;}
+  })()`);
+  console.log('PASS: Standalone, minimal-ui and window-controls-overlay app windows hide the control');
+  await evaluate('Object.defineProperty(document,"fullscreenEnabled",{configurable:true,value:false});window.dispatchEvent(new Event("pageshow"))');
+  await check('Unsupported or policy-blocked browsers have no inactive button','document.getElementById("fullscreen").hidden');
+  await evaluate('delete document.fullscreenEnabled;window.dispatchEvent(new Event("pageshow"));window.originalFullscreenRequest=document.documentElement.requestFullscreen;document.documentElement.requestFullscreen=()=>Promise.reject(Error("Denied"));document.getElementById("fullscreen").click()');await wait(100);
+  await check('Rejected fullscreen request leaves the ride and button usable','!document.fullscreenElement&&!document.getElementById("fullscreen").disabled&&!document.getElementById("fullscreen").hidden&&queenStreet.state.phase==="ready"&&[...document.querySelectorAll("[role=status]")].some(e=>e.textContent.includes("not available"))');
+  await evaluate('document.documentElement.requestFullscreen=window.originalFullscreenRequest;delete window.originalFullscreenRequest');
+  for(const width of [320,360,390,768,1024,1440]){
+   await send('Emulation.setDeviceMetricsOverride',{width,height:960,deviceScaleFactor:1,mobile:false});await wait(150);
+   await check('Toolbar fits at '+width+' pixels',`(()=>{const buttons=[...document.querySelectorAll('.topbar button')].filter(b=>!b.hidden&&b.getBoundingClientRect().width>0),bounds=buttons.map(b=>b.getBoundingClientRect());return bounds.every(r=>r.left>=0&&r.right<=innerWidth)&&bounds.every((a,i)=>bounds.every((b,j)=>i===j||a.right<=b.left+.5||b.right<=a.left+.5||a.bottom<=b.top+.5||b.bottom<=a.top+.5));})()`);
+   if([320,390,1440].includes(width)){const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'fullscreen-'+width+'.png'),Buffer.from(shot.data,'base64'));}
+  }
+ }
+ if(cooldowns){
+  const check=async(label,expression)=>{if(!await evaluate(expression))throw Error(label);console.log('PASS: '+label);};
+  const click=async name=>{const point=await evaluate(`(()=>{const r=document.getElementById('${name}').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);await send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...point});await send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point});await wait(150);};
+  await check('Both sounds default to no cooldown','queenStreet.settings.bellCooldown===0&&queenStreet.settings.hornCooldown===0&&document.getElementById("setting-bell-cooldown").value==="0"');
+  await click('bell');await evaluate('Promise.all([queenStreet.sound.load("bell"),queenStreet.sound.load("horn")])');
+  await evaluate(`(()=>{for(const [name,value] of [['bell',17],['horn',60]]){const input=document.getElementById('setting-'+name+'-cooldown');input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}));}delete queenStreet.sound.lastPlay.bell;queenStreet.updateHUD();})()`);
+  await check('Independent sliders save one-second choices through one minute','queenStreet.settings.bellCooldown===17&&queenStreet.settings.hornCooldown===60&&document.getElementById("bell-cooldown-value").textContent==="17 seconds"&&document.getElementById("horn-cooldown-value").textContent==="1 minute"&&JSON.parse(localStorage.getItem("queen-street-ride-settings-v1")).hornCooldown===60');
+  await click('bell');
+  await check('Bell sounds once and displays a cooldown','queenStreet.sound.remainingCooldown("bell")>16000&&document.getElementById("bell").getAttribute("aria-disabled")==="true"&&!document.getElementById("bell-cooldown").hidden&&document.getElementById("test-bell").disabled');
+  const bellStamp=await evaluate('queenStreet.sound.lastPlay.bell');await click('bell');
+  await send('Input.dispatchKeyEvent',{type:'keyDown',key:'b',code:'KeyB'});await send('Input.dispatchKeyEvent',{type:'keyUp',key:'b',code:'KeyB'});
+  await evaluate('queenStreet.ride.onDepart()');await wait(100);
+  await check('Repeated clicks, keyboard and departure events respect the bell limit',`queenStreet.sound.lastPlay.bell===${bellStamp}`);
+  await click('horn');await check('Horn has its own full-minute timer','queenStreet.sound.remainingCooldown("horn")>59000&&document.getElementById("horn").getAttribute("aria-disabled")==="true"&&document.getElementById("horn-cooldown").textContent==="60s"');
+  let shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'sound-cooldowns.png'),Buffer.from(shot.data,'base64'));
+  await evaluate('queenStreet.sound.lastPlay.bell=performance.now()-17001;queenStreet.updateHUD()');
+  await check('Expired bell becomes ready while horn continues cooling','document.getElementById("bell").getAttribute("aria-disabled")==="false"&&document.getElementById("bell-cooldown").hidden&&document.getElementById("horn").getAttribute("aria-disabled")==="true"');
+  await evaluate('(()=>{const input=document.getElementById("setting-bell-cooldown");input.value=0;input.dispatchEvent(new Event("input",{bubbles:true}));})()');
+  await click('bell');const stamp=await evaluate('queenStreet.sound.lastPlay.bell');await click('bell');
+  await check('No cooldown allows immediate replay',`queenStreet.sound.lastPlay.bell>${stamp}&&document.getElementById('bell').getAttribute('aria-disabled')==='false'`);
+  await evaluate('queenStreet.updateSettings({bellCooldown:23});queenStreet.openSettings();document.getElementById("setting-bell-cooldown").scrollIntoView({block:"center"})');
+  shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'sound-cooldown-settings.png'),Buffer.from(shot.data,'base64'));
+  await evaluate('document.getElementById("settings-close").click()');
+ }
  if(morning&&!await evaluate('queenStreet.nightAmount===0&&!queenStreet.settings.night&&queenStreet.settings.volume===.2'))throw Error('A saved night preference prevented a morning launch');
  if(morning){
   if(!await evaluate('queenStreet.settings.alwaysGreen&&queenStreet.ride.alwaysGreen&&queenStreet.settings.doorDwell===5&&queenStreet.ride.dwellSeconds===5&&document.getElementById("setting-green").checked&&document.getElementById("setting-door-dwell").value==="5"'))throw Error('Existing installations did not receive green signals and the five-second door default');
@@ -635,6 +699,8 @@ try{
  if(routes&&!await evaluate('(()=>{const expected=JSON.parse(sessionStorage.getItem("route-checkpoint-expected"));return queenStreet.route.stopOffset===expected.offset&&Math.abs(queenStreet.state.z-expected.z)<1e-8;})()'))throw Error('Offline update/recovery checkpoint lost its itinerary section');
  if(morning&&!await evaluate('queenStreet.settings.alwaysGreen===false&&queenStreet.settings.doorDwell===15&&queenStreet.captureSession().manualFade===null&&queenStreet.captureSession().cycleTime===0&&queenStreet.state.time>=29.9'))throw Error('Nighttime checkpoint did not restore in morning with later preferences retained');
  if(morning)console.log('PASS: Offline update/recovery checkpoint starts in daylight, clears its night fade and preserves the ride and later settings');
+ if(cooldowns&&!await evaluate('queenStreet.settings.bellCooldown===23&&queenStreet.settings.hornCooldown===60&&document.getElementById("setting-bell-cooldown").value==="23"&&document.getElementById("setting-horn-cooldown").value==="60"'))throw Error('Sound cooldown preferences did not survive offline reload');
+ if(cooldowns)console.log('PASS: Independent sound cooldown settings survive an offline reload');
  if(sensory&&await evaluate('JSON.stringify(queenStreet.settings)')!==sensoryExpected)throw Error('Saved sensory preferences did not survive offline reload');
  if(auto&&!await evaluate('queenStreet.settings.mode==="watch"&&!queenStreet.state.paused&&document.querySelector(".ride-dock").hidden'))throw Error('Explicit Full auto preference did not restore and run');
  if(sensory)console.log('PASS: all last-used preferences survive a full offline browser reload');

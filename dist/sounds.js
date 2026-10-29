@@ -98,19 +98,25 @@ export class StreetcarSounds {
  release(voice,seconds=.05){
   const now=this.context.currentTime;this.hold(voice.gain.gain,now);voice.gain.gain.linearRampToValueAtTime(0,now+seconds);try{voice.source.stop(now+seconds+.005);}catch{}
  }
+ remainingCooldown(name,now=performance.now()){
+  if(!['bell','horn'].includes(name))return 0;
+  const seconds=Number(this.settings[name+'Cooldown']),duration=Number.isFinite(seconds)?Math.max(0,Math.min(60,seconds))*1000:0;
+  return Math.max(0,duration-(now-(this.lastPlay[name]??-Infinity)));
+ }
  async play(name){
   if(!this.unlocked||this.settings.volume<=0)return false;
-  const requested=performance.now(),cooldown=name==='bell'?650:name==='door'?120:450;
-  if(requested-(this.lastPlay[name]??-Infinity)<cooldown)return false;this.lastPlay[name]=requested;
+  const requested=performance.now();
+  if(this.remainingCooldown(name,requested)>0)return false;
+  if(name==='door'){if(requested-(this.lastPlay[name]??-Infinity)<120)return false;this.lastPlay[name]=requested;}
   const epoch=this.voiceEpoch,ticket=(this.voiceRequests[name]??0)+1;this.voiceRequests[name]=ticket;
   try{
    const context=await this.contextReady(),buffer=await this.load(name);
-   if(epoch!==this.voiceEpoch||ticket!==this.voiceRequests[name]||this.settings.volume<=0||performance.now()-requested>800||context.state!=='running')return false;
+   if(epoch!==this.voiceEpoch||ticket!==this.voiceRequests[name]||this.settings.volume<=0||performance.now()-requested>800||context.state!=='running'||this.remainingCooldown(name)>0)return false;
    if(this.active[name])this.release(this.active[name]);
    const source=context.createBufferSource(),gain=context.createGain(),now=context.currentTime,level=this.settings.volume*(name==='door'?.4:.7);
    source.buffer=buffer;gain.gain.setValueAtTime(0,now);gain.gain.linearRampToValueAtTime(level,now+.015);gain.gain.setValueAtTime(level,now+Math.max(.016,buffer.duration-.09));gain.gain.linearRampToValueAtTime(0,now+buffer.duration);
    source.connect(gain).connect(context.destination);const voice={source,gain};this.active[name]=voice;
-   source.onended=()=>{if(this.active[name]===voice)delete this.active[name];source.disconnect();gain.disconnect();};source.start();return true;
+   source.onended=()=>{if(this.active[name]===voice)delete this.active[name];source.disconnect();gain.disconnect();};source.start();this.lastPlay[name]=performance.now();return true;
   }catch(error){console.error(`Streetcar ${name} audio could not be played:`,error);return false;}
  }
  stop(){this.voiceEpoch++;for(const voice of Object.values(this.active))this.release(voice);this.active={};this.pausePass();}

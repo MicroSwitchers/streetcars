@@ -19,6 +19,35 @@ export function installSettingsHold(button,open,duration=3000){
  return {cancel};
 }
 
+// Fullscreen the document, keeping the ride controls with the scene. Installed
+// windows already have their own display mode; browser fullscreen stays toggleable.
+export function installFullscreenButton(button,announce=()=>{}){
+ const root=document.documentElement,modes=['standalone','minimal-ui','window-controls-overlay'].map(mode=>matchMedia('(display-mode: '+mode+')'));
+ const active=()=>!!(document.fullscreenElement||document.webkitFullscreenElement);
+ const installed=()=>navigator.standalone===true||modes.some(mode=>mode.matches);
+ const supported=()=>typeof root.requestFullscreen==='function'?document.fullscreenEnabled!==false:typeof root.webkitRequestFullscreen==='function'&&document.webkitFullscreenEnabled!==false;
+ let pending=false;
+ function update(){
+  const on=active(),label=on?'Exit full screen':'Full screen';
+  button.hidden=installed()||(!on&&!supported());button.dataset.fullscreen=on?'on':'off';
+  button.querySelector('span').textContent=label;button.setAttribute('aria-label',label);button.setAttribute('aria-pressed',String(on));button.title=label;
+ }
+ button.addEventListener('click',async()=>{
+  if(button.hidden||pending)return;pending=true;button.disabled=true;
+  try{
+   if(active())await (document.exitFullscreen??document.webkitExitFullscreen).call(document);
+   else if(root.requestFullscreen)await root.requestFullscreen({navigationUI:'hide'});
+   else await root.webkitRequestFullscreen();
+  }catch{announce('Full screen is not available in this browser right now.');}
+  finally{pending=false;button.disabled=false;update();}
+ });
+ button.addEventListener('keydown',event=>{if(!['Space','Enter'].includes(event.code))return;event.preventDefault();event.stopPropagation();if(!event.repeat)button.click();});
+ button.addEventListener('keyup',event=>{if(['Space','Enter'].includes(event.code))event.preventDefault();});
+ for(const event of ['fullscreenchange','webkitfullscreenchange'])document.addEventListener(event,update);
+ for(const mode of modes){if(mode.addEventListener)mode.addEventListener('change',update);else mode.addListener(update);}
+ window.addEventListener('pageshow',update);update();
+}
+
 export const WEATHER_BUTTON_OPTIONS=['cycle','random','overcast','clear','mist','sunset','sunbreak','rain','storm','rainnight','off'];
 export function nextWeatherChoice(mode,preset){
  const current=mode==='fixed'?preset:mode,index=WEATHER_BUTTON_OPTIONS.indexOf(current);

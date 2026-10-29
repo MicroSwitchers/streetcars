@@ -252,4 +252,12 @@ select{background:#182a30;color:#f9efda;border-color:#a9bdb52e}
 
 .route-itinerary{font-size:12px;line-height:1.5}.route-itinerary ol{padding-left:25px}.route-itinerary a{color:#ffe1a8}
 
+#fullscreen[data-fullscreen=on] .fullscreen-enter,#fullscreen:not([data-fullscreen=on]) .fullscreen-exit{display:none}
+.sound-button{position:relative}.sound-button[aria-disabled=true]{filter:saturate(.35);opacity:.65}.sound-button[aria-disabled=true] svg{opacity:.6}
+.sound-button .sound-cooldown{position:absolute;right:5px;top:5px;min-width:27px;padding:2px 5px;border-radius:7px;background:#263a40;color:#fff8e9;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+.sound-tests button:disabled{opacity:.5;cursor:default}
+.cooldown-row>div{display:grid;gap:5px;width:min(46%,210px);flex-shrink:0}.cooldown-row input{width:100%;margin:0;min-height:30px;accent-color:#ddc38a}.cooldown-row output{font-size:12px;text-align:right;color:#f5d89a}
+/* Leave room for five browser controls alongside the route on narrow phones. */
+@media(max-width:350px){.topbar:has(#fullscreen:not([hidden])){gap:4px}.topbar:has(#fullscreen:not([hidden])) .quiet-button{min-width:40px;padding:9px}.topbar:has(#fullscreen:not([hidden])) .route-selector{gap:3px}.topbar:has(#fullscreen:not([hidden])) .route-badge{width:38px}}
+
 #stop-line .route-stop b{max-width:110px;white-space:normal;line-height:1.25}

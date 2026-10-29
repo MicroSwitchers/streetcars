@@ -85,4 +85,30 @@ for(const action of ['pausePass','stopPass']){
  media.nextPlay=null;s.unlockPass();
  check('A deliberate play control can retry blocked audio',!s.passFinished&&!s.passFailed);
 }
-console.log('PASS: '+checks+' audio timing checks: stale requests, permission gating, pause/resume races, single playback and natural completion.');
+for(const name of ['bell','horn']){
+ const s=fresh();s.settings[name+'Cooldown']=60;
+ check(name+' first use starts immediately',await s.play(name));
+ check(name+' one-minute cooldown blocks repeated sounds',await s.play(name)===false&&s.remainingCooldown(name)===60000);
+ const sources=s.context.sources.length;advance(59.999);
+ check(name+' stays blocked until the exact boundary',await s.play(name)===false&&s.context.sources.length===sources);
+ advance(.001);
+ check(name+' becomes available at one minute',s.remainingCooldown(name)<.001&&await s.play(name));
+ s.settings[name+'Cooldown']=0;
+ check(name+' no cooldown allows immediate deliberate replay',await s.play(name)&&await s.play(name));
+ s.settings[name+'Cooldown']=1;advance(.5);s.stop();advance(.5);
+ check(name+' cooldown continues while the ride is paused',await s.play(name));
+}
+{
+ const s=fresh();s.settings.bellCooldown=60;s.settings.hornCooldown=1;
+ check('Bell and horn have independent cooldowns',await s.play('bell')&&await s.play('horn'));
+ advance(1);check('A short horn cooldown does not reset the bell cooldown',await s.play('horn')&&await s.play('bell')===false);
+ s.settings.volume=0;advance(60);check('Muted actions do not consume a cooldown',await s.play('bell')===false&&s.remainingCooldown('bell')===0);
+ s.settings.volume=.35;check('Sound is available immediately after unmuting',await s.play('bell'));
+}
+{
+ const s=fresh(),gate=deferred();s.settings.bellCooldown=60;s.load=()=>gate.promise;
+ const request=s.play('bell');advance(.81);gate.resolve({duration:3});
+ check('A stale request does not start a one-minute cooldown',await request===false&&s.remainingCooldown('bell')===0);
+ s.load=async()=>({duration:3});check('A fresh action after a failed request can sound immediately',await s.play('bell'));
+}
+console.log('PASS: '+checks+' audio checks: configurable 0–60 second cooldowns, independent sounds, pause/mute, stale requests, permission gating, pause/resume races and natural completion.');
