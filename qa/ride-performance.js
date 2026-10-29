@@ -9,7 +9,7 @@ export async function checkRidePerformance(api,check,w){
  check('Doors finish their hold without departing in One button mode',api.ride.dwellReady&&api.state.phase==='atStop'&&api.state.speed===0&&api.state.doors);
  check('Go departs for the next scheduled stop',api.ride.go()&&api.state.nextStop===2);
  for(let i=0;i<20;i++)api.step(.1);api.setPaused(true);api.updateHUD();
- check('Every two stops targets Spadina after Bathurst',doc.querySelector('#stop-name').textContent==='Spadina Avenue');
+ check('Every two stops skips the middle stop in the selected route section',doc.querySelector('#stop-name').textContent===api.route.stops[2].name&&api.route.stops[api.state.nextStop].index===api.route.stops[0].index+2);
  const snapshot=api.captureSession(),z=api.state.z;api.restart();
  check('Safe-update snapshot restores position, doors and pause state',api.restoreSession(snapshot)&&api.state.z===z&&api.state.paused&&api.state.nextStop===2);
  api.updateSettings({quality:'low'});api.graphics.render(api.scene,api.camera);
